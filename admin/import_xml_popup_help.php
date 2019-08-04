@@ -42,7 +42,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 		</div>
 		<div>
 			<div>&nbsp;</div>
-			<p class="ixml-ix-help-faq-prolog"><i><?echo sprintf(GetMessage("IXML_IX_FAQ_PROLOG"), 'app@ixmlutions.su', 'app@ixmlutions.su');?></i></p>
+
 			<ol id="ixml-ix-help-faq">
 				<li>
 					<a href="#"><?echo GetMessage("IXML_IX_FAQ_QUEST_SLOW_IMPORT");?></a>

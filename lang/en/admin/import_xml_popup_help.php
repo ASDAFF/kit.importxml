@@ -10,7 +10,6 @@ $MESS["IXML_IX_HELP_TAB2_ALT"] = "Questions and answers on the operation of the 
 $MESS["IXML_IX_HELP_VIDEO_COMMON"] = "Basic instruction on imports";
 $MESS["IXML_IX_HELP_VIDEO_YML_PARAMS"] = "Import parameters from a YML-file";
 $MESS["IXML_IX_HELP_VIDEO_OFFERS"] = "Import of trade offers";
-$MESS["IXML_IX_FAQ_PROLOG"] = "Attention! If you have not found the answer to your question, write to us at <a href=\"mailto:%s\">%s</a>.";
 $MESS["IXML_IX_FAQ_QUEST_SLOW_IMPORT"] = "Why import is very slow?";
 $MESS["IXML_IX_FAQ_ANS_SLOW_IMPORT"] = "There are several reasons for the slow imports:
 	<ul>
