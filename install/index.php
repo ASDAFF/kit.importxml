@@ -36,7 +36,7 @@ class ixml_importxml extends CModule {
 		}
 
 		$this->PARTNER_NAME = GetMessage("IXML_PARTNER_NAME");
-		$this->PARTNER_URI = 'http://ixmlutions.su/';
+		$this->PARTNER_URI = 'https://asdaff.github.io/';
 
 		$this->MODULE_NAME = GetMessage('IXML_IMPORTXML_MODULE_NAME');
 		$this->MODULE_DESCRIPTION = GetMessage('IXML_IMPORTXML_MODULE_DESCRIPTION');

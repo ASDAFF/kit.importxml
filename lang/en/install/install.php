@@ -5,5 +5,5 @@
 
 $MESS['IXML_IMPORTXML_MODULE_NAME'] = 'Import from XML/YML';
 $MESS['IXML_IMPORTXML_MODULE_DESCRIPTION'] = 'Download information block elements of the XML-file';
-$MESS['IXML_PARTNER_NAME'] = 'ixmlutions.su';
+$MESS['IXML_PARTNER_NAME'] = 'ASDAFF';
 ?>

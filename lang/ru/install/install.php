@@ -5,5 +5,5 @@
 
 $MESS['IXML_IMPORTXML_MODULE_NAME'] = 'Импорт из XML/YML';
 $MESS['IXML_IMPORTXML_MODULE_DESCRIPTION'] = 'Загрузка элементов инфоблока из XML-файла';
-$MESS['IXML_PARTNER_NAME'] = 'ixmlutions.su';
+$MESS['IXML_PARTNER_NAME'] = 'ASDAFF';
 ?>
