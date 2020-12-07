@@ -3,14 +3,14 @@
  * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
  */
 
-namespace Bitrix\IxmlImportxml;
+namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 Loc::loadMessages(__FILE__);
 
 class Importer {
-	protected static $moduleId = 'ixml.importxml';
+	protected static $moduleId = 'kit.importxml';
 	var $rcurrencies = array('#USD#', '#EUR#');
 	var $xmlParts = array();
 	var $xmlPartsValues = array();
@@ -59,12 +59,12 @@ class Importer {
 
 		if(!$this->params['SECTION_UID']) $this->params['SECTION_UID'] = 'NAME';
 
-		//$this->fileEncoding = \Bitrix\IxmlImportxml\Utils::GetXmlEncoding($this->filename);
+		//$this->fileEncoding = \Bitrix\KitImportxml\Utils::GetXmlEncoding($this->filename);
 		$this->fileEncoding = 'utf-8';
-		$this->siteEncoding = \Bitrix\IxmlImportxml\Utils::getSiteEncoding();
+		$this->siteEncoding = \Bitrix\KitImportxml\Utils::getSiteEncoding();
 		$this->xpathMulti = ($this->params['XPATHS_MULTI'] ? unserialize(base64_decode($this->params['XPATHS_MULTI'])) : array());
 		if(!is_array($this->xpathMulti)) $this->xpathMulti = array();
-		$this->xpathMulti = \Bitrix\IxmlImportxml\Utils::ConvertDataEncoding($this->xpathMulti, $this->fileEncoding, $this->siteEncoding);
+		$this->xpathMulti = \Bitrix\KitImportxml\Utils::ConvertDataEncoding($this->xpathMulti, $this->fileEncoding, $this->siteEncoding);
 		
 		$this->skuInElement = (bool)(isset($this->params['GROUPS']['OFFER']) && strpos($this->params['GROUPS']['OFFER'], $this->params['GROUPS']['ELEMENT'].'/')===0);
 		if($this->skuInElement)
@@ -131,11 +131,11 @@ class Importer {
 		}
 		
 		$saveStat = (bool)($params['STAT_SAVE']=='Y');
-		$this->logger = new \Bitrix\IxmlImportxml\Logger($saveStat, $pid);
-		$this->fl = new \Bitrix\IxmlImportxml\FieldList();
-		$this->conv = new \Bitrix\IxmlImportxml\Conversion($this);
-		$this->cloud = new \Bitrix\IxmlImportxml\Cloud();
-		$this->sftp = new \Bitrix\IxmlImportxml\Sftp();
+		$this->logger = new \Bitrix\KitImportxml\Logger($saveStat, $pid);
+		$this->fl = new \Bitrix\KitImportxml\FieldList();
+		$this->conv = new \Bitrix\KitImportxml\Conversion($this);
+		$this->cloud = new \Bitrix\KitImportxml\Cloud();
+		$this->sftp = new \Bitrix\KitImportxml\Sftp();
 		
 		$this->useProxy = false;
 		$this->proxySettings = array(
@@ -152,7 +152,7 @@ class Importer {
 		$this->saveProductWithOffers = (bool)(Loader::includeModule('catalog') && \Bitrix\Main\Config\Option::get('catalog', 'show_catalog_tab_with_offers') == 'Y');
 		AddEventHandler('iblock', 'OnBeforeIBlockElementUpdate', array($this, 'OnBeforeIBlockElementUpdateHandler'), 999999);
 		
-		$cm = new \Bitrix\IxmlImportxml\ClassManager($this);
+		$cm = new \Bitrix\KitImportxml\ClassManager($this);
 		$this->pricer = $cm->GetPricer();
 		$this->productor = $cm->GetProductor();
 		
@@ -176,7 +176,7 @@ class Importer {
 		$this->tmpfile = $this->tmpdir.'params.txt';
 		$this->fileElementsId = $this->tmpdir.'elements_id.txt';
 		$this->fileOffersId = $this->tmpdir.'offers_id.txt';
-		$oProfile = \Bitrix\IxmlImportxml\Profile::getInstance();
+		$oProfile = \Bitrix\KitImportxml\Profile::getInstance();
 		$oProfile->SetImportParams($pid, $this->tmpdir, $stepparams);
 		/*/Temp folders*/
 		
@@ -234,7 +234,7 @@ class Importer {
 			$this->errorfile = $dir.$pid.'_error.txt';
 			if((int)$this->stepparams['import_started'] < 1)
 			{
-				$oProfile = \Bitrix\IxmlImportxml\Profile::getInstance();
+				$oProfile = \Bitrix\KitImportxml\Profile::getInstance();
 				$oProfile->OnStartImport();
 				
 				if(file_exists($this->procfile)) unlink($this->procfile);
@@ -362,8 +362,8 @@ class Importer {
 				$this->SaveStatusImport();
 				if($this->CheckTimeEnding($time)) return $this->GetBreakParams();
 				$this->stepparams['curstep'] = 'deactivate_elements';
-				$this->stepparams['deactivate_element_last'] = \Bitrix\IxmlImportxml\Utils::SortFileIds($this->fileElementsId);
-				$this->stepparams['deactivate_offer_last'] = \Bitrix\IxmlImportxml\Utils::SortFileIds($this->fileOffersId);
+				$this->stepparams['deactivate_element_last'] = \Bitrix\KitImportxml\Utils::SortFileIds($this->fileElementsId);
+				$this->stepparams['deactivate_offer_last'] = \Bitrix\KitImportxml\Utils::SortFileIds($this->fileOffersId);
 				$this->stepparams['deactivate_element_first'] = 0;
 				$this->stepparams['deactivate_element_processed'] = 0;
 				$this->stepparams['deactivate_offer_first'] = 0;
@@ -492,12 +492,12 @@ class Importer {
 						}
 					}
 				}
-				\Bitrix\IxmlImportxml\Utils::AddFilter($arFieldsList, $this->params['CELEMENT_MISSING_FILTER']);
+				\Bitrix\KitImportxml\Utils::AddFilter($arFieldsList, $this->params['CELEMENT_MISSING_FILTER']);
 			}
 		
 			while($this->stepparams['deactivate_element_first'] < $this->stepparams['deactivate_element_last'])
 			{
-				$arUpdatedIds = \Bitrix\IxmlImportxml\Utils::GetPartIdsFromFile($this->fileElementsId, $this->stepparams['deactivate_element_first']);
+				$arUpdatedIds = \Bitrix\KitImportxml\Utils::GetPartIdsFromFile($this->fileElementsId, $this->stepparams['deactivate_element_first']);
 				if(empty($arUpdatedIds))
 				{
 					$this->stepparams['deactivate_element_first'] = $this->stepparams['deactivate_element_last'];
@@ -704,7 +704,7 @@ class Importer {
 		
 		$this->SaveStatusImport(true);
 		
-		$oProfile = \Bitrix\IxmlImportxml\Profile::getInstance();
+		$oProfile = \Bitrix\KitImportxml\Profile::getInstance();
 		$arEventData = $oProfile->OnEndImport($this->filename, $this->stepparams);
 		
 		foreach(GetModuleEvents(static::$moduleId, "OnEndImport", true) as $arEvent)
@@ -714,7 +714,7 @@ class Importer {
 			{
 				if(!is_array($v)) $arEventData[ToUpper($k)] = $v;
 			}
-			$oProfile = new \Bitrix\IxmlImportxml\Profile();
+			$oProfile = new \Bitrix\KitImportxml\Profile();
 			$arProfile = $oProfile->GetFieldsByID($this->pid);
 			$arEventData['PROFILE_NAME'] = $arProfile['NAME'];
 			$arEventData['IMPORT_START_DATETIME'] = (is_callable(array($arProfile['DATE_START'], 'toString')) ? $arProfile['DATE_START']->toString() : '');
@@ -790,7 +790,7 @@ class Importer {
 		
 		while($this->stepparams['deactivate_offer_first'] < $this->stepparams['deactivate_offer_last'])
 		{
-			$arUpdatedIds = \Bitrix\IxmlImportxml\Utils::GetPartIdsFromFile($this->fileOffersId, $this->stepparams['deactivate_offer_first']);
+			$arUpdatedIds = \Bitrix\KitImportxml\Utils::GetPartIdsFromFile($this->fileOffersId, $this->stepparams['deactivate_offer_first']);
 			if(empty($arUpdatedIds))
 			{
 				$this->stepparams['deactivate_offer_first'] = $this->stepparams['deactivate_offer_last'];
@@ -1082,7 +1082,7 @@ class Importer {
 						$emptyFieldNames[] = $arFieldsDef['prop']['items'][$field];
 					}
 				}
-				$this->errors[] = sprintf(Loc::getMessage("IXML_IX_NOT_SET_UID"), implode(', ', $emptyFieldNames));
+				$this->errors[] = sprintf(Loc::getMessage("KIT_IX_NOT_SET_UID"), implode(', ', $emptyFieldNames));
 				return false;
 			}
 		}
@@ -1108,7 +1108,7 @@ class Importer {
 				{
 					$emptyFieldNames[] = $arFieldsDef[$field]['name'];
 				}
-				$this->errors[] = sprintf(Loc::getMessage("IXML_IX_NOT_SET_SECTION_UID"), implode(', ', $emptyFieldNames));
+				$this->errors[] = sprintf(Loc::getMessage("KIT_IX_NOT_SET_SECTION_UID"), implode(', ', $emptyFieldNames));
 				return false;
 			}
 		}
@@ -1133,7 +1133,7 @@ class Importer {
 				{
 					$emptyFieldNames[] = $arFieldsDef[$field];
 				}
-				//$this->errors[] = sprintf(Loc::getMessage("IXML_IX_NOT_SET_SECTION_UID"), implode(', ', $emptyFieldNames));
+				//$this->errors[] = sprintf(Loc::getMessage("KIT_IX_NOT_SET_SECTION_UID"), implode(', ', $emptyFieldNames));
 				return false;
 			}
 		}
@@ -1178,7 +1178,7 @@ class Importer {
 				$this->fieldsForSkuGen[] = $k;
 			}
 		}
-		$this->conv = new \Bitrix\IxmlImportxml\Conversion($this, $this->params['IBLOCK_ID'], $this->fieldSettings);
+		$this->conv = new \Bitrix\KitImportxml\Conversion($this, $this->params['IBLOCK_ID'], $this->fieldSettings);
 		
 		//$this->xmlObject = simplexml_load_file($this->filename);
 		
@@ -1195,7 +1195,7 @@ class Importer {
 			//$this->CheckGroupParams('ELEMENT', 'yml_catalog/shop/offers', 'yml_catalog/shop/offers/offer');
 			//$this->CheckGroupParams('ELEMENT', 'yml_catalog/offers', 'yml_catalog/offers/offer');
 			if(preg_match('/\/offers$/', $this->params['GROUPS']['ELEMENT'])) $this->CheckGroupParams('ELEMENT', $this->params['GROUPS']['ELEMENT'], $this->params['GROUPS']['ELEMENT'].'/offer');
-			if(preg_match('/\/'.Loc::getMessage("IXML_IX_PRODUCTS_TAG_1C").'$/', $this->params['GROUPS']['ELEMENT'])) $this->CheckGroupParams('ELEMENT', $this->params['GROUPS']['ELEMENT'], $this->params['GROUPS']['ELEMENT'].'/'.Loc::getMessage("IXML_IX_PRODUCT_TAG_1C"));
+			if(preg_match('/\/'.Loc::getMessage("KIT_IX_PRODUCTS_TAG_1C").'$/', $this->params['GROUPS']['ELEMENT'])) $this->CheckGroupParams('ELEMENT', $this->params['GROUPS']['ELEMENT'], $this->params['GROUPS']['ELEMENT'].'/'.Loc::getMessage("KIT_IX_PRODUCT_TAG_1C"));
 			
 			$count = 0;
 			$this->xmlElements = $this->GetXmlObject($count, $this->xmlCurrentRow, $this->params['GROUPS']['ELEMENT']);
@@ -1208,7 +1208,7 @@ class Importer {
 			//$this->CheckGroupParams('SECTION', 'yml_catalog/shop/categories', 'yml_catalog/shop/categories/category');
 			//$this->CheckGroupParams('SECTION', 'yml_catalog/categories', 'yml_catalog/categories/category');
 			if(preg_match('/\/categories$/', $this->params['GROUPS']['SECTION'])) $this->CheckGroupParams('SECTION', $this->params['GROUPS']['SECTION'], $this->params['GROUPS']['SECTION'].'/category');
-			if(preg_match('/\/'.Loc::getMessage("IXML_IX_SECTIONS_TAG_1C").'$/', $this->params['GROUPS']['SECTION'])) $this->CheckGroupParams('SECTION', $this->params['GROUPS']['SECTION'], $this->params['GROUPS']['SECTION'].'/'.Loc::getMessage("IXML_IX_SECTION_TAG_1C"));
+			if(preg_match('/\/'.Loc::getMessage("KIT_IX_SECTIONS_TAG_1C").'$/', $this->params['GROUPS']['SECTION'])) $this->CheckGroupParams('SECTION', $this->params['GROUPS']['SECTION'], $this->params['GROUPS']['SECTION'].'/'.Loc::getMessage("KIT_IX_SECTION_TAG_1C"));
 			
 			$count = 0;
 			$this->xmlSections = $this->GetXmlObject($count, 0, $this->params['GROUPS']['SECTION'], true);
@@ -1270,7 +1270,7 @@ class Importer {
 				$multiParent = true;
 			}
 		}
-		$arXpath = \Bitrix\IxmlImportxml\Utils::ConvertDataEncoding($arXpath, $this->siteEncoding, $this->fileEncoding);
+		$arXpath = \Bitrix\KitImportxml\Utils::ConvertDataEncoding($arXpath, $this->siteEncoding, $this->fileEncoding);
 		$cachedCountRowsKey = $xpath;
 		$cachedCountRows = 0;
 		if(isset($this->stepparams['count_rows'][$cachedCountRowsKey]))
@@ -1305,7 +1305,7 @@ class Importer {
 				}
 				
 				$curXPath = implode('/', $arObjectNames);
-				$curXPath = \Bitrix\IxmlImportxml\Utils::ConvertDataEncoding($curXPath, $this->fileEncoding, $this->siteEncoding);
+				$curXPath = \Bitrix\KitImportxml\Utils::ConvertDataEncoding($curXPath, $this->fileEncoding, $this->siteEncoding);
 				if($multiParent)
 				{
 					if(strpos($xpath, $curXPath)!==0 && strpos($curXPath, $xpath)!==0) continue;
@@ -1470,7 +1470,7 @@ class Importer {
 				}
 				
 				$curXPath = implode('/', $arObjectNames);
-				$curXPath = \Bitrix\IxmlImportxml\Utils::ConvertDataEncoding($curXPath, $this->fileEncoding, $this->siteEncoding);
+				$curXPath = \Bitrix\KitImportxml\Utils::ConvertDataEncoding($curXPath, $this->fileEncoding, $this->siteEncoding);
 				if(strpos($xpath.'/', $curXPath.'/')!==0 && strpos($curXPath.'/', $xpath.'/')!==0)
 				{
 					if(isset($arObjects[$curDepth]) && !in_array(implode('/', array_slice($arXpathOrig, 0, $curDepth+1)), $this->xpathMulti))
@@ -1766,7 +1766,7 @@ class Importer {
 		if(strpos($arPath[count($arPath)-1], '@')===0)
 		{
 			$attr = substr(array_pop($arPath), 1);
-			$attr = \Bitrix\IxmlImportxml\Utils::ConvertDataEncoding($attr, $this->siteEncoding, $this->fileEncoding);
+			$attr = \Bitrix\KitImportxml\Utils::ConvertDataEncoding($attr, $this->siteEncoding, $this->fileEncoding);
 		}
 		return $attr;
 	}
@@ -2823,7 +2823,7 @@ class Importer {
 	
 	public function CheckCondition($condVal, $v)
 	{
-		$condVal = \Bitrix\IxmlImportxml\Utils::ConvertDataEncoding($condVal, $this->fileEncoding, $this->siteEncoding);
+		$condVal = \Bitrix\KitImportxml\Utils::ConvertDataEncoding($condVal, $this->fileEncoding, $this->siteEncoding);
 		$condVal = preg_replace('/\s+/', ' ', trim($condVal));
 		$v['FROM'] = preg_replace('/\s+/', ' ', trim($v['FROM']));
 		if(!(($v['WHEN']=='EQ' && $condVal==$v['FROM'])
@@ -3536,7 +3536,7 @@ class Importer {
 			
 			if(!$res)
 			{
-				$this->errors[] = sprintf(Loc::getMessage("IXML_IX_NOT_SET_FIELD"), implode(', ', $emptyFields), '').(strlen($arFieldsElement['NAME']) > 0 ? ' ('.$arFieldsElement['NAME'].')' : '');
+				$this->errors[] = sprintf(Loc::getMessage("KIT_IX_NOT_SET_FIELD"), implode(', ', $emptyFields), '').(strlen($arFieldsElement['NAME']) > 0 ? ' ('.$arFieldsElement['NAME'].')' : '');
 				$this->stepparams['error_line']++;
 			}
 			else
@@ -3614,7 +3614,7 @@ class Importer {
 		
 		$elemName = '';
 		//$dbRes = \CIblockElement::GetList(array(), $arFilter, false, false, $arKeys);
-		$dbRes = \Bitrix\IxmlImportxml\DataManager\IblockElement::GetList($arFilter, $arKeys);
+		$dbRes = \Bitrix\KitImportxml\DataManager\IblockElement::GetList($arFilter, $arKeys);
 		while($arElement = $dbRes->Fetch())
 		{
 			if($this->params['ONLY_DELETE_MODE']=='Y')
@@ -3689,7 +3689,7 @@ class Importer {
 					else
 					{
 						$this->stepparams['error_line']++;
-						$this->errors[] = sprintf(Loc::getMessage("IXML_IX_UPDATE_ELEMENT_ERROR"), $el->LAST_ERROR, 'ID = '.$ID);
+						$this->errors[] = sprintf(Loc::getMessage("KIT_IX_UPDATE_ELEMENT_ERROR"), $el->LAST_ERROR, 'ID = '.$ID);
 					}
 					
 					$elemName = $arElement['NAME'];
@@ -3703,7 +3703,7 @@ class Importer {
 			$this->SaveRecordAfter($ID, $IBLOCK_ID, $arItem, $arFieldsElement2);
 		}
 		
-		$allowCreate = (bool)(\Bitrix\IxmlImportxml\DataManager\IblockElement::SelectedRowsCount($dbRes)==0 && $this->params['ONLY_DELETE_MODE']!='Y');
+		$allowCreate = (bool)(\Bitrix\KitImportxml\DataManager\IblockElement::SelectedRowsCount($dbRes)==0 && $this->params['ONLY_DELETE_MODE']!='Y');
 		if($allowCreate && $this->params['SEARCH_OFFERS_WO_PRODUCTS']=='Y')
 		{
 			$res = $this->SaveSKUWithGenerate(0, '', $IBLOCK_ID, $arItem);
@@ -3719,13 +3719,13 @@ class Importer {
 				if(isset($arFieldsElement['ID']))
 				{
 					$this->stepparams['error_line']++;
-					$this->errors[] = sprintf(Loc::getMessage("IXML_IX_NEW_ELEMENT_WITH_ID"), $arFieldsElement['ID'], '');
+					$this->errors[] = sprintf(Loc::getMessage("KIT_IX_NEW_ELEMENT_WITH_ID"), $arFieldsElement['ID'], '');
 					return false;
 				}
 				if(strlen($arFieldsElement['NAME'])==0)
 				{
 					$this->stepparams['error_line']++;
-					$this->errors[] = sprintf(Loc::getMessage("IXML_IX_NOT_SET_FIELD"), $arFieldsDef['element']['items']['IE_NAME']).($arFieldsElement['XML_ID'] ? ' ('.$arFieldsElement['XML_ID'].')' : '');
+					$this->errors[] = sprintf(Loc::getMessage("KIT_IX_NOT_SET_FIELD"), $arFieldsDef['element']['items']['IE_NAME']).($arFieldsElement['XML_ID'] ? ' ('.$arFieldsElement['XML_ID'].')' : '');
 					return false;
 				}
 				if($this->params['ELEMENT_NEW_DEACTIVATE']=='Y')
@@ -3772,7 +3772,7 @@ class Importer {
 				else
 				{
 					$this->stepparams['error_line']++;
-					$this->errors[] = sprintf(Loc::getMessage("IXML_IX_ADD_ELEMENT_ERROR"), $el->LAST_ERROR, $arFieldsElement['NAME']);
+					$this->errors[] = sprintf(Loc::getMessage("KIT_IX_ADD_ELEMENT_ERROR"), $el->LAST_ERROR, $arFieldsElement['NAME']);
 					return false;
 				}
 			}
@@ -4089,7 +4089,7 @@ class Importer {
 					$arUrl = parse_url($path);
 					$res = $client->get($path);
 					$hct = ToLower($client->getHeaders()->get('content-type'));
-					$siteEncoding = $fileEncoding = \Bitrix\IxmlImportxml\Utils::getSiteEncoding();
+					$siteEncoding = $fileEncoding = \Bitrix\KitImportxml\Utils::getSiteEncoding();
 					if(preg_match('/charset=(.+)(;|$)/Uis', $hct, $m))
 					{
 						$fileEncoding = ToLower(trim($m[1]));
@@ -4655,7 +4655,7 @@ class Importer {
 					else
 					{
 						$this->stepparams['error_line']++;
-						$this->errors[] = sprintf(Loc::getMessage("IXML_IX_UPDATE_OFFER_ERROR"), $el->LAST_ERROR, '');
+						$this->errors[] = sprintf(Loc::getMessage("KIT_IX_UPDATE_OFFER_ERROR"), $el->LAST_ERROR, '');
 					}
 						
 					$elemName = $arElement['NAME'];
@@ -4679,7 +4679,7 @@ class Importer {
 				if(isset($arFieldsElement['ID']))
 				{
 					$this->stepparams['error_line']++;
-					$this->errors[] = sprintf(Loc::getMessage("IXML_IX_NEW_OFFER_WITH_ID"), $arFieldsElement['ID'], '');
+					$this->errors[] = sprintf(Loc::getMessage("KIT_IX_NEW_OFFER_WITH_ID"), $arFieldsElement['ID'], '');
 					return false;
 				}
 				if(strlen($arFieldsElement['NAME'])==0)
@@ -4722,7 +4722,7 @@ class Importer {
 				else
 				{
 					$this->stepparams['error_line']++;
-					$this->errors[] = sprintf(Loc::getMessage("IXML_IX_ADD_OFFER_ERROR"), $el->LAST_ERROR, '');
+					$this->errors[] = sprintf(Loc::getMessage("KIT_IX_ADD_OFFER_ERROR"), $el->LAST_ERROR, '');
 					return false;
 				}
 			}
@@ -5231,7 +5231,7 @@ class Importer {
 				{
 					$idn = new \idna_convert();
 					$oldHost = $arUrl['host'];
-					if(!\CUtil::DetectUTF8($oldHost)) $oldHost = \Bitrix\IxmlImportxml\Utils::Win1251Utf8($oldHost);
+					if(!\CUtil::DetectUTF8($oldHost)) $oldHost = \Bitrix\KitImportxml\Utils::Win1251Utf8($oldHost);
 					$file = str_replace($arUrl['host'], $idn->encode($oldHost), $file);
 				}
 			}
@@ -5248,9 +5248,9 @@ class Importer {
 				$arOptions['socketTimeout'] = $arOptions['streamTimeout'] = 10;
 				$ob = new \Bitrix\Main\Web\HttpClient($arOptions);
 				//$ob->setHeader('User-Agent', 'BitrixSM HttpClient class');
-				$ob->setHeader('User-Agent', \Bitrix\IxmlImportxml\Utils::GetUserAgent());
+				$ob->setHeader('User-Agent', \Bitrix\KitImportxml\Utils::GetUserAgent());
 				try{
-					if(!\CUtil::DetectUTF8($file)) $file = \Bitrix\IxmlImportxml\Utils::Win1251Utf8($file);
+					if(!\CUtil::DetectUTF8($file)) $file = \Bitrix\KitImportxml\Utils::Win1251Utf8($file);
 					$file = preg_replace_callback('/[^:\/?=&#@]+/', create_function('$m', 'return rawurlencode($m[0]);'), $file);
 					if($ob->download($file, $tempPath) && $ob->getStatus()!=404) $file = $tempPath2;
 					else return array();
@@ -5296,7 +5296,7 @@ class Importer {
 		
 		if(!file_exists($file) && !$arFile['name'] && !\CUtil::DetectUTF8($file))
 		{
-			$file = \Bitrix\IxmlImportxml\Utils::Win1251Utf8($file);
+			$file = \Bitrix\KitImportxml\Utils::Win1251Utf8($file);
 			$arFile = \CFile::MakeFileArray($file);
 		}
 		
@@ -5439,8 +5439,8 @@ class Importer {
 	
 	public function GetBoolValue($val, $numReturn = false, $defaultValue = false)
 	{
-		$trueVals = array_map('trim', explode(',', Loc::getMessage("IXML_IX_FIELD_VAL_Y")));
-		$falseVals = array_map('trim', explode(',', Loc::getMessage("IXML_IX_FIELD_VAL_N")));
+		$trueVals = array_map('trim', explode(',', Loc::getMessage("KIT_IX_FIELD_VAL_Y")));
+		$falseVals = array_map('trim', explode(',', Loc::getMessage("KIT_IX_FIELD_VAL_N")));
 		if(in_array(ToLower($val), $trueVals))
 		{
 			return ($numReturn ? 1 : 'Y');
@@ -5623,7 +5623,7 @@ class Importer {
 			}
 			else
 			{
-				$this->errors[] = sprintf(Loc::getMessage("IXML_IX_ADD_SECTION_ERROR"), $arFields['NAME'], $bs->LAST_ERROR, '');
+				$this->errors[] = sprintf(Loc::getMessage("KIT_IX_ADD_SECTION_ERROR"), $arFields['NAME'], $bs->LAST_ERROR, '');
 			}
 			$arSections[] = $sectId;
 		}
@@ -6506,7 +6506,7 @@ class Importer {
 				}
 			}
 
-			$dbRes = \Bitrix\IxmlImportxml\DataManager\IblockElement::GetList($arFilter, array('ID'), array('ID'=>'ASC'), ($allowMultiple ? false : 1));
+			$dbRes = \Bitrix\KitImportxml\DataManager\IblockElement::GetList($arFilter, array('ID'), array('ID'=>'ASC'), ($allowMultiple ? false : 1));
 			//$dbRes = \CIblockElement::GetList(array('ID'=>'ASC'), $arFilter, false, ($allowMultiple ? false : array('nTopCount'=>1)), array('ID'));
 			if($arElem = $dbRes->Fetch())
 			{
@@ -6814,7 +6814,7 @@ class Importer {
 	public function SaveDiscount($ID, $IBLOCK_ID, $arFieldsProductDiscount, $name, $isOffer = false)
 	{
 		if(!isset($this->discountManager))
-			$this->discountManager = new \Bitrix\IxmlImportxml\DataManager\Discount($this);
+			$this->discountManager = new \Bitrix\KitImportxml\DataManager\Discount($this);
 		$this->discountManager->SaveDiscount($ID, $IBLOCK_ID, $arFieldsProductDiscount, $name, $isOffer);
 	}
 	
@@ -7087,7 +7087,7 @@ class Importer {
 	
 	public function Xpath($simpleXmlObj, $xpath)
 	{
-		$xpath = \Bitrix\IxmlImportxml\Utils::ConvertDataEncoding($xpath, $this->siteEncoding, $this->fileEncoding);
+		$xpath = \Bitrix\KitImportxml\Utils::ConvertDataEncoding($xpath, $this->siteEncoding, $this->fileEncoding);
 		if(preg_match('/((^|\/)[^\/]+):/', $xpath, $m))
 		{
 			if(strpos($m[1], '/')===0) $xpath = '/'.substr($xpath, strlen($m[1]) + 1);
@@ -7214,7 +7214,7 @@ class Importer {
 	{
 		if(!$this->iblockoffers || !isset($this->iblockoffers[$IBLOCK_ID]))
 		{
-			$this->iblockoffers[$IBLOCK_ID] = \Bitrix\IxmlImportxml\Utils::GetOfferIblock($IBLOCK_ID, true);
+			$this->iblockoffers[$IBLOCK_ID] = \Bitrix\KitImportxml\Utils::GetOfferIblock($IBLOCK_ID, true);
 		}
 		return $this->iblockoffers[$IBLOCK_ID];
 	}
@@ -7223,7 +7223,7 @@ class Importer {
 	{
 		$fileId = (int)$fileId;
 		if($this->params['ELEMENT_IMAGES_FORCE_UPDATE']=='Y' || !$fileId) return true;
-		$arFile = \Bitrix\IxmlImportxml\Utils::GetFileArray($fileId);
+		$arFile = \Bitrix\KitImportxml\Utils::GetFileArray($fileId);
 		$arNewFileVal = $arNewFile;
 		if(isset($arNewFileVal['VALUE'])) $arNewFileVal = $arNewFileVal['VALUE'];
 		if(isset($arNewFileVal['DESCRIPTION'])) $arNewFile['description'] = $arNewFile['DESCRIPTION'];
@@ -7328,7 +7328,7 @@ class Importer {
 	
 	public function GetRealXmlValue($val)
 	{
-		$val = \Bitrix\IxmlImportxml\Utils::ConvertDataEncoding($val, $this->fileEncoding, $this->siteEncoding);
+		$val = \Bitrix\KitImportxml\Utils::ConvertDataEncoding($val, $this->fileEncoding, $this->siteEncoding);
 		if($this->params['HTML_ENTITY_DECODE']=='Y')
 		{
 			if(is_array($val))
@@ -7402,7 +7402,7 @@ class Importer {
 		$arError = error_get_last();
 		if(!is_array($arError) || !isset($arError['type']) || !in_array($arError['type'], array(E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR, E_RECOVERABLE_ERROR))) return;
 		
-		$this->EndWithError(sprintf(Loc::getMessage("IXML_IX_FATAL_ERROR"), $arError['type'], $arError['message'], $arError['file'], $arError['line']));
+		$this->EndWithError(sprintf(Loc::getMessage("KIT_IX_FATAL_ERROR"), $arError['type'], $arError['message'], $arError['file'], $arError['line']));
 	}
 	
 	public function HandleError($code, $message, $file, $line)
@@ -7416,7 +7416,7 @@ class Importer {
 		{
 			$this->EndWithError(\Bitrix\Main\Diag\ExceptionHandlerFormatter::format($exception));
 		}
-		$this->EndWithError(sprintf(Loc::getMessage("IXML_IX_FATAL_ERROR"), '', $exception->getMessage(), $exception->getFile(), $exception->getLine()));
+		$this->EndWithError(sprintf(Loc::getMessage("KIT_IX_FATAL_ERROR"), '', $exception->getMessage(), $exception->getFile(), $exception->getLine()));
 	}
 	
 	public function EndWithError($error)

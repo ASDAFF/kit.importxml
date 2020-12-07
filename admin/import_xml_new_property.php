@@ -5,7 +5,7 @@
 
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_before.php");
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/iblock/prolog.php");
-$moduleId = 'ixml.importxml';
+$moduleId = 'kit.importxml';
 CModule::IncludeModule('iblock');
 CModule::IncludeModule($moduleId);
 $bCurrency = CModule::IncludeModule("currency");
@@ -65,25 +65,25 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 		<col width="50%">
 		<col width="50%">
 		<tr>
-			<td class="adm-detail-content-cell-l"><?echo GetMessage("IXML_IX_NP_TYPE");?>:</td>
+			<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_NP_TYPE");?>:</td>
 			<td class="adm-detail-content-cell-r">
 				<select name="FIELD[PROPERTY_TYPE]">
 				<?
 					if ($boolUserPropExist)
 					{
-						?><optgroup label="<? echo GetMessage('IXML_IX_NP_PROPERTY_BASE_TYPE_GROUP'); ?>"><?
+						?><optgroup label="<? echo GetMessage('KIT_IX_NP_PROPERTY_BASE_TYPE_GROUP'); ?>"><?
 					}
 					?>
-					<option value="S" <?if($PROPERTY_TYPE=="S")echo " selected"?>><?echo GetMessage("IXML_IX_NP_IBLOCK_PROP_S")?></option>
-					<option value="N" <?if($PROPERTY_TYPE=="N")echo " selected"?>><?echo GetMessage("IXML_IX_NP_IBLOCK_PROP_N")?></option>
-					<option value="L" <?if($PROPERTY_TYPE=="L")echo " selected"?>><?echo GetMessage("IXML_IX_NP_IBLOCK_PROP_L")?></option>
-					<option value="F" <?if($PROPERTY_TYPE=="F")echo " selected"?>><?echo GetMessage("IXML_IX_NP_IBLOCK_PROP_F")?></option>
-					<option value="G" <?if($PROPERTY_TYPE=="G")echo " selected"?>><?echo GetMessage("IXML_IX_NP_IBLOCK_PROP_G")?></option>
-					<option value="E" <?if($PROPERTY_TYPE=="E")echo " selected"?>><?echo GetMessage("IXML_IX_NP_IBLOCK_PROP_E")?></option>
+					<option value="S" <?if($PROPERTY_TYPE=="S")echo " selected"?>><?echo GetMessage("KIT_IX_NP_IBLOCK_PROP_S")?></option>
+					<option value="N" <?if($PROPERTY_TYPE=="N")echo " selected"?>><?echo GetMessage("KIT_IX_NP_IBLOCK_PROP_N")?></option>
+					<option value="L" <?if($PROPERTY_TYPE=="L")echo " selected"?>><?echo GetMessage("KIT_IX_NP_IBLOCK_PROP_L")?></option>
+					<option value="F" <?if($PROPERTY_TYPE=="F")echo " selected"?>><?echo GetMessage("KIT_IX_NP_IBLOCK_PROP_F")?></option>
+					<option value="G" <?if($PROPERTY_TYPE=="G")echo " selected"?>><?echo GetMessage("KIT_IX_NP_IBLOCK_PROP_G")?></option>
+					<option value="E" <?if($PROPERTY_TYPE=="E")echo " selected"?>><?echo GetMessage("KIT_IX_NP_IBLOCK_PROP_E")?></option>
 					<?
 					if ($boolUserPropExist)
 					{
-					?></optgroup><optgroup label="<? echo GetMessage('IXML_IX_NP_PROPERTY_USER_TYPE_GROUP'); ?>"><?
+					?></optgroup><optgroup label="<? echo GetMessage('KIT_IX_NP_PROPERTY_USER_TYPE_GROUP'); ?>"><?
 					}
 					foreach($arUserTypeList as  $ar)
 					{
@@ -100,56 +100,56 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 		</tr>
 		
 		<tr>
-			<td class="adm-detail-content-cell-l"><?echo GetMessage("IXML_IX_NP_ACTIVE");?>:</td>
+			<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_NP_ACTIVE");?>:</td>
 			<td class="adm-detail-content-cell-r">
 				<input type="checkbox" name="FIELD[ACTIVE]" value="Y" <?if(!isset($_POST['FIELD']['ACTIVE']) || $_POST['FIELD']['ACTIVE']=='Y'){?>checked<?}?>>
 			</td>
 		</tr>
 		
 		<tr>
-			<td class="adm-detail-content-cell-l"><?echo GetMessage("IXML_IX_NP_SORT");?>:</td>
+			<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_NP_SORT");?>:</td>
 			<td class="adm-detail-content-cell-r">
 				<input type="text" name="FIELD[SORT]" value="<?echo ($_POST['FIELD']['SORT'] ? htmlspecialcharsex($_POST['FIELD']['SORT']) : '500')?>">
 			</td>
 		</tr>
 		
 		<tr>
-			<td class="adm-detail-content-cell-l"><b><?echo GetMessage("IXML_IX_NP_NAME");?></b>:</td>
+			<td class="adm-detail-content-cell-l"><b><?echo GetMessage("KIT_IX_NP_NAME");?></b>:</td>
 			<td class="adm-detail-content-cell-r">
 				<input type="text" name="FIELD[NAME]" value="<?echo ($_POST['FIELD']['NAME'] ? htmlspecialcharsex($_POST['FIELD']['NAME']) : '')?>">
 			</td>
 		</tr>
 		
 		<tr>
-			<td class="adm-detail-content-cell-l"><?echo GetMessage("IXML_IX_NP_CODE");?>:</td>
+			<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_NP_CODE");?>:</td>
 			<td class="adm-detail-content-cell-r">
 				<input type="text" name="FIELD[CODE]" value="<?echo ($_POST['FIELD']['CODE'] ? htmlspecialcharsex($_POST['FIELD']['CODE']) : '')?>">
 			</td>
 		</tr>
 		
 		<tr>
-			<td class="adm-detail-content-cell-l"><?echo GetMessage("IXML_IX_NP_MULTIPLE");?>:</td>
+			<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_NP_MULTIPLE");?>:</td>
 			<td class="adm-detail-content-cell-r">
 				<input type="checkbox" name="FIELD[MULTIPLE]" value="Y" <?if(isset($_POST['FIELD']['MULTIPLE']) && $_POST['FIELD']['MULTIPLE']=='Y'){?>checked<?}?>>
 			</td>
 		</tr>
 		
 		<tr>
-			<td class="adm-detail-content-cell-l"><?echo GetMessage("IXML_IX_NP_IS_REQUIRED");?>:</td>
+			<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_NP_IS_REQUIRED");?>:</td>
 			<td class="adm-detail-content-cell-r">
 				<input type="checkbox" name="FIELD[IS_REQUIRED]" value="Y" <?if(isset($_POST['FIELD']['IS_REQUIRED']) && $_POST['FIELD']['IS_REQUIRED']=='Y'){?>checked<?}?>>
 			</td>
 		</tr>
 		
 		<tr>
-			<td class="adm-detail-content-cell-l"><?echo GetMessage("IXML_IX_NP_SEARCHABLE");?>:</td>
+			<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_NP_SEARCHABLE");?>:</td>
 			<td class="adm-detail-content-cell-r">
 				<input type="checkbox" name="FIELD[SEARCHABLE]" value="Y" <?if(isset($_POST['FIELD']['SEARCHABLE']) && $_POST['FIELD']['SEARCHABLE']=='Y'){?>checked<?}?>>
 			</td>
 		</tr>
 		
 		<tr>
-			<td class="adm-detail-content-cell-l"><?echo GetMessage("IXML_IX_NP_FILTRABLE");?>:</td>
+			<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_NP_FILTRABLE");?>:</td>
 			<td class="adm-detail-content-cell-r">
 				<input type="checkbox" name="FIELD[FILTRABLE]" value="Y" <?if(isset($_POST['FIELD']['FILTRABLE']) && $_POST['FIELD']['FILTRABLE']=='Y'){?>checked<?}?>>
 			</td>

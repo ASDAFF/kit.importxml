@@ -3,14 +3,14 @@
  * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
  */
 
-namespace Bitrix\IxmlImportxml;
+namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Localization\Loc;
 Loc::loadMessages(__FILE__);
 
 class Cloud
 {
-	protected static $moduleId = 'ixml.importxml';
+	protected static $moduleId = 'kit.importxml';
 	protected $services = array(
 		'yadisk' => '/^https?:\/\/yadi\.sk\//i',
 		'mailru' => '/^https?:\/\/cloud\.mail\.ru\/public\//i',
@@ -204,7 +204,7 @@ class Cloud
 		{
 			$path = substr($path, 0, -strlen($arUrl['fragment']) - 1);
 		}
-		$mr = \Bitrix\IxmlImportxml\Cloud\MailRu::GetInstance();
+		$mr = \Bitrix\KitImportxml\Cloud\MailRu::GetInstance();
 		return $mr->download($tmpPath, $path, (isset($arUrl['fragment']) ? $arUrl['fragment'] : ''));
 	}
 	
@@ -249,7 +249,7 @@ class Cloud
 					$fn = \Bitrix\Main\IO\Path::convertLogicalToPhysical($fn);
 					if(strpos($tmpPath, $fn)===false)
 					{
-						$tmpPath = \Bitrix\IxmlImportxml\Utils::ReplaceFile($tmpPath, preg_replace('/\/[^\/]+$/', '/'.$fn, $tmpPath));
+						$tmpPath = \Bitrix\KitImportxml\Utils::ReplaceFile($tmpPath, preg_replace('/\/[^\/]+$/', '/'.$fn, $tmpPath));
 					}
 				}
 				elseif(count($hcdParts2) > 0)
@@ -258,7 +258,7 @@ class Cloud
 					$fn = trim(end($hcdParts2), '"\' ');
 					if(strpos($tmpPath, $fn)===false)
 					{
-						$tmpPath = \Bitrix\IxmlImportxml\Utils::ReplaceFile($tmpPath, preg_replace('/\/[^\/]+$/', '/'.$fn, $tmpPath));
+						$tmpPath = \Bitrix\KitImportxml\Utils::ReplaceFile($tmpPath, preg_replace('/\/[^\/]+$/', '/'.$fn, $tmpPath));
 					}
 				}
 			}
@@ -297,7 +297,7 @@ class Cloud
 					$fn = \Bitrix\Main\IO\Path::convertLogicalToPhysical($fn);
 					if(strpos($tmpPath, $fn)===false)
 					{
-						$tmpPath = \Bitrix\IxmlImportxml\Utils::ReplaceFile($tmpPath, preg_replace('/\/[^\/]+$/', '/'.$fn, $tmpPath));
+						$tmpPath = \Bitrix\KitImportxml\Utils::ReplaceFile($tmpPath, preg_replace('/\/[^\/]+$/', '/'.$fn, $tmpPath));
 					}
 				}
 				elseif(count($hcdParts2) > 0)
@@ -306,7 +306,7 @@ class Cloud
 					$fn = trim(end($hcdParts2), '"\' ');
 					if(strpos($tmpPath, $fn)===false)
 					{
-						$tmpPath = \Bitrix\IxmlImportxml\Utils::ReplaceFile($tmpPath, preg_replace('/\/[^\/]+$/', '/'.$fn, $tmpPath));
+						$tmpPath = \Bitrix\KitImportxml\Utils::ReplaceFile($tmpPath, preg_replace('/\/[^\/]+$/', '/'.$fn, $tmpPath));
 					}
 				}
 			}

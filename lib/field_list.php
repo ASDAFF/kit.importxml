@@ -3,7 +3,7 @@
  * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
  */
 
-namespace Bitrix\IxmlImportxml;
+namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Config\Option;
@@ -26,8 +26,8 @@ class FieldList {
 	public function GetBasicElements()
 	{
 		return array(
-			"ELEMENT" => Loc::getMessage("IXML_IS_GROUP_ELEMENT"),
-			"SECTION" => Loc::getMessage("IXML_IS_GROUP_SECTION")
+			"ELEMENT" => Loc::getMessage("KIT_IS_GROUP_ELEMENT"),
+			"SECTION" => Loc::getMessage("KIT_IS_GROUP_SECTION")
 		);
 	}
 	
@@ -47,79 +47,79 @@ class FieldList {
 		return array(
 			"IE_NAME" => array(
 				"uid" => "Y",
-				"name" => Loc::getMessage("IXML_IX_FI_NAME"),
+				"name" => Loc::getMessage("KIT_IX_FI_NAME"),
 			),
 			"IE_ID" => array(
 				"uid" => "Y",
-				"name" => Loc::getMessage("IXML_IX_FI_ID"),
+				"name" => Loc::getMessage("KIT_IX_FI_ID"),
 			),
 			"IE_XML_ID" => array(
 				"uid" => "Y",
-				"name" => Loc::getMessage("IXML_IX_FI_UNIXML"),
+				"name" => Loc::getMessage("KIT_IX_FI_UNKIT"),
 			),
 			"IE_CODE" => array(
 				"uid" => "Y",
-				"name" => Loc::getMessage("IXML_IX_FI_CODE"),
+				"name" => Loc::getMessage("KIT_IX_FI_CODE"),
 			),
 			"IE_PREVIEW_PICTURE" => array(
-				"name" => Loc::getMessage("IXML_IX_FI_CATIMG"),
+				"name" => Loc::getMessage("KIT_IX_FI_CATIMG"),
 			),
 			"IE_PREVIEW_PICTURE_DESCRIPTION" => array(
-				"name" => Loc::getMessage("IXML_IX_FI_CATIMG_DESCRIPTION"),
+				"name" => Loc::getMessage("KIT_IX_FI_CATIMG_DESCRIPTION"),
 			),
 			"IE_PREVIEW_TEXT" => array(
-				"name" => Loc::getMessage("IXML_IX_FI_CATDESCR"),
+				"name" => Loc::getMessage("KIT_IX_FI_CATDESCR"),
 			),
 			"IE_PREVIEW_TEXT|PREVIEW_TEXT_TYPE=text" => array(
-				"name" => Loc::getMessage("IXML_IX_FI_CATDESCR").' ('.Loc::getMessage("IXML_IX_TEXTTYPE").')',
+				"name" => Loc::getMessage("KIT_IX_FI_CATDESCR").' ('.Loc::getMessage("KIT_IX_TEXTTYPE").')',
 			),
 			"IE_PREVIEW_TEXT|PREVIEW_TEXT_TYPE=html" => array(
-				"name" => Loc::getMessage("IXML_IX_FI_CATDESCR").' (html)',
+				"name" => Loc::getMessage("KIT_IX_FI_CATDESCR").' (html)',
 			),
 			"IE_DETAIL_PICTURE" => array(
-				"name" => Loc::getMessage("IXML_IX_FI_DETIMG"),
+				"name" => Loc::getMessage("KIT_IX_FI_DETIMG"),
 			),
 			"IE_DETAIL_PICTURE_DESCRIPTION" => array(
-				"name" => Loc::getMessage("IXML_IX_FI_DETIMG_DESCRIPTION"),
+				"name" => Loc::getMessage("KIT_IX_FI_DETIMG_DESCRIPTION"),
 			),
 			"IE_DETAIL_TEXT" => array(
-				"name" => Loc::getMessage("IXML_IX_FI_DETDESCR"),
+				"name" => Loc::getMessage("KIT_IX_FI_DETDESCR"),
 			),
 			"IE_DETAIL_TEXT|DETAIL_TEXT_TYPE=text" => array(
-				"name" => Loc::getMessage("IXML_IX_FI_DETDESCR").' ('.Loc::getMessage("IXML_IX_TEXTTYPE").')',
+				"name" => Loc::getMessage("KIT_IX_FI_DETDESCR").' ('.Loc::getMessage("KIT_IX_TEXTTYPE").')',
 			),
 			"IE_DETAIL_TEXT|DETAIL_TEXT_TYPE=html" => array(
-				"name" => Loc::getMessage("IXML_IX_FI_DETDESCR").' (html)',
+				"name" => Loc::getMessage("KIT_IX_FI_DETDESCR").' (html)',
 			),
 			"IE_ACTIVE" => array(
-				"name" => Loc::getMessage("IXML_IX_FI_ACTIV"),
+				"name" => Loc::getMessage("KIT_IX_FI_ACTIV"),
 			),
 			"IE_ACTIVE_FROM" => array(
 				"uid" => "Y",
-				"name" => Loc::getMessage("IXML_IX_FI_ACTIVFROM"),
+				"name" => Loc::getMessage("KIT_IX_FI_ACTIVFROM"),
 			),
 			"IE_ACTIVE_TO" => array(
 				"uid" => "Y",
-				"name" => Loc::getMessage("IXML_IX_FI_ACTIVTO"),
+				"name" => Loc::getMessage("KIT_IX_FI_ACTIVTO"),
 			),
 			"IE_SORT" => array(
-				"name" => Loc::getMessage("IXML_IX_FI_SORT"),
+				"name" => Loc::getMessage("KIT_IX_FI_SORT"),
 			),
 			"IE_TAGS" => array(
 				"uid" => "Y",
-				"name" => Loc::getMessage("IXML_IX_FI_TAGS"),
+				"name" => Loc::getMessage("KIT_IX_FI_TAGS"),
 			),
 			"IE_DATE_CREATE" => array(
-				"name" => Loc::getMessage("IXML_IX_FI_DATE_CREATE"),
+				"name" => Loc::getMessage("KIT_IX_FI_DATE_CREATE"),
 			),
 			"IE_CREATED_BY" => array(
-				"name" => Loc::getMessage("IXML_IX_FI_CREATED_BY"),
+				"name" => Loc::getMessage("KIT_IX_FI_CREATED_BY"),
 			),
 			"IE_SHOW_COUNTER" => array(
-				"name" => Loc::getMessage("IXML_IX_FI_SHOW_COUNTER"),
+				"name" => Loc::getMessage("KIT_IX_FI_SHOW_COUNTER"),
 			),
 			"IE_IBLOCK_SECTION_TMP_ID" => array(
-				"name" => Loc::getMessage("IXML_IX_FI_SECTION_TMP_ID"),
+				"name" => Loc::getMessage("KIT_IX_FI_SECTION_TMP_ID"),
 			),
 		);
 	}
@@ -128,22 +128,22 @@ class FieldList {
 	{
 		return array(
 			"IE_XML_ID" => array(
-				"NAME" => Loc::getMessage("IXML_IX_FI_UNIXML"),
+				"NAME" => Loc::getMessage("KIT_IX_FI_UNKIT"),
 			),
 			"IE_CODE" => array(
-				"NAME" => Loc::getMessage("IXML_IX_FI_CODE"),
+				"NAME" => Loc::getMessage("KIT_IX_FI_CODE"),
 			),
 			"IE_ACTIVE_FROM" => array(
-				"NAME" => Loc::getMessage("IXML_IX_FI_ACTIVFROM"),
+				"NAME" => Loc::getMessage("KIT_IX_FI_ACTIVFROM"),
 			),
 			"IE_ACTIVE_TO" => array(
-				"NAME" => Loc::getMessage("IXML_IX_FI_ACTIVTO"),
+				"NAME" => Loc::getMessage("KIT_IX_FI_ACTIVTO"),
 			),
 			"IE_SORT" => array(
-				"NAME" => Loc::getMessage("IXML_IX_FI_SORT"),
+				"NAME" => Loc::getMessage("KIT_IX_FI_SORT"),
 			),
 			"IE_TAGS" => array(
-				"NAME" => Loc::getMessage("IXML_IX_FI_TAGS"),
+				"NAME" => Loc::getMessage("KIT_IX_FI_TAGS"),
 			),
 		);
 	}
@@ -159,19 +159,19 @@ class FieldList {
 				$dbRes = \CCatalogStore::GetList(array("SORT"=>"ID"), array(), false, false, array("ID", "TITLE", "ADDRESS"));
 				while($arStore = $dbRes->Fetch())
 				{
-					$arDefaultCatFields["ICAT_STORE".$arStore["ID"]."_AMOUNT"] = array('NAME' => Loc::getMessage("IXML_IX_LIST_QUANTITY_STORE").' "'.(strlen($arStore["TITLE"]) > 0 ? $arStore["TITLE"] : $arStore["ADDRESS"]).'"');
+					$arDefaultCatFields["ICAT_STORE".$arStore["ID"]."_AMOUNT"] = array('NAME' => Loc::getMessage("KIT_IX_LIST_QUANTITY_STORE").' "'.(strlen($arStore["TITLE"]) > 0 ? $arStore["TITLE"] : $arStore["ADDRESS"]).'"');
 				}
 				
 				$dbRes = \CCatalogGroup::GetList(array("SORT" => "ASC"));
 				while($arPriceType = $dbRes->Fetch())
 				{
-					$arDefaultCatFields["ICAT_PRICE".$arPriceType["ID"]."_PRICE"] = array('NAME' => Loc::getMessage("IXML_IX_LIST_PRICE").' "'.($arPriceType["NAME_LANG"] ? $arPriceType["NAME_LANG"] : $arPriceType["NAME"]).'"');
+					$arDefaultCatFields["ICAT_PRICE".$arPriceType["ID"]."_PRICE"] = array('NAME' => Loc::getMessage("KIT_IX_LIST_PRICE").' "'.($arPriceType["NAME_LANG"] ? $arPriceType["NAME_LANG"] : $arPriceType["NAME"]).'"');
 				}
 				
-				$arDefaultCatFields["ICAT_QUANTITY_TRACE"] = array('NAME' => Loc::getMessage("IXML_IX_LIST_QUANTITY_TRACE"));
-				$arDefaultCatFields["ICAT_CAN_BUY_ZERO"] = array('NAME' => Loc::getMessage("IXML_IX_LIST_CAN_BUY_ZERO"));
-				//$arDefaultCatFields["ICAT_NEGATIVE_AMOUNT_TRACE"] = array('NAME' => Loc::getMessage("IXML_IX_LIST_NEGATIVE_AMOUNT_TRACE"));
-				$arDefaultCatFields["ICAT_SUBSCRIBE"] = array('NAME' => Loc::getMessage("IXML_IX_LIST_SUBSCRIBE"));
+				$arDefaultCatFields["ICAT_QUANTITY_TRACE"] = array('NAME' => Loc::getMessage("KIT_IX_LIST_QUANTITY_TRACE"));
+				$arDefaultCatFields["ICAT_CAN_BUY_ZERO"] = array('NAME' => Loc::getMessage("KIT_IX_LIST_CAN_BUY_ZERO"));
+				//$arDefaultCatFields["ICAT_NEGATIVE_AMOUNT_TRACE"] = array('NAME' => Loc::getMessage("KIT_IX_LIST_NEGATIVE_AMOUNT_TRACE"));
+				$arDefaultCatFields["ICAT_SUBSCRIBE"] = array('NAME' => Loc::getMessage("KIT_IX_LIST_SUBSCRIBE"));
 			}
 		}
 		return $arDefaultCatFields;
@@ -180,16 +180,16 @@ class FieldList {
 	public static function GetIblockIpropTemplates()
 	{
 		return array(
-			"IPROP_TEMP_ELEMENT_META_TITLE" => Loc::getMessage("IXML_IX_IPROP_ELEMENT_META_TITLE"),
-			"IPROP_TEMP_ELEMENT_META_KEYWORDS" => Loc::getMessage("IXML_IX_IPROP_ELEMENT_META_KEYWORDS"),
-			"IPROP_TEMP_ELEMENT_META_DESCRIPTION" => Loc::getMessage("IXML_IX_IPROP_ELEMENT_META_DESCRIPTION"),
-			"IPROP_TEMP_ELEMENT_PAGE_TITLE" => Loc::getMessage("IXML_IX_IPROP_ELEMENT_PAGE_TITLE"),
-			"IPROP_TEMP_ELEMENT_PREVIEW_PICTURE_FILE_ALT" => Loc::getMessage("IXML_IX_IPROP_ELEMENT_PREVIEW_PICTURE_FILE_ALT"),
-			"IPROP_TEMP_ELEMENT_PREVIEW_PICTURE_FILE_TITLE" => Loc::getMessage("IXML_IX_IPROP_ELEMENT_PREVIEW_PICTURE_FILE_TITLE"),
-			"IPROP_TEMP_ELEMENT_PREVIEW_PICTURE_FILE_NAME" => Loc::getMessage("IXML_IX_IPROP_ELEMENT_PREVIEW_PICTURE_FILE_NAME"),
-			"IPROP_TEMP_ELEMENT_DETAIL_PICTURE_FILE_ALT" => Loc::getMessage("IXML_IX_IPROP_ELEMENT_DETAIL_PICTURE_FILE_ALT"),
-			"IPROP_TEMP_ELEMENT_DETAIL_PICTURE_FILE_TITLE" => Loc::getMessage("IXML_IX_IPROP_ELEMENT_DETAIL_PICTURE_FILE_TITLE"),
-			"IPROP_TEMP_ELEMENT_DETAIL_PICTURE_FILE_NAME" => Loc::getMessage("IXML_IX_IPROP_ELEMENT_DETAIL_PICTURE_FILE_NAME"),
+			"IPROP_TEMP_ELEMENT_META_TITLE" => Loc::getMessage("KIT_IX_IPROP_ELEMENT_META_TITLE"),
+			"IPROP_TEMP_ELEMENT_META_KEYWORDS" => Loc::getMessage("KIT_IX_IPROP_ELEMENT_META_KEYWORDS"),
+			"IPROP_TEMP_ELEMENT_META_DESCRIPTION" => Loc::getMessage("KIT_IX_IPROP_ELEMENT_META_DESCRIPTION"),
+			"IPROP_TEMP_ELEMENT_PAGE_TITLE" => Loc::getMessage("KIT_IX_IPROP_ELEMENT_PAGE_TITLE"),
+			"IPROP_TEMP_ELEMENT_PREVIEW_PICTURE_FILE_ALT" => Loc::getMessage("KIT_IX_IPROP_ELEMENT_PREVIEW_PICTURE_FILE_ALT"),
+			"IPROP_TEMP_ELEMENT_PREVIEW_PICTURE_FILE_TITLE" => Loc::getMessage("KIT_IX_IPROP_ELEMENT_PREVIEW_PICTURE_FILE_TITLE"),
+			"IPROP_TEMP_ELEMENT_PREVIEW_PICTURE_FILE_NAME" => Loc::getMessage("KIT_IX_IPROP_ELEMENT_PREVIEW_PICTURE_FILE_NAME"),
+			"IPROP_TEMP_ELEMENT_DETAIL_PICTURE_FILE_ALT" => Loc::getMessage("KIT_IX_IPROP_ELEMENT_DETAIL_PICTURE_FILE_ALT"),
+			"IPROP_TEMP_ELEMENT_DETAIL_PICTURE_FILE_TITLE" => Loc::getMessage("KIT_IX_IPROP_ELEMENT_DETAIL_PICTURE_FILE_TITLE"),
+			"IPROP_TEMP_ELEMENT_DETAIL_PICTURE_FILE_NAME" => Loc::getMessage("KIT_IX_IPROP_ELEMENT_DETAIL_PICTURE_FILE_NAME"),
 		);
 	}
 	
@@ -197,52 +197,52 @@ class FieldList {
 	{
 		$arSections = array(
 			'ISECT'.$i.'_NAME' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_NAME")
+				"name" => Loc::getMessage("KIT_ISECT_FI_NAME")
 			),
 			'ISECT'.$i.'_CODE' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_CODE")
+				"name" => Loc::getMessage("KIT_ISECT_FI_CODE")
 			),
 			'ISECT'.$i.'_ID' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_ID")
+				"name" => Loc::getMessage("KIT_ISECT_FI_ID")
 			),
 			'ISECT'.$i.'_XML_ID' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_XML_ID")
+				"name" => Loc::getMessage("KIT_ISECT_FI_XML_ID")
 			),
 			'ISECT'.$i.'_TMP_ID' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_TMP_ID")
+				"name" => Loc::getMessage("KIT_ISECT_FI_TMP_ID")
 			),
 			'ISECT'.$i.'_PARENT_TMP_ID' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_PARENT_TMP_ID")
+				"name" => Loc::getMessage("KIT_ISECT_FI_PARENT_TMP_ID")
 			),
 			'ISECT'.$i.'_ACTIVE' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_ACTIVE")
+				"name" => Loc::getMessage("KIT_ISECT_FI_ACTIVE")
 			),
 			'ISECT'.$i.'_SORT' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_SORT")
+				"name" => Loc::getMessage("KIT_ISECT_FI_SORT")
 			),
 			'ISECT'.$i.'_PICTURE' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_PICTURE")
+				"name" => Loc::getMessage("KIT_ISECT_FI_PICTURE")
 			),
 			'ISECT'.$i.'_DETAIL_PICTURE' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_DETAIL_PICTURE")
+				"name" => Loc::getMessage("KIT_ISECT_FI_DETAIL_PICTURE")
 			),
 			'ISECT'.$i.'_DESCRIPTION' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_DESCRIPTION"),
+				"name" => Loc::getMessage("KIT_ISECT_FI_DESCRIPTION"),
 			) ,
 			'ISECT'.$i.'_DESCRIPTION|DESCRIPTION_TYPE=html' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_DESCRIPTION").' (html)',
+				"name" => Loc::getMessage("KIT_ISECT_FI_DESCRIPTION").' (html)',
 			) ,
 			'ISECT'.$i.'_IPROP_TEMP_SECTION_META_TITLE' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_SECTION_META_TITLE"),
+				"name" => Loc::getMessage("KIT_ISECT_FI_SECTION_META_TITLE"),
 			) ,
 			'ISECT'.$i.'_IPROP_TEMP_SECTION_META_KEYWORDS' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_SECTION_META_KEYWORDS"),
+				"name" => Loc::getMessage("KIT_ISECT_FI_SECTION_META_KEYWORDS"),
 			) ,
 			'ISECT'.$i.'_IPROP_TEMP_SECTION_META_DESCRIPTION' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_SECTION_META_DESCRIPTION"),
+				"name" => Loc::getMessage("KIT_ISECT_FI_SECTION_META_DESCRIPTION"),
 			) ,
 			'ISECT'.$i.'_IPROP_TEMP_SECTION_PAGE_TITLE' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_SECTION_PAGE_TITLE"),
+				"name" => Loc::getMessage("KIT_ISECT_FI_SECTION_PAGE_TITLE"),
 			) ,
 		);
 		
@@ -277,34 +277,34 @@ class FieldList {
 	{
 		$arSections = array(
 			'ISECT'.$i.'_NAME' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_NAME")
+				"name" => Loc::getMessage("KIT_ISECT_FI_NAME")
 			),
 			'ISECT'.$i.'_CODE' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_CODE")
+				"name" => Loc::getMessage("KIT_ISECT_FI_CODE")
 			),
 			'ISECT'.$i.'_ID' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_ID")
+				"name" => Loc::getMessage("KIT_ISECT_FI_ID")
 			),
 			'ISECT'.$i.'_XML_ID' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_XML_ID")
+				"name" => Loc::getMessage("KIT_ISECT_FI_XML_ID")
 			),
 			'ISECT'.$i.'_ACTIVE' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_ACTIVE")
+				"name" => Loc::getMessage("KIT_ISECT_FI_ACTIVE")
 			),
 			'ISECT'.$i.'_SORT' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_SORT")
+				"name" => Loc::getMessage("KIT_ISECT_FI_SORT")
 			),
 			'ISECT'.$i.'_PICTURE' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_PICTURE")
+				"name" => Loc::getMessage("KIT_ISECT_FI_PICTURE")
 			),
 			'ISECT'.$i.'_DETAIL_PICTURE' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_DETAIL_PICTURE")
+				"name" => Loc::getMessage("KIT_ISECT_FI_DETAIL_PICTURE")
 			),
 			'ISECT'.$i.'_DESCRIPTION' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_DESCRIPTION"),
+				"name" => Loc::getMessage("KIT_ISECT_FI_DESCRIPTION"),
 			) ,
 			'ISECT'.$i.'_DESCRIPTION|DESCRIPTION_TYPE=html' => array(
-				"name" => Loc::getMessage("IXML_ISECT_FI_DESCRIPTION").' (html)',
+				"name" => Loc::getMessage("KIT_ISECT_FI_DESCRIPTION").' (html)',
 			)
 		);
 		
@@ -339,7 +339,7 @@ class FieldList {
 	{
 		$arFields = array(
 			'IE_SECTION_PATH' => array(
-				"name" => Loc::getMessage("IXML_IX_FI_SECTION_PATH")
+				"name" => Loc::getMessage("KIT_IX_FI_SECTION_PATH")
 			)
 		);
 		return $arFields;
@@ -353,13 +353,13 @@ class FieldList {
 			for($i=1; $i<$this->sectionLevels+1; $i++)
 			{
 				$arMenu['SET_SECTION_'.$i] = array(
-					'TEXT' => sprintf(Loc::getMessage("IXML_IX_SET_SECTION_LEVEL"), $i),
-					'TITLE' => sprintf(Loc::getMessage("IXML_IX_SECTION_LEVEL_TITLE"), $i)
+					'TEXT' => sprintf(Loc::getMessage("KIT_IX_SET_SECTION_LEVEL"), $i),
+					'TITLE' => sprintf(Loc::getMessage("KIT_IX_SECTION_LEVEL_TITLE"), $i)
 				);
 			}
 			$arMenu['REMOVE_ACTION'] = array(
-				'TEXT' => Loc::getMessage("IXML_IX_CANCEL_ACTION"),
-				'TITLE' => Loc::getMessage("IXML_IX_CANCEL_ACTION")
+				'TEXT' => Loc::getMessage("KIT_IX_CANCEL_ACTION"),
+				'TITLE' => Loc::getMessage("KIT_IX_CANCEL_ACTION")
 			);
 		}
 		return $arMenu;
@@ -400,11 +400,11 @@ class FieldList {
 			{
 				$arCatalogFields[] = array(
 					"value" => "ICAT_PURCHASING_PRICE",
-					"name" => Loc::getMessage("IXML_IX_FI_PURCHASING_PRICE"),
+					"name" => Loc::getMessage("KIT_IX_FI_PURCHASING_PRICE"),
 				);
 				$arCatalogFields[] = array(
 					"value" => "ICAT_PURCHASING_CURRENCY",
-					"name" => Loc::getMessage("IXML_IX_FI_PRICE_CURRENCY").' "'.Loc::getMessage("IXML_IX_FI_PURCHASING_PRICE").'"',
+					"name" => Loc::getMessage("KIT_IX_FI_PRICE_CURRENCY").' "'.Loc::getMessage("KIT_IX_FI_PURCHASING_PRICE").'"',
 				);
 			
 				$dbPriceType = \CCatalogGroup::GetList(array("SORT" => "ASC"));
@@ -412,40 +412,40 @@ class FieldList {
 				{
 					$arCatalogFields[] = array(
 						"value" => "ICAT_PRICE".$arPriceType["ID"]."_PRICE",
-						"name" => Loc::getMessage("IXML_IX_FI_PRICE_NAME").' "'.($arPriceType["NAME_LANG"] ? $arPriceType["NAME_LANG"] : $arPriceType["NAME"]).'"',
+						"name" => Loc::getMessage("KIT_IX_FI_PRICE_NAME").' "'.($arPriceType["NAME_LANG"] ? $arPriceType["NAME_LANG"] : $arPriceType["NAME"]).'"',
 					);
 					$arCatalogFields[] = array(
 						"value" => "ICAT_PRICE".$arPriceType["ID"]."_CURRENCY",
-						"name" => Loc::getMessage("IXML_IX_FI_PRICE_CURRENCY").' "'.($arPriceType["NAME_LANG"] ? $arPriceType["NAME_LANG"] : $arPriceType["NAME"]).'"',
+						"name" => Loc::getMessage("KIT_IX_FI_PRICE_CURRENCY").' "'.($arPriceType["NAME_LANG"] ? $arPriceType["NAME_LANG"] : $arPriceType["NAME"]).'"',
 					);
 					$arCatalogFields[] = array(
 						"value" => "ICAT_PRICE".$arPriceType["ID"]."_QUANTITY_FROM",
-						"name" => Loc::getMessage("IXML_IX_FI_PRICE_QUANTITY_FROM").' "'.($arPriceType["NAME_LANG"] ? $arPriceType["NAME_LANG"] : $arPriceType["NAME"]).'"',
+						"name" => Loc::getMessage("KIT_IX_FI_PRICE_QUANTITY_FROM").' "'.($arPriceType["NAME_LANG"] ? $arPriceType["NAME_LANG"] : $arPriceType["NAME"]).'"',
 					);
 					$arCatalogFields[] = array(
 						"value" => "ICAT_PRICE".$arPriceType["ID"]."_QUANTITY_TO",
-						"name" => Loc::getMessage("IXML_IX_FI_PRICE_QUANTITY_TO").' "'.($arPriceType["NAME_LANG"] ? $arPriceType["NAME_LANG"] : $arPriceType["NAME"]).'"',
+						"name" => Loc::getMessage("KIT_IX_FI_PRICE_QUANTITY_TO").' "'.($arPriceType["NAME_LANG"] ? $arPriceType["NAME_LANG"] : $arPriceType["NAME"]).'"',
 					);
 					if($arPriceType['BASE']!='Y')
 					{
 						$arCatalogFields[] = array(
 							"value" => "ICAT_PRICE".$arPriceType["ID"]."_EXTRA",
-							"name" => Loc::getMessage("IXML_IX_FI_PRICE_EXTRA").' "'.($arPriceType["NAME_LANG"] ? $arPriceType["NAME_LANG"] : $arPriceType["NAME"]).'" ('.Loc::getMessage("IXML_IX_FI_PRICE_EXTRA_MEASURE").')',
+							"name" => Loc::getMessage("KIT_IX_FI_PRICE_EXTRA").' "'.($arPriceType["NAME_LANG"] ? $arPriceType["NAME_LANG"] : $arPriceType["NAME"]).'" ('.Loc::getMessage("KIT_IX_FI_PRICE_EXTRA_MEASURE").')',
 						);
 						$arCatalogFields[] = array(
 							"value" => "ICAT_PRICE".$arPriceType["ID"]."_EXTRA_NAME",
-							"name" => Loc::getMessage("IXML_IX_FI_PRICE_EXTRA_NAME").' "'.($arPriceType["NAME_LANG"] ? $arPriceType["NAME_LANG"] : $arPriceType["NAME"]).'"',
+							"name" => Loc::getMessage("KIT_IX_FI_PRICE_EXTRA_NAME").' "'.($arPriceType["NAME_LANG"] ? $arPriceType["NAME_LANG"] : $arPriceType["NAME"]).'"',
 						);
 						$arCatalogFields[] = array(
 							"value" => "ICAT_PRICE".$arPriceType["ID"]."_EXTRA_ID",
-							"name" => Loc::getMessage("IXML_IX_FI_PRICE_EXTRA_ID").' "'.($arPriceType["NAME_LANG"] ? $arPriceType["NAME_LANG"] : $arPriceType["NAME"]).'"',
+							"name" => Loc::getMessage("KIT_IX_FI_PRICE_EXTRA_ID").' "'.($arPriceType["NAME_LANG"] ? $arPriceType["NAME_LANG"] : $arPriceType["NAME"]).'"',
 						);
 					}
 				}
 				
 				$arCatalogFields[] = array(
 					"value" => "ICAT_QUANTITY",
-					"name" => Loc::getMessage("IXML_IX_FI_QUANTITY"),
+					"name" => Loc::getMessage("KIT_IX_FI_QUANTITY"),
 				);
 				
 				$dbRes = \CCatalogStore::GetList(array("SORT"=>"ID"), array(), false, false, array("ID", "TITLE", 'ADDRESS'));
@@ -454,73 +454,73 @@ class FieldList {
 					if(strlen($arStore['TITLE'])==0 && $arStore['ADDRESS']) $arStore['TITLE'] = $arStore['ADDRESS'];
 					$arCatalogFields[] = array(
 						"value" => "ICAT_STORE".$arStore["ID"]."_AMOUNT",
-						"name" => Loc::getMessage("IXML_IX_FI_QUANTITY_STORE").' "'.$arStore["TITLE"].'"'
+						"name" => Loc::getMessage("KIT_IX_FI_QUANTITY_STORE").' "'.$arStore["TITLE"].'"'
 					);
 				}
 				
 				$arCatalogFields[] = array(
 					"value" => "ICAT_WEIGHT",
-					"name" => Loc::getMessage("IXML_IX_FI_WEIGHT"),
+					"name" => Loc::getMessage("KIT_IX_FI_WEIGHT"),
 				);
 				
 				$arCatalogFields[] = array(
 					"value" => "ICAT_LENGTH",
-					"name" => Loc::getMessage("IXML_IX_FI_LENGTH"),
+					"name" => Loc::getMessage("KIT_IX_FI_LENGTH"),
 				);
 				
 				$arCatalogFields[] = array(
 					"value" => "ICAT_WIDTH",
-					"name" => Loc::getMessage("IXML_IX_FI_WIDTH"),
+					"name" => Loc::getMessage("KIT_IX_FI_WIDTH"),
 				);
 				
 				$arCatalogFields[] = array(
 					"value" => "ICAT_HEIGHT",
-					"name" => Loc::getMessage("IXML_IX_FI_HEIGHT"),
+					"name" => Loc::getMessage("KIT_IX_FI_HEIGHT"),
 				);
 				
 				$arCatalogFields[] = array(
 					"value" => "ICAT_MEASURE",
-					"name" => Loc::getMessage("IXML_IX_FI_MEASURE"),
+					"name" => Loc::getMessage("KIT_IX_FI_MEASURE"),
 				);
 				
 				$arCatalogFields[] = array(
 					"value" => "ICAT_MEASURE_RATIO",
-					"name" => Loc::getMessage("IXML_IX_FI_MEASURE_RATIO"),
+					"name" => Loc::getMessage("KIT_IX_FI_MEASURE_RATIO"),
 				);
 				
 				$arCatalogFields[] = array(
 					"value" => "ICAT_VAT_INCLUDED",
-					"name" => Loc::getMessage("IXML_IX_FI_VAT_INCLUDED"),
+					"name" => Loc::getMessage("KIT_IX_FI_VAT_INCLUDED"),
 				);
 				
 				$arCatalogFields[] = array(
 					"value" => "ICAT_VAT_ID",
-					"name" => Loc::getMessage("IXML_IX_FI_VAT_ID"),
+					"name" => Loc::getMessage("KIT_IX_FI_VAT_ID"),
 				);
 				
 				$arCatalogFields[] = array(
 					"value" => "ICAT_BARCODE",
-					"name" => Loc::getMessage("IXML_IX_FI_BARCODE"),
+					"name" => Loc::getMessage("KIT_IX_FI_BARCODE"),
 				);
 				
 				$arCatalogFields[] = array(
 					"value" => "ICAT_QUANTITY_TRACE",
-					"name" => Loc::getMessage("IXML_IX_FI_QUANTITY_TRACE"),
+					"name" => Loc::getMessage("KIT_IX_FI_QUANTITY_TRACE"),
 				);
 				
 				$arCatalogFields[] = array(
 					"value" => "ICAT_CAN_BUY_ZERO",
-					"name" => Loc::getMessage("IXML_IX_FI_CAN_BUY_ZERO"),
+					"name" => Loc::getMessage("KIT_IX_FI_CAN_BUY_ZERO"),
 				);
 				
 				/*$arCatalogFields[] = array(
 					"value" => "ICAT_NEGATIVE_AMOUNT_TRACE",
-					"name" => Loc::getMessage("IXML_IX_FI_NEGATIVE_AMOUNT_TRACE"),
+					"name" => Loc::getMessage("KIT_IX_FI_NEGATIVE_AMOUNT_TRACE"),
 				);*/
 				
 				$arCatalogFields[] = array(
 					"value" => "ICAT_SUBSCRIBE",
-					"name" => Loc::getMessage("IXML_IX_FI_SUBSCRIBE"),
+					"name" => Loc::getMessage("KIT_IX_FI_SUBSCRIBE"),
 				);
 			}
 		}
@@ -545,39 +545,39 @@ class FieldList {
 					$arDiscountFields = array(
 						array(
 							"value" => "ICAT_DISCOUNT_NAME",
-							"name" => Loc::getMessage("IXML_IX_FI_DISCOUNT_NAME"),
+							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_NAME"),
 						),
 						array(
 							"value" => "ICAT_DISCOUNT_XML_ID",
-							"name" => Loc::getMessage("IXML_IX_FI_DISCOUNT_XML_ID"),
+							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_XML_ID"),
 						),
 						array(
 							"value" => "ICAT_DISCOUNT_ACTIVE_FROM",
-							"name" => Loc::getMessage("IXML_IX_FI_DISCOUNT_ACTIVE_FROM"),
+							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_ACTIVE_FROM"),
 						),
 						array(
 							"value" => "ICAT_DISCOUNT_ACTIVE_TO",
-							"name" => Loc::getMessage("IXML_IX_FI_DISCOUNT_ACTIVE_TO"),
+							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_ACTIVE_TO"),
 						),
 						array(
 							"value" => "ICAT_DISCOUNT_VALUE|VALUE_TYPE=P",
-							"name" => Loc::getMessage("IXML_IX_FI_DISCOUNT_PERCENT"),
+							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_PERCENT"),
 						),
 						array(
 							"value" => "ICAT_DISCOUNT_VALUE|VALUE_TYPE=F",
-							"name" => Loc::getMessage("IXML_IX_FI_DISCOUNT_SUM"),
+							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_SUM"),
 						),
 						array(
 							"value" => "ICAT_DISCOUNT_MAX_DISCOUNT",
-							"name" => Loc::getMessage("IXML_IX_FI_DISCOUNT_MAX_DISCOUNT"),
+							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_MAX_DISCOUNT"),
 						),
 						array(
 							"value" => "ICAT_DISCOUNT_PRIORITY",
-							"name" => Loc::getMessage("IXML_IX_FI_DISCOUNT_PRIORITY"),
+							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_PRIORITY"),
 						),
 						array(
 							"value" => "ICAT_DISCOUNT_LAST_DISCOUNT",
-							"name" => Loc::getMessage("IXML_IX_FI_DISCOUNT_LAST_DISCOUNT"),
+							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_LAST_DISCOUNT"),
 						),
 					);
 				}
@@ -586,55 +586,55 @@ class FieldList {
 					$arDiscountFields = array(
 						array(
 							"value" => "ICAT_DISCOUNT_NAME",
-							"name" => Loc::getMessage("IXML_IX_FI_DISCOUNT_NAME"),
+							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_NAME"),
 						),
 						array(
 							"value" => "ICAT_DISCOUNT_ACTIVE_FROM",
-							"name" => Loc::getMessage("IXML_IX_FI_DISCOUNT_ACTIVE_FROM"),
+							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_ACTIVE_FROM"),
 						),
 						array(
 							"value" => "ICAT_DISCOUNT_ACTIVE_TO",
-							"name" => Loc::getMessage("IXML_IX_FI_DISCOUNT_ACTIVE_TO"),
+							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_ACTIVE_TO"),
 						),
 						array(
 							"value" => "ICAT_DISCOUNT_VALUE|VALUE_TYPE=P",
-							"name" => Loc::getMessage("IXML_IX_FI_DISCOUNT_PERCENT"),
+							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_PERCENT"),
 						),
 						array(
 							"value" => "ICAT_DISCOUNT_VALUE|VALUE_TYPE=F",
-							"name" => Loc::getMessage("IXML_IX_FI_DISCOUNT_SUM"),
+							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_SUM"),
 						),
 						array(
 							"value" => "ICAT_DISCOUNT_VALUE|VALUE_TYPE=S",
-							"name" => Loc::getMessage("IXML_IX_FI_DISCOUNT_PRICE"),
+							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_PRICE"),
 						),
 						array(
 							"value" => "ICAT_DISCOUNT_CURRENCY",
-							"name" => Loc::getMessage("IXML_IX_FI_DISCOUNT_CURRENCY"),
+							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_CURRENCY"),
 						),
 						array(
 							"value" => "ICAT_DISCOUNT_MAX_DISCOUNT",
-							"name" => Loc::getMessage("IXML_IX_FI_DISCOUNT_MAX_DISCOUNT"),
+							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_MAX_DISCOUNT"),
 						),
 						array(
 							"value" => "ICAT_DISCOUNT_RENEWAL",
-							"name" => Loc::getMessage("IXML_IX_FI_DISCOUNT_RENEWAL"),
+							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_RENEWAL"),
 						),
 						array(
 							"value" => "ICAT_DISCOUNT_PRIORITY",
-							"name" => Loc::getMessage("IXML_IX_FI_DISCOUNT_PRIORITY"),
+							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_PRIORITY"),
 						),
 						array(
 							"value" => "ICAT_DISCOUNT_LAST_DISCOUNT",
-							"name" => Loc::getMessage("IXML_IX_FI_DISCOUNT_LAST_DISCOUNT"),
+							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_LAST_DISCOUNT"),
 						),
 						array(
 							"value" => "ICAT_DISCOUNT_NOTES",
-							"name" => Loc::getMessage("IXML_IX_FI_DISCOUNT_NOTES"),
+							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_NOTES"),
 						),
 						array(
 							"value" => "ICAT_DISCOUNT_BRGIFT",
-							"name" => Loc::getMessage("IXML_IX_FI_DISCOUNT_GIFT"),
+							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_GIFT"),
 						),
 					);
 				}
@@ -659,15 +659,15 @@ class FieldList {
 				$arSetFields = array(
 					array(
 						"value" => "ICAT_SET_ITEM_ID",
-						"name" => Loc::getMessage("IXML_IX_FI_SET_ITEM"),
+						"name" => Loc::getMessage("KIT_IX_FI_SET_ITEM"),
 					),
 					array(
 						"value" => "ICAT_SET_QUANTITY",
-						"name" => Loc::getMessage("IXML_IX_FI_SET_QUANTITY"),
+						"name" => Loc::getMessage("KIT_IX_FI_SET_QUANTITY"),
 					),
 					array(
 						"value" => "ICAT_SET_SORT",
-						"name" => Loc::getMessage("IXML_IX_FI_SET_SORT"),
+						"name" => Loc::getMessage("KIT_IX_FI_SET_SORT"),
 					),
 				);
 			}
@@ -691,19 +691,19 @@ class FieldList {
 				$arSetFields = array(
 					array(
 						"value" => "ICAT_SET2_ITEM_ID",
-						"name" => Loc::getMessage("IXML_IX_FI_SET2_ITEM"),
+						"name" => Loc::getMessage("KIT_IX_FI_SET2_ITEM"),
 					),
 					array(
 						"value" => "ICAT_SET2_QUANTITY",
-						"name" => Loc::getMessage("IXML_IX_FI_SET2_QUANTITY"),
+						"name" => Loc::getMessage("KIT_IX_FI_SET2_QUANTITY"),
 					),
 					array(
 						"value" => "ICAT_SET2_DISCOUNT_PERCENT",
-						"name" => Loc::getMessage("IXML_IX_FI_SET2_DISCOUNT_PERCENT"),
+						"name" => Loc::getMessage("KIT_IX_FI_SET2_DISCOUNT_PERCENT"),
 					),
 					array(
 						"value" => "ICAT_SET2_SORT",
-						"name" => Loc::getMessage("IXML_IX_FI_SET2_SORT"),
+						"name" => Loc::getMessage("KIT_IX_FI_SET2_SORT"),
 					),
 				);
 			}
@@ -715,7 +715,7 @@ class FieldList {
 	{
 		$arProperties = array(array(
 			"value" => "IP_LIST_PROPS",
-			"name" => Loc::getMessage("IXML_IX_FI_PROP_LIST"),
+			"name" => Loc::getMessage("KIT_IX_FI_PROP_LIST"),
 			"uid" => "N",
 			"wdesc" => false
 		));
@@ -778,8 +778,8 @@ class FieldList {
 		{
 			$i = '';
 			$this->aSectionFields[$IBLOCK_ID]['section'] = array(
-				//'title' => sprintf(Loc::getMessage("IXML_IX_GROUP_SECTION_LEVEL"), $i),
-				'title' => Loc::getMessage("IXML_IX_GROUP_SECTION"),
+				//'title' => sprintf(Loc::getMessage("KIT_IX_GROUP_SECTION_LEVEL"), $i),
+				'title' => Loc::getMessage("KIT_IX_GROUP_SECTION"),
 				'items' => array()
 			);
 			foreach($this->GetIblockSectionFields($i, $IBLOCK_ID) as $k=>$ar)
@@ -801,7 +801,7 @@ class FieldList {
 		if(!$this->aFields[$IBLOCK_ID])
 		{
 			$this->aFields[$IBLOCK_ID]['element'] = array(
-				'title' => ($offers ? Loc::getMessage("IXML_IX_GROUP_OFFER") : Loc::getMessage("IXML_IX_GROUP_ELEMENT")),
+				'title' => ($offers ? Loc::getMessage("KIT_IX_GROUP_OFFER") : Loc::getMessage("KIT_IX_GROUP_ELEMENT")),
 				'items' => array()
 			);
 			foreach(self::GetIblockElementFields() as $k=>$ar)
@@ -826,7 +826,7 @@ class FieldList {
 			if($arPropFields = self::GetIblockProperties($IBLOCK_ID))
 			{
 				$this->aFields[$IBLOCK_ID]['prop'] = array(
-					'title' => ($offers ? Loc::getMessage("IXML_IX_GROUP_OFFER").' ('.Loc::getMessage("IXML_IX_GROUP_PROP").')' : Loc::getMessage("IXML_IX_GROUP_PROP")),
+					'title' => ($offers ? Loc::getMessage("KIT_IX_GROUP_OFFER").' ('.Loc::getMessage("KIT_IX_GROUP_PROP").')' : Loc::getMessage("KIT_IX_GROUP_PROP")),
 					'items' => array()
 				);
 				foreach($arPropFields as $ar)
@@ -839,7 +839,7 @@ class FieldList {
 					$this->aFields[$IBLOCK_ID]['prop']['items'][$ar["value"]] = $ar["name"];
 					if($ar["wdesc"])
 					{
-						$this->aFields[$IBLOCK_ID]['prop']['items'][$ar["value"].'_DESCRIPTION'] = $ar["name"].' ('.Loc::getMessage("IXML_IX_PROP_DESCRIPTION").')';
+						$this->aFields[$IBLOCK_ID]['prop']['items'][$ar["value"].'_DESCRIPTION'] = $ar["name"].' ('.Loc::getMessage("KIT_IX_PROP_DESCRIPTION").')';
 					}
 				}
 			}
@@ -847,7 +847,7 @@ class FieldList {
 			if($arIpropTempFields = self::GetIblockIpropTemplates())
 			{
 				$this->aFields[$IBLOCK_ID]['iprop_temp'] = array(
-					'title' => ($offers ? Loc::getMessage("IXML_IX_GROUP_OFFER").' ('.Loc::getMessage("IXML_IX_IPROP_TEMPLATES").')' : Loc::getMessage("IXML_IX_IPROP_TEMPLATES")),
+					'title' => ($offers ? Loc::getMessage("KIT_IX_GROUP_OFFER").' ('.Loc::getMessage("KIT_IX_IPROP_TEMPLATES").')' : Loc::getMessage("KIT_IX_IPROP_TEMPLATES")),
 					'items' => array()
 				);
 				foreach($arIpropTempFields as $k=>$v)
@@ -863,7 +863,7 @@ class FieldList {
 			if($arCatalogFields = self::GetCatalogFields($IBLOCK_ID))
 			{
 				$this->aFields[$IBLOCK_ID]['catalog'] = array(
-					'title' => ($offers ? Loc::getMessage("IXML_IX_GROUP_OFFER").' ('.Loc::getMessage("IXML_IX_GROUP_CATALOG").')' : Loc::getMessage("IXML_IX_GROUP_CATALOG")),
+					'title' => ($offers ? Loc::getMessage("KIT_IX_GROUP_OFFER").' ('.Loc::getMessage("KIT_IX_GROUP_CATALOG").')' : Loc::getMessage("KIT_IX_GROUP_CATALOG")),
 					'items' => array()
 				);
 				foreach($arCatalogFields as $ar)
@@ -876,7 +876,7 @@ class FieldList {
 			if($arDiscountFields = self::GetCatalogDiscountFields($IBLOCK_ID))
 			{
 				$this->aFields[$IBLOCK_ID]['catalog_discount'] = array(
-					'title' => ($offers ? Loc::getMessage("IXML_IX_GROUP_OFFER").' ('.Loc::getMessage("IXML_IX_GROUP_CATALOG_DISCOUNT").')' : Loc::getMessage("IXML_IX_GROUP_CATALOG_DISCOUNT")),
+					'title' => ($offers ? Loc::getMessage("KIT_IX_GROUP_OFFER").' ('.Loc::getMessage("KIT_IX_GROUP_CATALOG_DISCOUNT").')' : Loc::getMessage("KIT_IX_GROUP_CATALOG_DISCOUNT")),
 					'items' => array()
 				);
 				foreach($arDiscountFields as $ar)
@@ -889,7 +889,7 @@ class FieldList {
 			if(!$offers && ($arCatalogSetFields = self::GetCatalogSetFields($IBLOCK_ID)))
 			{
 				$this->aFields[$IBLOCK_ID]['catalog_set'] = array(
-					'title' => Loc::getMessage("IXML_IX_GROUP_CATALOG_SET"),
+					'title' => Loc::getMessage("KIT_IX_GROUP_CATALOG_SET"),
 					'items' => array()
 				);
 				foreach($arCatalogSetFields as $ar)
@@ -901,7 +901,7 @@ class FieldList {
 			if(!$offers && ($arCatalogSetFields = self::GetCatalogSet2Fields($IBLOCK_ID)))
 			{
 				$this->aFields[$IBLOCK_ID]['catalog_set2'] = array(
-					'title' => Loc::getMessage("IXML_IX_GROUP_CATALOG_SET2"),
+					'title' => Loc::getMessage("KIT_IX_GROUP_CATALOG_SET2"),
 					'items' => array()
 				);
 				foreach($arCatalogSetFields as $ar)
@@ -915,7 +915,7 @@ class FieldList {
 				for($i=1; $i<$this->sectionLevels+1; $i++)
 				{
 					$this->aFields[$IBLOCK_ID]['section'.$i] = array(
-						'title' => sprintf(Loc::getMessage("IXML_IX_GROUP_SECTION_LEVEL"), $i),
+						'title' => sprintf(Loc::getMessage("KIT_IX_GROUP_SECTION_LEVEL"), $i),
 						'items' => array()
 					);
 					foreach($this->GetIblockSectionFieldsLevels($i, $IBLOCK_ID) as $k=>$ar)
@@ -999,8 +999,8 @@ class FieldList {
 			$arOffer = self::GetOfferIblock($IBLOCK_ID, true);
 			if($arOffer) $arGroupsOffers = $this->GetFields($arOffer['OFFERS_IBLOCK_ID'], $arOffer['OFFERS_PROPERTY_ID']);
 		}
-		?><select name="<?echo $fname;?>"><option value=""><?echo Loc::getMessage("IXML_IX_CHOOSE_FIELD");?></option><option value="VARIABLE"><?echo Loc::getMessage("IXML_IX_VARIABLE");?></option><?
-		/*?><option value="new_prop"><?echo Loc::getMessage("IXML_IX_CREATE_PROPERTY");?></option><?*/
+		?><select name="<?echo $fname;?>"><option value=""><?echo Loc::getMessage("KIT_IX_CHOOSE_FIELD");?></option><option value="VARIABLE"><?echo Loc::getMessage("KIT_IX_VARIABLE");?></option><?
+		/*?><option value="new_prop"><?echo Loc::getMessage("KIT_IX_CREATE_PROPERTY");?></option><?*/
 		foreach($arGroups as $k2=>$v2)
 		{
 			?><optgroup label="<?echo $v2['title']?>"><?
@@ -1031,7 +1031,7 @@ class FieldList {
 			if($arOffer) $arGroupsOffers = $this->GetFields($arOffer['OFFERS_IBLOCK_ID'], $arOffer['OFFERS_PROPERTY_ID']);
 		}
 		if(empty($arGroupsOffers)) return;
-		?><select name="<?echo $fname;?>"><option value=""><?echo Loc::getMessage("IXML_IX_CHOOSE_FIELD");?></option><?
+		?><select name="<?echo $fname;?>"><option value=""><?echo Loc::getMessage("KIT_IX_CHOOSE_FIELD");?></option><?
 		foreach($arGroupsOffers as $k2=>$v2)
 		{
 			?><optgroup label="<?echo $v2['title']?>"><?
@@ -1047,7 +1047,7 @@ class FieldList {
 	public function ShowSelectSectionFields($IBLOCK_ID, $fname, $value="")
 	{
 		$arGroups = $this->GetSectionFields($IBLOCK_ID);
-		?><select name="<?echo $fname;?>"><option value=""><?echo Loc::getMessage("IXML_IX_CHOOSE_FIELD");?></option><?
+		?><select name="<?echo $fname;?>"><option value=""><?echo Loc::getMessage("KIT_IX_CHOOSE_FIELD");?></option><?
 		foreach($arGroups as $k2=>$v2)
 		{
 			?><optgroup label="<?echo $v2['title']?>"><?
@@ -1063,7 +1063,7 @@ class FieldList {
 	public function ShowSelectSubSectionFields($IBLOCK_ID, $fname, $value="")
 	{
 		$arGroups = $this->GetSectionFields($IBLOCK_ID);
-		?><select name="<?echo $fname;?>"><option value=""><?echo Loc::getMessage("IXML_IX_CHOOSE_FIELD");?></option><?
+		?><select name="<?echo $fname;?>"><option value=""><?echo Loc::getMessage("KIT_IX_CHOOSE_FIELD");?></option><?
 		foreach($arGroups as $k2=>$v2)
 		{
 			?><optgroup label="<?echo $v2['title']?>"><?
@@ -1090,11 +1090,11 @@ class FieldList {
 		if(!$this->aPropertyFields[$IBLOCK_ID])
 		{
 			$this->aPropertyFields[$IBLOCK_ID] = array(
-				'PROPERTY_NAME' => Loc::getMessage("IXML_IX_PROPERTY_NAME"),
-				'PROPERTY_CODE' => Loc::getMessage("IXML_IX_PROPERTY_CODE"),
-				'PROPERTY_TMP_ID' => Loc::getMessage("IXML_IX_PROPERTY_TMP_ID"),
-				'PROPERTY_VALUE' => Loc::getMessage("IXML_IX_PROPERTY_VALUE"),
-				'PROPERTY_DESCRIPTION' => Loc::getMessage("IXML_IX_PROPERTY_DESCRIPTION")
+				'PROPERTY_NAME' => Loc::getMessage("KIT_IX_PROPERTY_NAME"),
+				'PROPERTY_CODE' => Loc::getMessage("KIT_IX_PROPERTY_CODE"),
+				'PROPERTY_TMP_ID' => Loc::getMessage("KIT_IX_PROPERTY_TMP_ID"),
+				'PROPERTY_VALUE' => Loc::getMessage("KIT_IX_PROPERTY_VALUE"),
+				'PROPERTY_DESCRIPTION' => Loc::getMessage("KIT_IX_PROPERTY_DESCRIPTION")
 			);
 		}
 	
@@ -1104,7 +1104,7 @@ class FieldList {
 	public function ShowSelectPropertyFields($IBLOCK_ID, $fname, $value="")
 	{
 		$arFields = $this->GetPropertyFields($IBLOCK_ID);
-		?><select name="<?echo $fname;?>"><option value=""><?echo Loc::getMessage("IXML_IX_CHOOSE_FIELD");?></option><?
+		?><select name="<?echo $fname;?>"><option value=""><?echo Loc::getMessage("KIT_IX_CHOOSE_FIELD");?></option><?
 		foreach($arFields as $k=>$v)
 		{
 			?><option value="<?echo $k; ?>" <?if($k==$value){echo 'selected';}?>><?echo htmlspecialcharsbx($v); ?></option><?
@@ -1115,14 +1115,14 @@ class FieldList {
 	public function GetIbPropertyFields()
 	{
 		$arFields = array(
-			'IBPROP_NAME' => Loc::getMessage("IXML_IX_IBPROPERTY_NAME"),
-			'IBPROP_CODE' => Loc::getMessage("IXML_IX_IBPROPERTY_CODE"),
-			'IBPROP_TMP_ID' => Loc::getMessage("IXML_IX_IBPROPERTY_TMP_ID"),
-			'IBPROP_PROPERTY_TYPE' => Loc::getMessage("IXML_IX_IBPROPERTY_PROPERTY_TYPE"),
-			'IBPROP_MULTIPLE' => Loc::getMessage("IXML_IX_IBPROPERTY_MULTIPLE"),
-			'IBPROP_WITH_DESCRIPTION' => Loc::getMessage("IXML_IX_WITH_DESCRIPTION"),
-			'IBPROP_SMART_FILTER' => Loc::getMessage("IXML_IX_IBPROPERTY_SMART_FILTER"),
-			'IBPROP_VALUES' => Loc::getMessage("IXML_IX_IBPROPERTY_VALUES")
+			'IBPROP_NAME' => Loc::getMessage("KIT_IX_IBPROPERTY_NAME"),
+			'IBPROP_CODE' => Loc::getMessage("KIT_IX_IBPROPERTY_CODE"),
+			'IBPROP_TMP_ID' => Loc::getMessage("KIT_IX_IBPROPERTY_TMP_ID"),
+			'IBPROP_PROPERTY_TYPE' => Loc::getMessage("KIT_IX_IBPROPERTY_PROPERTY_TYPE"),
+			'IBPROP_MULTIPLE' => Loc::getMessage("KIT_IX_IBPROPERTY_MULTIPLE"),
+			'IBPROP_WITH_DESCRIPTION' => Loc::getMessage("KIT_IX_WITH_DESCRIPTION"),
+			'IBPROP_SMART_FILTER' => Loc::getMessage("KIT_IX_IBPROPERTY_SMART_FILTER"),
+			'IBPROP_VALUES' => Loc::getMessage("KIT_IX_IBPROPERTY_VALUES")
 		);
 		return $arFields;
 	}
@@ -1130,7 +1130,7 @@ class FieldList {
 	public function ShowSelectIbPropertyFields($IBLOCK_ID, $fname, $value="")
 	{
 		$arFields = $this->GetIbPropertyFields();
-		?><select name="<?echo $fname;?>"><option value=""><?echo Loc::getMessage("IXML_IX_CHOOSE_FIELD");?></option><?
+		?><select name="<?echo $fname;?>"><option value=""><?echo Loc::getMessage("KIT_IX_CHOOSE_FIELD");?></option><?
 		foreach($arFields as $k=>$v)
 		{
 			?><option value="<?echo $k; ?>" <?if($k==$value){echo 'selected';}?>><?echo htmlspecialcharsbx($v); ?></option><?
@@ -1147,10 +1147,10 @@ class FieldList {
 	public function ShowSelectSectionUidFields($IBLOCK_ID, $fname, $val=false)
 	{
 		?><select name="<?echo $fname;?>"><?
-			?><option value="NAME"<?if($val=='NAME') echo ' selected';?>><?echo Loc::getMessage("IXML_IX_SECTION_NAME"); ?></option><?
-			?><option value="CODE"<?if($val=='CODE') echo ' selected';?>><?echo Loc::getMessage("IXML_IX_SECTION_CODE"); ?></option><?
-			?><option value="ID"<?if($val=='ID') echo ' selected';?>><?echo Loc::getMessage("IXML_IX_SECTION_ID"); ?></option><?
-			?><option value="XML_ID"<?if($val=='XML_ID') echo ' selected';?>><?echo Loc::getMessage("IXML_IX_SECTION_XML_ID"); ?></option><?
+			?><option value="NAME"<?if($val=='NAME') echo ' selected';?>><?echo Loc::getMessage("KIT_IX_SECTION_NAME"); ?></option><?
+			?><option value="CODE"<?if($val=='CODE') echo ' selected';?>><?echo Loc::getMessage("KIT_IX_SECTION_CODE"); ?></option><?
+			?><option value="ID"<?if($val=='ID') echo ' selected';?>><?echo Loc::getMessage("KIT_IX_SECTION_ID"); ?></option><?
+			?><option value="XML_ID"<?if($val=='XML_ID') echo ' selected';?>><?echo Loc::getMessage("KIT_IX_SECTION_XML_ID"); ?></option><?
 			
 			$dbRes = \CUserTypeEntity::GetList(array('SORT'=>'ASC', 'ID'=>'ASC'), array('ENTITY_ID'=>'IBLOCK_'.$IBLOCK_ID.'_SECTION', 'LANG'=>LANGUAGE_ID));
 			while($arField = $dbRes->Fetch())
@@ -1167,7 +1167,7 @@ class FieldList {
 	
 	public function ShowSelectPropertyList($IBLOCK_ID, $fname, $val=false, $prefix='')
 	{
-		?><select name="<?echo $fname;?>" class="kda-chosen-multi" multiple data-placeholder="<?echo Loc::getMessage('IXML_IX_PLACEHOLDER_CHOOSE');?>"><?echo $this->GetSelectPropertyList($IBLOCK_ID, $val, $prefix);?></select><?
+		?><select name="<?echo $fname;?>" class="kda-chosen-multi" multiple data-placeholder="<?echo Loc::getMessage('KIT_IX_PLACEHOLDER_CHOOSE');?>"><?echo $this->GetSelectPropertyList($IBLOCK_ID, $val, $prefix);?></select><?
 	}
 	
 	public function GetSelectPropertyList($IBLOCK_ID, $val=false, $prefix='')
@@ -1193,13 +1193,13 @@ class FieldList {
 		if(!$IBLOCK_ID) return;
 		if(!$isOffer)
 		{
-			echo GetMessage("IXML_IX_PRODUCT_PROPERTIES");?>:<br><?
+			echo GetMessage("KIT_IX_PRODUCT_PROPERTIES");?>:<br><?
 		}
 		else
 		{
-			?><br><?echo GetMessage("IXML_IX_OFFER_PROPERTIES");?>:<br><?
+			?><br><?echo GetMessage("KIT_IX_OFFER_PROPERTIES");?>:<br><?
 		}
-		?><select name="<?echo $fname;?>" class="kda-chosen-multi" multiple data-placeholder="<?echo Loc::getMessage('IXML_IX_PLACEHOLDER_CHOOSE');?>"><?echo $this->GetSelectPropertyListForSum($IBLOCK_ID, $val);?></select><?
+		?><select name="<?echo $fname;?>" class="kda-chosen-multi" multiple data-placeholder="<?echo Loc::getMessage('KIT_IX_PLACEHOLDER_CHOOSE');?>"><?echo $this->GetSelectPropertyListForSum($IBLOCK_ID, $val);?></select><?
 	}
 	
 	public function GetSelectPropertyListForSum($IBLOCK_ID, $val=false)
@@ -1246,7 +1246,7 @@ class FieldList {
 					if($ar['uid']=="Y")
 					{
 						$ar["value"] = $prefix.$ar["value"];
-						?><option value="<?echo $ar["value"] ?>" <?if((is_array($val) && in_array($ar["value"], $val)) || $ar["value"]==$val){echo 'selected';}?>><?echo Loc::getMessage("IXML_IX_FI_PROP");?> "<?echo htmlspecialcharsbx($ar["name"]); ?>"</option><?
+						?><option value="<?echo $ar["value"] ?>" <?if((is_array($val) && in_array($ar["value"], $val)) || $ar["value"]==$val){echo 'selected';}?>><?echo Loc::getMessage("KIT_IX_FI_PROP");?> "<?echo htmlspecialcharsbx($ar["name"]); ?>"</option><?
 					}
 				}
 			}		
@@ -1268,7 +1268,7 @@ class FieldList {
 			{
 				$this->Sections[$IBLOCK_ID][] = array(
 					'ID' => '',
-					'NAME' => Loc::getMessage("IXML_IX_NO_SECTION")
+					'NAME' => Loc::getMessage("KIT_IX_NO_SECTION")
 				);
 				
 				if(Loader::includeModule('iblock'))
@@ -1287,7 +1287,7 @@ class FieldList {
 			{
 				$this->Sections[$IBLOCK_ID][] = array(
 					'ID' => '',
-					'NAME' => Loc::getMessage("IXML_IX_CHOOSE_SECTION_FIRST")
+					'NAME' => Loc::getMessage("KIT_IX_CHOOSE_SECTION_FIRST")
 				);
 			}
 		}
@@ -1365,9 +1365,9 @@ class FieldList {
 	public function ShowSelectFieldsHighload($HIGHLOADBLOCK_ID, $fname, $value="")
 	{
 		$arFields = $this->GetHigloadBlockFields($HIGHLOADBLOCK_ID);
-		?><select name="<?echo $fname;?>"><option value=""><?echo Loc::getMessage("IXML_IX_CHOOSE_FIELD");?></option><?
-		/*?><option value="new_prop"><?echo Loc::getMessage("IXML_IX_CREATE_HIGHLOAD_FIELD");?></option><?*/
-		?><optgroup label="<?echo Loc::getMessage("IXML_IX_HIGHLOAD_FIELDS")?>"><?
+		?><select name="<?echo $fname;?>"><option value=""><?echo Loc::getMessage("KIT_IX_CHOOSE_FIELD");?></option><?
+		/*?><option value="new_prop"><?echo Loc::getMessage("KIT_IX_CREATE_HIGHLOAD_FIELD");?></option><?*/
+		?><optgroup label="<?echo Loc::getMessage("KIT_IX_HIGHLOAD_FIELDS")?>"><?
 		foreach($arFields as $k=>$v)
 		{
 			?><option value="<?echo $k; ?>" <?if($k==$value){echo 'selected';}?>><?echo htmlspecialcharsbx($v['NAME_LANG']); ?></option><?
@@ -1450,9 +1450,9 @@ class FieldList {
 			{
 				foreach($arExtKey as $extKey) unset($arGroups['element']['items'][$extKey]);
 			}
-			$arGroups['element']['items']['IE_IBLOCK_SECTION_ID'] = Loc::getMessage("IXML_IX_FI_IBLOCK_SECTION_ID");
-			$arGroups['element']['items']['IE_IBLOCK_SECTION_IDS'] = Loc::getMessage("IXML_IX_FI_IBLOCK_SECTION_IDS");
-			$arGroups['element']['items']['IE_IBLOCK_SECTION_PARENT_IDS'] = Loc::getMessage("IXML_IX_FI_IBLOCK_SECTION_PARENT_IDS");
+			$arGroups['element']['items']['IE_IBLOCK_SECTION_ID'] = Loc::getMessage("KIT_IX_FI_IBLOCK_SECTION_ID");
+			$arGroups['element']['items']['IE_IBLOCK_SECTION_IDS'] = Loc::getMessage("KIT_IX_FI_IBLOCK_SECTION_IDS");
+			$arGroups['element']['items']['IE_IBLOCK_SECTION_PARENT_IDS'] = Loc::getMessage("KIT_IX_FI_IBLOCK_SECTION_PARENT_IDS");
 		}		
 		return $arGroups;
 	}

@@ -3,7 +3,7 @@
  * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
  */
 
-namespace Bitrix\IxmlImportxml\DataManager;
+namespace Bitrix\KitImportxml\DataManager;
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;

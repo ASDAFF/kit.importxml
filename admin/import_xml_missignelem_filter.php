@@ -5,7 +5,7 @@
 
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_before.php");
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/iblock/prolog.php");
-$moduleId = 'ixml.importxml';
+$moduleId = 'kit.importxml';
 CModule::IncludeModule('iblock');
 CModule::IncludeModule($moduleId);
 IncludeModuleLangFile(__FILE__);
@@ -44,7 +44,7 @@ if(!is_array($FILTER)) $FILTER = array();
 
 require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_admin.php");
 ?>
-<form action="" method="post" enctype="multipart/form-data" name="filter_form" id="ixml-ix-filter" class="ixml-ix-filter">
-	<?\Bitrix\IxmlImportxml\Utils::ShowFilter('ixml_importxml_'.$PROFILE_ID, $IBLOCK_ID, $FILTER);?>
+<form action="" method="post" enctype="multipart/form-data" name="filter_form" id="kit-ix-filter" class="kit-ix-filter">
+	<?\Bitrix\KitImportxml\Utils::ShowFilter('kit_importxml_'.$PROFILE_ID, $IBLOCK_ID, $FILTER);?>
 </form>
 <?require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/epilog_popup_admin.php");?>

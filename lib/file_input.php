@@ -3,7 +3,7 @@
  * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
  */
 
-namespace Bitrix\IxmlImportxml;
+namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Loader,
 	Bitrix\Main\Localization\Loc;
@@ -394,36 +394,36 @@ class CFileInput
 
 		if ($inputs['upload'])
 		{
-			self::$menuNew[] = array("ID" => "upload", "GLOBAL_ICON" => "adm-menu-upload-pc", "TEXT" => GetMessage("IXML_IX_ADM_FILE_UPLOAD"), "CLOSE_ON_CLICK" => false);
-			self::$menuExist[] = array("ID" => "upload", "GLOBAL_ICON" => "adm-menu-upload-pc", "TEXT" => GetMessage("IXML_IX_ADM_FILE_NEW_UPLOAD"), "CLOSE_ON_CLICK" => false);
+			self::$menuNew[] = array("ID" => "upload", "GLOBAL_ICON" => "adm-menu-upload-pc", "TEXT" => GetMessage("KIT_IX_ADM_FILE_UPLOAD"), "CLOSE_ON_CLICK" => false);
+			self::$menuExist[] = array("ID" => "upload", "GLOBAL_ICON" => "adm-menu-upload-pc", "TEXT" => GetMessage("KIT_IX_ADM_FILE_NEW_UPLOAD"), "CLOSE_ON_CLICK" => false);
 		}
 		if ($inputs['medialib'])
 		{
-			self::$menuNew[] = array("TEXT" => GetMessage("IXML_IX_ADM_FILE_MEDIALIB"), "GLOBAL_ICON" => "adm-menu-upload-medialib", "ONCLICK" => "OpenMedialibDialog".self::$jsId."()");
-			self::$menuExist[] = array("TEXT" => GetMessage("IXML_IX_ADM_FILE_NEW_MEDIALIB"), "GLOBAL_ICON" => "adm-menu-upload-medialib", "ONCLICK" => "OpenMedialibDialog".self::$jsId."()");
+			self::$menuNew[] = array("TEXT" => GetMessage("KIT_IX_ADM_FILE_MEDIALIB"), "GLOBAL_ICON" => "adm-menu-upload-medialib", "ONCLICK" => "OpenMedialibDialog".self::$jsId."()");
+			self::$menuExist[] = array("TEXT" => GetMessage("KIT_IX_ADM_FILE_NEW_MEDIALIB"), "GLOBAL_ICON" => "adm-menu-upload-medialib", "ONCLICK" => "OpenMedialibDialog".self::$jsId."()");
 		}
 		if ($inputs['file_dialog'])
 		{
-			self::$menuNew[] = array("TEXT" => GetMessage("IXML_IX_ADM_FILE_SITE"), "GLOBAL_ICON" => "adm-menu-upload-site", "ONCLICK" => "OpenFileDialog".self::$jsId."()");
-			self::$menuExist[] = array("TEXT" => GetMessage("IXML_IX_ADM_FILE_NEW_SITE"), "GLOBAL_ICON" => "adm-menu-upload-site", "ONCLICK" => "OpenFileDialog".self::$jsId."()");
+			self::$menuNew[] = array("TEXT" => GetMessage("KIT_IX_ADM_FILE_SITE"), "GLOBAL_ICON" => "adm-menu-upload-site", "ONCLICK" => "OpenFileDialog".self::$jsId."()");
+			self::$menuExist[] = array("TEXT" => GetMessage("KIT_IX_ADM_FILE_NEW_SITE"), "GLOBAL_ICON" => "adm-menu-upload-site", "ONCLICK" => "OpenFileDialog".self::$jsId."()");
 		}
 
 		if ($inputs['cloud'])
 		{
-			self::$menuNew[] = array("TEXT" => GetMessage("IXML_IX_ADM_FILE_CLOUD"), "GLOBAL_ICON" => "adm-menu-upload-cloud", "ONCLICK" => "OpenCloudDialog".self::$jsId."()");
-			self::$menuExist[] = array("TEXT" => GetMessage("IXML_IX_ADM_FILE_NEW_CLOUD"), "GLOBAL_ICON" => "adm-menu-upload-cloud", "ONCLICK" => "OpenCloudDialog".self::$jsId."()");
+			self::$menuNew[] = array("TEXT" => GetMessage("KIT_IX_ADM_FILE_CLOUD"), "GLOBAL_ICON" => "adm-menu-upload-cloud", "ONCLICK" => "OpenCloudDialog".self::$jsId."()");
+			self::$menuExist[] = array("TEXT" => GetMessage("KIT_IX_ADM_FILE_NEW_CLOUD"), "GLOBAL_ICON" => "adm-menu-upload-cloud", "ONCLICK" => "OpenCloudDialog".self::$jsId."()");
 		}
 		
 		if ($inputs['email'])
 		{
-			self::$menuNew[] = array("TEXT" => GetMessage("IXML_IX_FILE_SOURCE_EMAIL"), "GLOBAL_ICON" => "adm-menu-upload-email", "ONCLICK" => "EProfile.ShowEmailForm()");
-			self::$menuExist[] = array("TEXT" => GetMessage("IXML_IX_FILE_SOURCE_EMAIL"), "GLOBAL_ICON" => "adm-menu-upload-email", "ONCLICK" => "EProfile.ShowEmailForm()");
+			self::$menuNew[] = array("TEXT" => GetMessage("KIT_IX_FILE_SOURCE_EMAIL"), "GLOBAL_ICON" => "adm-menu-upload-email", "ONCLICK" => "EProfile.ShowEmailForm()");
+			self::$menuExist[] = array("TEXT" => GetMessage("KIT_IX_FILE_SOURCE_EMAIL"), "GLOBAL_ICON" => "adm-menu-upload-email", "ONCLICK" => "EProfile.ShowEmailForm()");
 		}
 		
 		if ($inputs['linkauth'])
 		{
-			self::$menuNew[] = array("TEXT" => GetMessage("IXML_IX_FILE_SOURCE_LINKAUTH"), "GLOBAL_ICON" => "adm-menu-upload-linkauth", "ONCLICK" => "EProfile.ShowFileAuthForm()");
-			self::$menuExist[] = array("TEXT" => GetMessage("IXML_IX_FILE_SOURCE_LINKAUTH"), "GLOBAL_ICON" => "adm-menu-upload-linkauth", "ONCLICK" => "EProfile.ShowFileAuthForm()");
+			self::$menuNew[] = array("TEXT" => GetMessage("KIT_IX_FILE_SOURCE_LINKAUTH"), "GLOBAL_ICON" => "adm-menu-upload-linkauth", "ONCLICK" => "EProfile.ShowFileAuthForm()");
+			self::$menuExist[] = array("TEXT" => GetMessage("KIT_IX_FILE_SOURCE_LINKAUTH"), "GLOBAL_ICON" => "adm-menu-upload-linkauth", "ONCLICK" => "EProfile.ShowFileAuthForm()");
 		}
 
 		$arConfig = array(
@@ -519,15 +519,15 @@ class CFileInput
 			$descName = isset($arFile['DESC_NAME']) ? $arFile['DESC_NAME'] : self::$descInputName;
 
 			if ($arFile['FORMATED_SIZE'] != '')
-				$hint .= '<span class="adm-input-file-hint-row">'.GetMessage('IXML_IX_ADM_FILE_INFO_SIZE').':&nbsp;&nbsp;'.$arFile['FORMATED_SIZE'].'</span>';
+				$hint .= '<span class="adm-input-file-hint-row">'.GetMessage('KIT_IX_ADM_FILE_INFO_SIZE').':&nbsp;&nbsp;'.$arFile['FORMATED_SIZE'].'</span>';
 
 			if ($arFile['IS_IMAGE'])
-				$hint .= '<span class="adm-input-file-hint-row">'.GetMessage('IXML_IX_ADM_FILE_INFO_DIM').':&nbsp;&nbsp;'.$arFile['WIDTH'].'x'.$arFile['HEIGHT'].'</span>';
+				$hint .= '<span class="adm-input-file-hint-row">'.GetMessage('KIT_IX_ADM_FILE_INFO_DIM').':&nbsp;&nbsp;'.$arFile['WIDTH'].'x'.$arFile['HEIGHT'].'</span>';
 			if ($sImagePath != '')
-				$hint .= '<span class="adm-input-file-hint-row">'.GetMessage('IXML_IX_ADM_FILE_INFO_LINK').':&nbsp;&nbsp;<a href="'.\CHTTP::urnEncode($sImagePath, "UTF-8").'">'.htmlspecialcharsbx($sImagePath).'</a></span>';
+				$hint .= '<span class="adm-input-file-hint-row">'.GetMessage('KIT_IX_ADM_FILE_INFO_LINK').':&nbsp;&nbsp;<a href="'.\CHTTP::urnEncode($sImagePath, "UTF-8").'">'.htmlspecialcharsbx($sImagePath).'</a></span>';
 
 			if (!self::$bShowDescInput && $arFile['DESCRIPTION'] != "")
-				$hint .= '<span class="adm-input-file-hint-row">'.GetMessage('IXML_IX_ADM_FILE_DESCRIPTION').':&nbsp;&nbsp;'.htmlspecialcharsbx($arFile['DESCRIPTION']).'</span>';
+				$hint .= '<span class="adm-input-file-hint-row">'.GetMessage('KIT_IX_ADM_FILE_DESCRIPTION').':&nbsp;&nbsp;'.htmlspecialcharsbx($arFile['DESCRIPTION']).'</span>';
 		}
 		?><span class="adm-input-file-exist-cont" id="<?= self::$jsId?>_file_cont_<?= $ind?>">
 		<div class="adm-input-file-ex-wrap<?if(self::$bMultiple){echo ' adm-input-cont-bordered';}?>">
@@ -536,7 +536,7 @@ class CFileInput
 		{
 			?>
 			<span id="<?= self::$jsId.'_file_404_'.$ind?>" class="adm-input-file-not-found">
-			<?= GetMessage('IXML_IX_ADM_FILE_NOT_FOUND')?>
+			<?= GetMessage('KIT_IX_ADM_FILE_NOT_FOUND')?>
 			</span>
 			<?
 		}
@@ -546,7 +546,7 @@ class CFileInput
 			?>
 			<span id="<?= $hintId?>" class="adm-input-file-preview" style="<?if(self::$minPreviewWidth > 0){echo 'min-width: '.self::$minPreviewWidth.'px;';}?> <?if(self::$minPreviewHeight > 0){echo 'min-height:'.self::$minPreviewHeight.'px;';}?>">
 				<?= \CFile::Show2Images($file['src'], $arFile['SRC'], self::$maxPreviewWidth, self::$maxPreviewHeight);?>
-				<div id="<?= self::$jsId.'_file_del_lbl_'.$ind?>" class="adm-input-file-del-lbl"><?= GetMessage('IXML_IX_ADM_FILE_DELETED_TITLE')?></div>
+				<div id="<?= self::$jsId.'_file_del_lbl_'.$ind?>" class="adm-input-file-del-lbl"><?= GetMessage('KIT_IX_ADM_FILE_DELETED_TITLE')?></div>
 			</span>
 			<?
 		}
@@ -582,7 +582,7 @@ class CFileInput
 		{
 			?>
 			<div id="<?= self::$jsId.'_file_desc_'.$ind?>" class="adm-input-file-desc-inp-cont" <?if($arFile['DESCRIPTION'] == ""){echo 'style="display: none;"';}?>>
-				<input name="<?= $descName?>" class="adm-input" type="text" value="<?= htmlspecialcharsbx($arFile['DESCRIPTION'])?>" size="<?= self::$inputSize?>" placeholder="<?= GetMessage("IXML_IX_ADM_FILE_DESC")?>" <?if(self::$bViewMode){echo ' disabled="disabled"';}?>>
+				<input name="<?= $descName?>" class="adm-input" type="text" value="<?= htmlspecialcharsbx($arFile['DESCRIPTION'])?>" size="<?= self::$inputSize?>" placeholder="<?= GetMessage("KIT_IX_ADM_FILE_DESC")?>" <?if(self::$bViewMode){echo ' disabled="disabled"';}?>>
 			</div>
 			<?
 		}

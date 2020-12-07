@@ -10,15 +10,15 @@ if(!$USER->CanDoOperation('view_event_log'))
 	$APPLICATION->AuthForm(GetMessage("ACCESS_DENIED"));
 
 IncludeModuleLangFile(__FILE__);
-$MODULE_ID = 'ixml.importxml';
+$MODULE_ID = 'kit.importxml';
 CModule::IncludeModule($MODULE_ID);
 CModule::IncludeModule('iblock');
-$logger = new \Bitrix\IxmlImportxml\Logger(false);
+$logger = new \Bitrix\KitImportxml\Logger(false);
 
-$oProfile = new \Bitrix\IxmlImportxml\Profile();
+$oProfile = new \Bitrix\KitImportxml\Profile();
 $arProfiles = $oProfile->GetList();
 
-$sTableID = "tbl_ixml_importxml_event_log";
+$sTableID = "tbl_kit_importxml_event_log";
 $oSort = new CAdminSorting($sTableID, "ID", "DESC");
 $lAdmin = new CAdminList($sTableID, $oSort);
 
@@ -43,12 +43,12 @@ function CheckFilter()
 	if(strlen($_REQUEST["find_timestamp_x_1"])>0)
 	{
 		if(!CheckDateTime($_REQUEST["find_timestamp_x_1"], CSite::GetDateFormat("FULL")))
-			$str.= GetMessage("IXML_IX_EVENTLOG_WRONG_TIMESTAMP_X_FROM")."<br>";
+			$str.= GetMessage("KIT_IX_EVENTLOG_WRONG_TIMESTAMP_X_FROM")."<br>";
 	}
 	if(strlen($_REQUEST["find_timestamp_x_2"])>0)
 	{
 		if(!CheckDateTime($_REQUEST["find_timestamp_x_2"], CSite::GetDateFormat("FULL")))
-			$str.= GetMessage("IXML_IX_EVENTLOG_WRONG_TIMESTAMP_X_TO")."<br>";
+			$str.= GetMessage("KIT_IX_EVENTLOG_WRONG_TIMESTAMP_X_TO")."<br>";
 	}
 
 	if(strlen($str) > 0)
@@ -134,59 +134,59 @@ else
 $rsData = CEventLog::GetList(array($by => $order), $arFilter, $arNavParams);
 $rsData = new CAdminResult($rsData, $sTableID);
 $rsData->NavStart();
-$lAdmin->NavText($rsData->GetNavPrint(GetMessage("IXML_IX_EVENTLOG_LIST_PAGE")));
+$lAdmin->NavText($rsData->GetNavPrint(GetMessage("KIT_IX_EVENTLOG_LIST_PAGE")));
 
 $arHeaders = array(
 	array(
 		"id" => "ID",
-		"content" => GetMessage("IXML_IX_EVENTLOG_ID"),
+		"content" => GetMessage("KIT_IX_EVENTLOG_ID"),
 		"sort" => "ID",
 		"default" => true,
 		"align" => "right",
 	),
 	array(
 		"id" => "TIMESTAMP_X",
-		"content" => GetMessage("IXML_IX_EVENTLOG_TIMESTAMP_X"),
+		"content" => GetMessage("KIT_IX_EVENTLOG_TIMESTAMP_X"),
 		"sort" => "TIMESTAMP_X",
 		"default" => true,
 		"align" => "right",
 	),
 	array(
 		"id" => "AUDIT_TYPE_ID",
-		"content" => GetMessage("IXML_IX_EVENTLOG_PROFILE_ID"),
+		"content" => GetMessage("KIT_IX_EVENTLOG_PROFILE_ID"),
 		"default" => true,
 	),
 	array(
 		"id" => "ITEM_ID",
-		"content" => GetMessage("IXML_IX_EVENTLOG_ITEM_ID"),
+		"content" => GetMessage("KIT_IX_EVENTLOG_ITEM_ID"),
 		"default" => true,
 	),
 	array(
 		"id" => "REMOTE_ADDR",
-		"content" => GetMessage("IXML_IX_EVENTLOG_REMOTE_ADDR"),
+		"content" => GetMessage("KIT_IX_EVENTLOG_REMOTE_ADDR"),
 		"default" => true,
 	),
 	array(
 		"id" => "USER_AGENT",
-		"content" => GetMessage("IXML_IX_EVENTLOG_USER_AGENT"),
+		"content" => GetMessage("KIT_IX_EVENTLOG_USER_AGENT"),
 	),
 	array(
 		"id" => "REQUEST_URI",
-		"content" => GetMessage("IXML_IX_EVENTLOG_REQUEST_URI"),
+		"content" => GetMessage("KIT_IX_EVENTLOG_REQUEST_URI"),
 		"default" => true,
 	),
 	array(
 		"id" => "SITE_ID",
-		"content" => GetMessage("IXML_IX_EVENTLOG_SITE_ID"),
+		"content" => GetMessage("KIT_IX_EVENTLOG_SITE_ID"),
 	),
 	array(
 		"id" => "USER_ID",
-		"content" => GetMessage("IXML_IX_EVENTLOG_USER_ID"),
+		"content" => GetMessage("KIT_IX_EVENTLOG_USER_ID"),
 		"default" => true,
 	),
 	array(
 		"id" => "DESCRIPTION",
-		"content" => GetMessage("IXML_IX_EVENTLOG_DESCRIPTION"),
+		"content" => GetMessage("KIT_IX_EVENTLOG_DESCRIPTION"),
 		"default" => true,
 	),
 );
@@ -221,8 +221,8 @@ while($db_res = $rsData->NavNext(true, "a_"))
 	{
 		if($a_ITEM_ID=='ELEMENT_NOT_FOUND')
 		{
-			$row->AddViewField("ITEM_ID", '['.$a_ITEM_ID.'] '.GetMessage("IXML_IX_EVENTLOG_IBLOCK_ELEMENT_NOT_FOUND"));
-			$a_DESCRIPTION = '<b>'.GetMessage("IXML_IX_EVENTLOG_FILTER_FIELDS").'</b>'.$logger->GetElementDescriptionArray($a_DESCRIPTION);
+			$row->AddViewField("ITEM_ID", '['.$a_ITEM_ID.'] '.GetMessage("KIT_IX_EVENTLOG_IBLOCK_ELEMENT_NOT_FOUND"));
+			$a_DESCRIPTION = '<b>'.GetMessage("KIT_IX_EVENTLOG_FILTER_FIELDS").'</b>'.$logger->GetElementDescriptionArray($a_DESCRIPTION);
 		}
 		elseif(strpos($a_ITEM_ID, 'ELEMENT_')===0)
 		{
@@ -234,7 +234,7 @@ while($db_res = $rsData->NavNext(true, "a_"))
 				{
 					$a_ITEM_ID = '<a href="/bitrix/admin/iblock_element_edit.php?IBLOCK_ID='.$arElement['IBLOCK_ID'].'&type='.$arElement['IBLOCK_TYPE_ID'].'&ID='.$arElement['ID'].'&lang='.LANGUAGE_ID.'">'.$a_ITEM_ID.'</a>';
 				}
-				$row->AddViewField("ITEM_ID", '['.$a_ITEM_ID.'] '.GetMessage("IXML_IX_EVENTLOG_IBLOCK_ELEMENT_".$eaction));
+				$row->AddViewField("ITEM_ID", '['.$a_ITEM_ID.'] '.GetMessage("KIT_IX_EVENTLOG_IBLOCK_ELEMENT_".$eaction));
 				
 				if(strlen($a_DESCRIPTION))
 				{
@@ -266,7 +266,7 @@ while($db_res = $rsData->NavNext(true, "a_"))
 $aContext = array();
 $lAdmin->AddAdminContextMenu($aContext);
 
-$APPLICATION->SetTitle(GetMessage("IXML_IX_EVENTLOG_PAGE_TITLE"));
+$APPLICATION->SetTitle(GetMessage("KIT_IX_EVENTLOG_PAGE_TITLE"));
 $lAdmin->CheckListMode();
 
 require($_SERVER["DOCUMENT_ROOT"].BX_ROOT."/modules/main/include/prolog_admin_after.php");
@@ -275,28 +275,28 @@ require($_SERVER["DOCUMENT_ROOT"].BX_ROOT."/modules/main/include/prolog_admin_af
 <input type="hidden" name="lang" value="<?echo LANG?>">
 <?
 $arFilterNames = array(
-	"find_id" => GetMessage("IXML_IX_EVENTLOG_ID"),
-	"find_timestamp_x" => GetMessage("IXML_IX_EVENTLOG_TIMESTAMP_X"),
-	"find_item_id" => GetMessage("IXML_IX_EVENTLOG_ITEM_ID"),
-	"find_site_id" => GetMessage("IXML_IX_EVENTLOG_SITE_ID"),
-	"find_user_id" => GetMessage("IXML_IX_EVENTLOG_USER_ID"),
-	"find_remote_addr" => GetMessage("IXML_IX_EVENTLOG_REMOTE_ADDR"),
-	"find_user_agent" => GetMessage("IXML_IX_EVENTLOG_USER_AGENT"),
-	"find_request_uri" => GetMessage("IXML_IX_EVENTLOG_REQUEST_URI"),
+	"find_id" => GetMessage("KIT_IX_EVENTLOG_ID"),
+	"find_timestamp_x" => GetMessage("KIT_IX_EVENTLOG_TIMESTAMP_X"),
+	"find_item_id" => GetMessage("KIT_IX_EVENTLOG_ITEM_ID"),
+	"find_site_id" => GetMessage("KIT_IX_EVENTLOG_SITE_ID"),
+	"find_user_id" => GetMessage("KIT_IX_EVENTLOG_USER_ID"),
+	"find_remote_addr" => GetMessage("KIT_IX_EVENTLOG_REMOTE_ADDR"),
+	"find_user_agent" => GetMessage("KIT_IX_EVENTLOG_USER_AGENT"),
+	"find_request_uri" => GetMessage("KIT_IX_EVENTLOG_REQUEST_URI"),
 );
 
 $oFilter = new CAdminFilter($sTableID."_filter", $arFilterNames);
 $oFilter->Begin();
 ?>
 <tr>
-	<td><?echo GetMessage("IXML_IX_EVENTLOG_PROFILE_ID")?>:</td>
+	<td><?echo GetMessage("KIT_IX_EVENTLOG_PROFILE_ID")?>:</td>
 	<td>
 		<select name="find_audit_type_id" >
-			<option value=""><?echo GetMessage("IXML_IX_ALL"); ?></option>
+			<option value=""><?echo GetMessage("KIT_IX_ALL"); ?></option>
 			<?
 			foreach($arProfiles as $k=>$profile)
 			{
-				$key = 'IXML_IX_PROFILE_'.$k;
+				$key = 'KIT_IX_PROFILE_'.$k;
 				?><option value="<?echo $key;?>" <?if($find_audit_type_id==$key){echo 'selected';}?>><?echo $profile; ?></option><?
 			}
 			?>
@@ -304,15 +304,15 @@ $oFilter->Begin();
 	</td>
 </tr>
 <tr>
-	<td><?echo GetMessage("IXML_IX_EVENTLOG_ID")?>:</td>
+	<td><?echo GetMessage("KIT_IX_EVENTLOG_ID")?>:</td>
 	<td><input type="text" name="find_id" size="47" value="<?echo htmlspecialcharsbx($find_id)?>"></td>
 </tr>
 <tr>
-	<td><?echo GetMessage("IXML_IX_EVENTLOG_TIMESTAMP_X")?>:</td>
+	<td><?echo GetMessage("KIT_IX_EVENTLOG_TIMESTAMP_X")?>:</td>
 	<td><?echo CAdminCalendar::CalendarPeriod("find_timestamp_x_1", "find_timestamp_x_2", $find_timestamp_x_1, $find_timestamp_x_2, false, 15, true)?></td>
 </tr>
 <tr>
-	<td><?echo GetMessage("IXML_IX_EVENTLOG_ITEM_ID")?>:</td>
+	<td><?echo GetMessage("KIT_IX_EVENTLOG_ITEM_ID")?>:</td>
 	<td><input type="text" name="find_item_id" size="47" value="<?echo htmlspecialcharsbx($find_item_id)?>">&nbsp;<?=ShowFilterLogicHelp()?></td>
 </tr>
 <?
@@ -327,23 +327,23 @@ while ($ar = $rs->Fetch())
 }
 ?>
 <tr>
-	<td><?echo GetMessage("IXML_IX_EVENTLOG_SITE_ID")?>:</td>
-	<td><?echo SelectBoxFromArray("find_site_id", $arSiteDropdown, $find_site_id, GetMessage("IXML_IX_ALL"), "");?></td>
+	<td><?echo GetMessage("KIT_IX_EVENTLOG_SITE_ID")?>:</td>
+	<td><?echo SelectBoxFromArray("find_site_id", $arSiteDropdown, $find_site_id, GetMessage("KIT_IX_ALL"), "");?></td>
 </tr>
 <tr>
-	<td><?echo GetMessage("IXML_IX_EVENTLOG_USER_ID")?>:</td>
+	<td><?echo GetMessage("KIT_IX_EVENTLOG_USER_ID")?>:</td>
 	<td><input type="text" name="find_user_id" size="47" value="<?echo htmlspecialcharsbx($find_user_id)?>"></td>
 </tr>
 <tr>
-	<td><?echo GetMessage("IXML_IX_EVENTLOG_REMOTE_ADDR")?>:</td>
+	<td><?echo GetMessage("KIT_IX_EVENTLOG_REMOTE_ADDR")?>:</td>
 	<td><input type="text" name="find_remote_addr" size="47" value="<?echo htmlspecialcharsbx($find_remote_addr)?>">&nbsp;<?=ShowFilterLogicHelp()?></td>
 </tr>
 <tr>
-	<td><?echo GetMessage("IXML_IX_EVENTLOG_USER_AGENT")?>:</td>
+	<td><?echo GetMessage("KIT_IX_EVENTLOG_USER_AGENT")?>:</td>
 	<td><input type="text" name="find_user_agent" size="47" value="<?echo htmlspecialcharsbx($find_user_agent)?>">&nbsp;<?=ShowFilterLogicHelp()?></td>
 </tr>
 <tr>
-	<td><?echo GetMessage("IXML_IX_EVENTLOG_REQUEST_URI")?>:</td>
+	<td><?echo GetMessage("KIT_IX_EVENTLOG_REQUEST_URI")?>:</td>
 	<td><input type="text" name="find_request_uri" size="47" value="<?echo htmlspecialcharsbx($find_request_uri)?>">&nbsp;<?=ShowFilterLogicHelp()?></td>
 </tr>
 <?

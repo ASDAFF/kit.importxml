@@ -3,7 +3,7 @@
  * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
  */
 
-namespace Bitrix\IxmlImportxml;
+namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Localization\Loc;
 Loc::loadMessages(__FILE__);

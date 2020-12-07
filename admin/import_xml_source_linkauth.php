@@ -5,7 +5,7 @@
 
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_before.php");
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/iblock/prolog.php");
-$moduleId = 'ixml.importxml';
+$moduleId = 'kit.importxml';
 CModule::IncludeModule('iblock');
 CModule::IncludeModule($moduleId);
 IncludeModuleLangFile(__FILE__);
@@ -57,7 +57,7 @@ if($_POST['action']=='checkconnect')
 	$APPLICATION->RestartBuffer();
 	if(ob_get_contents()) ob_end_clean();
 		
-	$arFile = \Bitrix\IxmlImportxml\Utils::MakeFileArray(CUtil::PhpToJSObject($_POST['AUTH_SETTINGS']));
+	$arFile = \Bitrix\KitImportxml\Utils::MakeFileArray(CUtil::PhpToJSObject($_POST['AUTH_SETTINGS']));
 	$res = ($arFile['size'] > 0 && $arFile['type']!='text/html');
 	$arResult = array('result'=>($res ? 'success' : 'fail'), 'file'=>$arFile);
 	echo \CUtil::PhpToJSObject($arResult);
@@ -86,8 +86,8 @@ if($_POST['action']=='checkconnect')
 			foreach($arHeaders as $hk=>$hv) $client->setHeader($hk, $hv);
 			$htmlPage = $client->get($location);
 			$arHeaders['Referer'] = $location;
-			\Bitrix\IxmlImportxml\Utils::MergeCookie($arCookies, $client->getCookies()->toArray());
-			\Bitrix\IxmlImportxml\Utils::GetNewLocation($location, $client->getHeaders()->get("Location"));
+			\Bitrix\KitImportxml\Utils::MergeCookie($arCookies, $client->getCookies()->toArray());
+			\Bitrix\KitImportxml\Utils::GetNewLocation($location, $client->getHeaders()->get("Location"));
 			$status = $client->getStatus();
 			if($status != 302 && $status != 303) $location = '';
 			$redirectCount++;
@@ -120,7 +120,7 @@ if($_POST['action']=='checkconnect')
 							if(preg_match('/<form[^>]*action\s*=\s*[\'"]?([^\'"]+)[\'"]?(\s|>)/Uis', $htmlForm, $m2))
 							{
 								$formAction = $authLink;
-								\Bitrix\IxmlImportxml\Utils::GetNewLocation($formAction, $m2[1]);
+								\Bitrix\KitImportxml\Utils::GetNewLocation($formAction, $m2[1]);
 							}
 						}
 					}
@@ -149,29 +149,29 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 <form action="<?echo $APPLICATION->GetCurUri();?>" method="post" enctype="multipart/form-data" name="field_settings">
 	<input type="hidden" name="action" value="save">
 	<?//ShowPostData($_POST);?>
-	<table width="100%" class="ixml-ix-list-settings">
+	<table width="100%" class="kit-ix-list-settings">
 		<col width="50%">
 		<col width="50%">
 		<tr>
-			<td class="adm-detail-content-cell-l"><?echo GetMessage("IXML_IX_LAUTH_FILELINK");?>:</td>
+			<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_LAUTH_FILELINK");?>:</td>
 			<td class="adm-detail-content-cell-r">
 				<input type="text" size="50" name="AUTH_SETTINGS[FILELINK]" value="<?echo htmlspecialcharsbx($AUTH_SETTINGS['FILELINK'])?>">
 			</td>
 		</tr>
 		<tr>
-			<td class="ixml-ix-email-checkparams" colspan="2">
-				<a href="javascript:void(0)" onclick="EProfile.CheckLauthConnectData(this)"><?echo GetMessage("IXML_IX_LAUTH_CHECK_SETTINGS");?></a> <div id="connect_result"></div>
+			<td class="kit-ix-email-checkparams" colspan="2">
+				<a href="javascript:void(0)" onclick="EProfile.CheckLauthConnectData(this)"><?echo GetMessage("KIT_IX_LAUTH_CHECK_SETTINGS");?></a> <div id="connect_result"></div>
 				<div>&nbsp;</div>
 			</td>
 		</tr>
 		<tr>
-			<td class="adm-detail-content-cell-l"><?echo GetMessage("IXML_IX_LAUTH_PAGEAUTH");?>:</td>
+			<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_LAUTH_PAGEAUTH");?>:</td>
 			<td class="adm-detail-content-cell-r">
 				<input type="text" size="50" name="AUTH_SETTINGS[PAGEAUTH]" value="<?echo htmlspecialcharsbx($AUTH_SETTINGS['PAGEAUTH'])?>" onchange="EProfile.LauthLoadParams(this)">
 			</td>
 		</tr>
 		<tr>
-			<td class="adm-detail-content-cell-l"><?echo GetMessage("IXML_IX_LAUTH_POSTPAGEAUTH");?>:</td>
+			<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_LAUTH_POSTPAGEAUTH");?>:</td>
 			<td class="adm-detail-content-cell-r">
 				<input type="text" size="50" name="AUTH_SETTINGS[POSTPAGEAUTH]" value="<?echo htmlspecialcharsbx($AUTH_SETTINGS['POSTPAGEAUTH'])?>">
 			</td>
@@ -180,7 +180,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 		
 		<tr class="heading">
 			<td colspan="2">
-				<?echo GetMessage("IXML_IX_LAUTH_VARS"); ?>
+				<?echo GetMessage("KIT_IX_LAUTH_VARS"); ?>
 			</td>
 		</tr>
 		<?
@@ -189,13 +189,13 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 		foreach($AUTH_SETTINGS['VARS'] as $var=>$value)
 		{
 			?>
-			<tr class="ixml-ix-lauth-var">
+			<tr class="kit-ix-lauth-var">
 				<td class="adm-detail-content-cell-l">
-					<?echo GetMessage("IXML_IX_LAUTH_VAR");?>:
+					<?echo GetMessage("KIT_IX_LAUTH_VAR");?>:
 					<input type="text" name="vars[]" value="<?echo htmlspecialcharsbx($var)?>">
 				</td>
 				<td class="adm-detail-content-cell-r">
-					<?echo GetMessage("IXML_IX_LAUTH_VALUE");?>:
+					<?echo GetMessage("KIT_IX_LAUTH_VALUE");?>:
 					<input type="text" name="values[]" value="<?echo htmlspecialcharsbx($value)?>">
 				</td>
 			</tr>
@@ -203,14 +203,14 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 		}
 		?>
 		<tr>
-			<td colspan="2" class="ixml-ix-email-checkparams ixml-ix-lauth-addvar">
-				<a href="javascript:void(0)" onclick="EProfile.LauthAddVar(this)"><?echo GetMessage("IXML_IX_LAUTH_ADD_VAR");?></a>
+			<td colspan="2" class="kit-ix-email-checkparams kit-ix-lauth-addvar">
+				<a href="javascript:void(0)" onclick="EProfile.LauthAddVar(this)"><?echo GetMessage("KIT_IX_LAUTH_ADD_VAR");?></a>
 			</td>
 		</tr>
 		
 		<tr class="heading">
 			<td colspan="2">
-				<?echo GetMessage("IXML_IX_LAUTH_HEADERS"); ?>
+				<?echo GetMessage("KIT_IX_LAUTH_HEADERS"); ?>
 			</td>
 		</tr>
 		<?
@@ -219,13 +219,13 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 		foreach($AUTH_SETTINGS['HEADERS'] as $var=>$value)
 		{
 			?>
-			<tr class="ixml-ix-lauth-var">
+			<tr class="kit-ix-lauth-var">
 				<td class="adm-detail-content-cell-l">
-					<?echo GetMessage("IXML_IX_LAUTH_HEADER");?>:
+					<?echo GetMessage("KIT_IX_LAUTH_HEADER");?>:
 					<input type="text" name="headers[]" value="<?echo htmlspecialcharsbx($var)?>">
 				</td>
 				<td class="adm-detail-content-cell-r">
-					<?echo GetMessage("IXML_IX_LAUTH_VALUE");?>:
+					<?echo GetMessage("KIT_IX_LAUTH_VALUE");?>:
 					<input type="text" name="hvalues[]" value="<?echo htmlspecialcharsbx($value)?>">
 				</td>
 			</tr>
@@ -233,19 +233,19 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 		}
 		?>
 		<tr>
-			<td colspan="2" class="ixml-ix-email-checkparams">
-				<a href="javascript:void(0)" onclick="EProfile.LauthAddVar(this)"><?echo GetMessage("IXML_IX_LAUTH_ADD_HEADER");?></a>
+			<td colspan="2" class="kit-ix-email-checkparams">
+				<a href="javascript:void(0)" onclick="EProfile.LauthAddVar(this)"><?echo GetMessage("KIT_IX_LAUTH_ADD_HEADER");?></a>
 			</td>
 		</tr>
 		
 		<tr class="heading">
 			<td colspan="2">
-				<?echo GetMessage("IXML_IX_LAUTH_OTHER_PARAMS"); ?>
+				<?echo GetMessage("KIT_IX_LAUTH_OTHER_PARAMS"); ?>
 			</td>
 		</tr>
 		<tr>
-			<td colspan="2" class="ixml-ix-linkauth-handler">
-				<p><?echo GetMessage("IXML_IX_LAUTH_HANDLER_FOR_LINK"); ?>:</p>
+			<td colspan="2" class="kit-ix-linkauth-handler">
+				<p><?echo GetMessage("KIT_IX_LAUTH_HANDLER_FOR_LINK"); ?>:</p>
 				<textarea name="AUTH_SETTINGS[HANDLER_FOR_LINK]"><?echo $AUTH_SETTINGS['HANDLER_FOR_LINK']?></textarea>
 			</td>
 		</tr>

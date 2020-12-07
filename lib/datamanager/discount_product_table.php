@@ -3,7 +3,7 @@
  * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
  */
 
-namespace Bitrix\IxmlImportxml\DataManager;
+namespace Bitrix\KitImportxml\DataManager;
 
 use Bitrix\Main\Entity;
 use Bitrix\Main\Localization\Loc;
@@ -21,7 +21,7 @@ Loc::loadMessages(__FILE__);
  * <li> SORT int optional default 500
  * </ul>
  *
- * @package Bitrix\IxmlImportxml
+ * @package Bitrix\KitImportxml
  **/
 
 class DiscountProductTable extends Entity\DataManager
@@ -58,22 +58,22 @@ class DiscountProductTable extends Entity\DataManager
 				'data_type' => 'integer',
 				'primary' => true,
 				'autocomplete' => true,
-				'title' => Loc::getMessage('IXML_IX_DP_ENTITY_ID_FIELD'),
+				'title' => Loc::getMessage('KIT_IX_DP_ENTITY_ID_FIELD'),
 			),
 			'DISCOUNT_ID' => array(
 				'data_type' => 'integer',
 				'required' => true,
-				'title' => Loc::getMessage('IXML_IX_DP_ENTITY_DISCOUNT_ID_FIELD'),
+				'title' => Loc::getMessage('KIT_IX_DP_ENTITY_DISCOUNT_ID_FIELD'),
 			),
 			'PRODUCT_ID' => array(
 				'data_type' => 'integer',
 				'required' => true,
-				'title' => Loc::getMessage('IXML_IX_DP_ENTITY_PRODUCT_ID_FIELD'),
+				'title' => Loc::getMessage('KIT_IX_DP_ENTITY_PRODUCT_ID_FIELD'),
 			),
 			'SITE_ID' => array(
 				'data_type' => 'string',
 				'required' => true,
-				'title' => Loc::getMessage('IXML_IX_DP_ENTITY_SITE_ID_FIELD'),
+				'title' => Loc::getMessage('KIT_IX_DP_ENTITY_SITE_ID_FIELD'),
 			)
 		);
 	}

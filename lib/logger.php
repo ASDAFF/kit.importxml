@@ -3,14 +3,14 @@
  * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
  */
 
-namespace Bitrix\IxmlImportxml;
+namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 Loc::loadMessages(__FILE__);
 
 class Logger {
-	protected static $moduleId = 'ixml.importxml';
+	protected static $moduleId = 'kit.importxml';
 	
 	function __construct($saveLog = false, $profileId = 0)
 	{
@@ -51,7 +51,7 @@ class Logger {
 		if((!is_array($this->elemFields) || empty($this->elemFields)) && (ToUpper($this->typeChanges)!='DELETE')) return false;
 		\CEventLog::Add(array(
 			"SEVERITY" => "INFO_".$this->profileId,
-			"AUDIT_TYPE_ID" => "IXML_IX_PROFILE_".$this->profileId,
+			"AUDIT_TYPE_ID" => "KIT_IX_PROFILE_".$this->profileId,
 			"MODULE_ID" => static::$moduleId,
 			"ITEM_ID" => 'ELEMENT_'.ToUpper($this->typeChanges).'_'.$this->elementID,
 			"DESCRIPTION" => serialize($this->elemFields),
@@ -63,7 +63,7 @@ class Logger {
 		if(!$this->saveLog) return false;
 		\CEventLog::Add(array(
 			"SEVERITY" => "INFO_".$this->profileId,
-			"AUDIT_TYPE_ID" => "IXML_IX_PROFILE_".$this->profileId,
+			"AUDIT_TYPE_ID" => "KIT_IX_PROFILE_".$this->profileId,
 			"MODULE_ID" => static::$moduleId,
 			"ITEM_ID" => 'ELEMENT_NOT_FOUND',
 			"DESCRIPTION" => serialize($arFilter)
@@ -73,7 +73,7 @@ class Logger {
 	public function PrepareFieldList()
 	{
 		if(isset($this->fl)) return;
-		$this->fl = new \Bitrix\IxmlImportxml\FieldList();
+		$this->fl = new \Bitrix\KitImportxml\FieldList();
 	}
 	
 	public function GetElementDescriptionArray($description)
@@ -131,7 +131,7 @@ class Logger {
 		if(!empty($arFieldsElement))
 		{
 			$arFieldNames = $this->fl->GetIblockElementFields();
-			$newDesc .= '<p><b>'.Loc::getMessage("IXML_IX_EVENTRES_GROUP_FIELDS").'</b></p><ul>';
+			$newDesc .= '<p><b>'.Loc::getMessage("KIT_IX_EVENTRES_GROUP_FIELDS").'</b></p><ul>';
 			foreach($arFieldsElement as $k=>$v)
 			{
 				if(!isset($arFieldNames[$k]))
@@ -142,11 +142,11 @@ class Logger {
 						if(!is_array($value)) $value = array($value);
 						$value = implode(', ', $value);
 						$oldvalue = $arFieldsElement['IE_IBLOCK_SECTION_ID']['OLDVALUE'];
-						$newDesc .= '<li><b>'.Loc::getMessage("IXML_IX_EVENTRES_SECTION_ID").':</b> ';
+						$newDesc .= '<li><b>'.Loc::getMessage("KIT_IX_EVENTRES_SECTION_ID").':</b> ';
 						if($value) $newDesc .= $value;
 						if($oldvalue)
 						{
-							$newDesc .= '<div><b>'.Loc::getMessage("IXML_IX_EVENTRES_OLD_VALUE").'</b> '.$oldvalue.'</div>';
+							$newDesc .= '<div><b>'.Loc::getMessage("KIT_IX_EVENTRES_OLD_VALUE").'</b> '.$oldvalue.'</div>';
 						}
 						$newDesc .= '</li>';
 					}
@@ -159,7 +159,7 @@ class Logger {
 				if($value) $newDesc .= $value;
 				if($oldvalue)
 				{
-					$newDesc .= '<div><b>'.Loc::getMessage("IXML_IX_EVENTRES_OLD_VALUE").'</b> '.$oldvalue.'</div>';
+					$newDesc .= '<div><b>'.Loc::getMessage("KIT_IX_EVENTRES_OLD_VALUE").'</b> '.$oldvalue.'</div>';
 				}
 				$newDesc .= '</li>';
 			}
@@ -168,7 +168,7 @@ class Logger {
 		if(!empty($arFieldsProps))
 		{
 			$arFieldProps = $this->fl->GetAllIblockProperties();
-			$newDesc .= '<p><b>'.Loc::getMessage("IXML_IX_EVENTRES_GROUP_PROPERTIES").'</b></p><ul>';
+			$newDesc .= '<p><b>'.Loc::getMessage("KIT_IX_EVENTRES_GROUP_PROPERTIES").'</b></p><ul>';
 			foreach($arFieldsProps as $k=>$v)
 			{
 				if(!isset($arFieldProps[$k])) continue;
@@ -185,7 +185,7 @@ class Logger {
 				if($value) $newDesc .= $value;
 				if($oldvalue)
 				{
-					$newDesc .= '<div><b>'.Loc::getMessage("IXML_IX_EVENTRES_OLD_VALUE").'</b> '.$oldvalue.'</div>';
+					$newDesc .= '<div><b>'.Loc::getMessage("KIT_IX_EVENTRES_OLD_VALUE").'</b> '.$oldvalue.'</div>';
 				}
 				$newDesc .= '</li>';
 			}
@@ -194,7 +194,7 @@ class Logger {
 		if(!empty($arFieldsProduct))
 		{
 			$arFieldNames = $this->fl->GetCatalogFieldsCached();
-			$newDesc .= '<p><b>'.Loc::getMessage("IXML_IX_EVENTRES_GROUP_CATALOG").'</b></p><ul>';
+			$newDesc .= '<p><b>'.Loc::getMessage("KIT_IX_EVENTRES_GROUP_CATALOG").'</b></p><ul>';
 			foreach($arFieldsProduct as $k=>$v)
 			{
 				if(!isset($arFieldNames[$k])) continue;
@@ -205,7 +205,7 @@ class Logger {
 				if($value) $newDesc .= $value;
 				if($oldvalue)
 				{
-					$newDesc .= '<div><b>'.Loc::getMessage("IXML_IX_EVENTRES_OLD_VALUE").'</b> '.$oldvalue.'</div>';
+					$newDesc .= '<div><b>'.Loc::getMessage("KIT_IX_EVENTRES_OLD_VALUE").'</b> '.$oldvalue.'</div>';
 				}
 				$newDesc .= '</li>';
 			}
@@ -289,7 +289,7 @@ class Logger {
 	{
 		if($val)
 		{
-			$arFile = \Bitrix\IxmlImportxml\Utils::GetFileArray($val);
+			$arFile = \Bitrix\KitImportxml\Utils::GetFileArray($val);
 			if($arFile)
 			{
 				$val = $arFile['SRC'];

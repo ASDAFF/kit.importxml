@@ -5,12 +5,12 @@
 
 IncludeModuleLangFile(__FILE__);
 
-function ixml_importxml_demo_expired() {
-	$DemoMode = CModule::IncludeModuleEx("ixml.importxml");
+function kit_importxml_demo_expired() {
+	$DemoMode = CModule::IncludeModuleEx("kit.importxml");
 	if ($DemoMode==MODULE_DEMO) {
 		$now=time();
-		if (defined("ixml_importxml_OLDSITEEXPIREDATE")) {
-			if ($now>=ixml_importxml_OLDSITEEXPIREDATE || ixml_importxml_OLDSITEEXPIREDATE>$now+3000000) {
+		if (defined("kit_importxml_OLDSITEEXPIREDATE")) {
+			if ($now>=kit_importxml_OLDSITEEXPIREDATE || kit_importxml_OLDSITEEXPIREDATE>$now+3000000) {
 				return true;
 			}
 		} else{ 
@@ -22,43 +22,43 @@ function ixml_importxml_demo_expired() {
 	return false;
 }
 
-function ixml_importxml_show_demo($bAjax = false) {
-	$moduleId = 'ixml.importxml';
+function kit_importxml_show_demo($bAjax = false) {
+	$moduleId = 'kit.importxml';
 	$DemoMode = CModule::IncludeModuleEx($moduleId);
-	$activateText = GetMessage("IXML_IMPORTXML_DEMO_MESSAGE_ACTIVATE_MODULE",array("#LANG#"=>LANGUAGE_ID));
+	$activateText = GetMessage("KIT_IMPORTXML_DEMO_MESSAGE_ACTIVATE_MODULE",array("#LANG#"=>LANGUAGE_ID));
 	if ($DemoMode==MODULE_DEMO) {
 		$now=time();
-		if (defined("ixml_importxml_OLDSITEEXPIREDATE")) {
-			if ($now<ixml_importxml_OLDSITEEXPIREDATE) {
+		if (defined("kit_importxml_OLDSITEEXPIREDATE")) {
+			if ($now<kit_importxml_OLDSITEEXPIREDATE) {
 				print BeginNote();
-				$expire_arr = getdate(ixml_importxml_OLDSITEEXPIREDATE);
+				$expire_arr = getdate(kit_importxml_OLDSITEEXPIREDATE);
 				$expire_date = gmmktime($expire_arr["hours"],$expire_arr["minutes"],$expire_arr["seconds"],$expire_arr["mon"],$expire_arr["mday"],$expire_arr["year"]);
 				$now_arr = getdate($now);
 				$now_date = gmmktime($expire_arr["hours"],$expire_arr["minutes"],$expire_arr["seconds"],$now_arr["mon"],$now_arr["mday"],$now_arr["year"]);
 				$days = ($expire_date-$now_date)/86400; 
-				print GetMessage("IXML_IMPORTXML_DEMO_MESSAGE_DAYS_REMAIN",array("#DAYS#"=>$days, "#ACTIVATE#"=>$activateText));
+				print GetMessage("KIT_IMPORTXML_DEMO_MESSAGE_DAYS_REMAIN",array("#DAYS#"=>$days, "#ACTIVATE#"=>$activateText));
 				print EndNote();
 			} else {
 				print BeginNote();
-				print GetMessage("IXML_IMPORTXML_DEMO_MESSAGE_EXPIRED", array("#ACTIVATE#"=>$activateText));
+				print GetMessage("KIT_IMPORTXML_DEMO_MESSAGE_EXPIRED", array("#ACTIVATE#"=>$activateText));
 				print EndNote();
 			}
 		} else{ 
 			print BeginNote();
-			print GetMessage("IXML_IMPORTXML_DEMO_MESSAGE_EXPIRED", array("#ACTIVATE#"=>$activateText));
+			print GetMessage("KIT_IMPORTXML_DEMO_MESSAGE_EXPIRED", array("#ACTIVATE#"=>$activateText));
 			print EndNote();
 		}
 	} elseif ($DemoMode==MODULE_DEMO_EXPIRED) {
 		print BeginNote();
-		print GetMessage("IXML_IMPORTXML_DEMO_MESSAGE_EXPIRED", array("#ACTIVATE#"=>$activateText));
+		print GetMessage("KIT_IMPORTXML_DEMO_MESSAGE_EXPIRED", array("#ACTIVATE#"=>$activateText));
 		print EndNote();
 	}
 	else
 	{
 		if(!$bAjax)
 		{
-			print BeginNote('id="ixml-ix-updates-message"');
-			print '<div id="ixml-ix-updates-message-inner"></div>';
+			print BeginNote('id="kit-ix-updates-message"');
+			print '<div id="kit-ix-updates-message-inner"></div>';
 			print EndNote();
 		}
 		else
@@ -107,11 +107,11 @@ function ixml_importxml_show_demo($bAjax = false) {
 			if($updateEnd && is_callable(array('CUpdateClientPartner', 'GetLicenseKey')))
 			{
 				$lckey = md5("BITRIX".CUpdateClientPartner::GetLicenseKey()."LICENCE");
-				echo '<div id="ixml-ix-updates-message-inner">'.GetMessage("IXML_IMPORTXML_DEMO_MESSAGE_UPDATE_END", array("#LCKEY#"=>$lckey, "#LANG#"=>LANGUAGE_ID)).'</div>';
+				echo '<div id="kit-ix-updates-message-inner">'.GetMessage("KIT_IMPORTXML_DEMO_MESSAGE_UPDATE_END", array("#LCKEY#"=>$lckey, "#LANG#"=>LANGUAGE_ID)).'</div>';
 			}
 		}
 	}
-	?><script>BX.ready(function(){BX.bind(BX('ixml_module_activate'), 'click', function(){var div = BX.findNextSibling(this, {tag: 'DIV'}); BX.style(div, 'display', (BX.style(div, 'display')=='none' ? '' : 'none'));});});</script><?
+	?><script>BX.ready(function(){BX.bind(BX('kit_module_activate'), 'click', function(){var div = BX.findNextSibling(this, {tag: 'DIV'}); BX.style(div, 'display', (BX.style(div, 'display')=='none' ? '' : 'none'));});});</script><?
 }
 
 ?>

@@ -3,7 +3,7 @@
  * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
  */
 
-namespace Bitrix\IxmlImportxml;
+namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -17,7 +17,7 @@ class XMLViewer
 	{
 		$this->filename = $DATA_FILE_NAME;
 		$this->params = $SETTINGS_DEFAULT;
-		//$this->fl = new \Bitrix\IxmlImportxml\FieldList($SETTINGS_DEFAULT);
+		//$this->fl = new \Bitrix\KitImportxml\FieldList($SETTINGS_DEFAULT);
 	}
 	
 	public function GetXPathsMulti()
@@ -34,9 +34,9 @@ class XMLViewer
 		$arStruct = array();
 		$this->GetStructureFromSimpleXML($arStruct, $arXml);
 		
-		//$fileEncoding = \Bitrix\IxmlImportxml\Utils::GetXmlEncoding($file);
+		//$fileEncoding = \Bitrix\KitImportxml\Utils::GetXmlEncoding($file);
 		$fileEncoding = 'utf-8';
-		$siteEncoding = \Bitrix\IxmlImportxml\Utils::getSiteEncoding();
+		$siteEncoding = \Bitrix\KitImportxml\Utils::getSiteEncoding();
 		if($siteEncoding!=$fileEncoding)
 		{
 			$arStruct = \Bitrix\Main\Text\Encoding::convertEncodingArray($arStruct, $fileEncoding, $siteEncoding);
@@ -312,26 +312,26 @@ class XMLViewer
 	{
 		foreach($arStruct as $k=>$v)
 		{
-			echo '<div class="ixml_ix_xml_struct_item" data-name="'.htmlspecialcharsex($k).'">';
-			echo '&lt;<a href="javascript:void(0)" onclick="EIXPreview.ShowBaseElements(this)" class="ixml_ix_open_tag">'.$k.'</a>';
+			echo '<div class="kit_ix_xml_struct_item" data-name="'.htmlspecialcharsex($k).'">';
+			echo '&lt;<a href="javascript:void(0)" onclick="EIXPreview.ShowBaseElements(this)" class="kit_ix_open_tag">'.$k.'</a>';
 			if(is_array($v) && !empty($v['@attributes']))
 			{
 				foreach($v['@attributes'] as $k2=>$v2)
 				{
-					echo ' '.$k2.'="<span class="ixml_ix_str_value" data-attr="'.htmlspecialcharsex($k2).'"><span class="ixml_ix_str_value_val" title="'.htmlspecialcharsex($v2).'">'.$this->GetShowVal($v2).'</span></span>"';
+					echo ' '.$k2.'="<span class="kit_ix_str_value" data-attr="'.htmlspecialcharsex($k2).'"><span class="kit_ix_str_value_val" title="'.htmlspecialcharsex($v2).'">'.$this->GetShowVal($v2).'</span></span>"';
 				}
 				unset($v['@attributes']);
 			}
 			echo '&gt;';
 			/*if(is_array($v) && isset($v['@value']))
 			{
-				echo '<span class="ixml_ix_str_value"><span class="ixml_ix_str_value_val">'.$this->GetShowVal($v['@value']).'</span></span>';
+				echo '<span class="kit_ix_str_value"><span class="kit_ix_str_value_val">'.$this->GetShowVal($v['@value']).'</span></span>';
 				unset($v['@value']);
 			}*/
 			if((is_array($v) && isset($v['@value'])) || empty($v))
 			{
 				$val = ((is_array($v) && isset($v['@value'])) ? $v['@value'] : '');
-				echo '<span class="ixml_ix_str_value"><span class="ixml_ix_str_value_val" title="'.htmlspecialcharsex($val).'">'.$this->GetShowVal($val).'</span></span>';
+				echo '<span class="kit_ix_str_value"><span class="kit_ix_str_value_val" title="'.htmlspecialcharsex($val).'">'.$this->GetShowVal($val).'</span></span>';
 			}
 			if(is_array($v) && isset($v['@value'])) 
 			{
@@ -373,20 +373,20 @@ class XMLViewer
 	
 	public function ShowXmlTagChoose()
 	{
-		//echo '<a href="javascript:void(0)" onclick="" class="ixml_ix_dropdown_btn"></a>';
-		echo '<span class="ixml_ix_group_value"></span>';
+		//echo '<a href="javascript:void(0)" onclick="" class="kit_ix_dropdown_btn"></a>';
+		echo '<span class="kit_ix_group_value"></span>';
 	}
 	
 	public function GetAvailableTags(&$arTags, $path, $arStruct)
 	{
-		$arTags[$path] = Loc::getMessage("IXML_IX_VALUE").' '.$path;
+		$arTags[$path] = Loc::getMessage("KIT_IX_VALUE").' '.$path;
 		foreach($arStruct as $k=>$v)
 		{
 			if($k == '@attributes')
 			{
 				foreach($v as $k2=>$v2)
 				{
-					$arTags[$path.'/@'.$k2] = Loc::getMessage("IXML_IX_ATTRIBUTE").' '.$path.'/@'.$k2;
+					$arTags[$path.'/@'.$k2] = Loc::getMessage("KIT_IX_ATTRIBUTE").' '.$path.'/@'.$k2;
 				}
 				continue;
 			}

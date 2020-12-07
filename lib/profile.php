@@ -3,15 +3,15 @@
  * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
  */
 
-namespace Bitrix\IxmlImportxml;
+namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 Loc::loadMessages(__FILE__);
 
 class Profile {
-	protected static $moduleId = 'ixml.importxml';
-	protected static $moduleFilePrefix = 'ixml_import_xml';
+	protected static $moduleId = 'kit.importxml';
+	protected static $moduleFilePrefix = 'kit_import_xml';
 	protected static $dbIsPrepared = false;
 	protected static $instance = null;
 	private $params = array();
@@ -41,15 +41,15 @@ class Profile {
 			}
 			if(strlen($v) > 0 && file_exists($v) && !is_writable($v))
 			{
-				$this->errors[] = sprintf(Loc::getMessage('IXML_IX_DIR_NOT_WRITABLE'), $v);
+				$this->errors[] = sprintf(Loc::getMessage('KIT_IX_DIR_NOT_WRITABLE'), $v);
 			}
 		}
 		
 		$this->tmpdir = realpath($this->tmpdir).'/';
 		$this->uploadDir = realpath($this->uploadDir).'/';
 		
-		/*if(!is_writable($this->tmpdir)) $this->errors[] = sprintf(Loc::getMessage('IXML_IX_DIR_NOT_WRITABLE'), $this->tmpdir);
-		if(!is_writable($this->uploadDir)) $this->errors[] = sprintf(Loc::getMessage('IXML_IX_DIR_NOT_WRITABLE'), $this->uploadDir);*/
+		/*if(!is_writable($this->tmpdir)) $this->errors[] = sprintf(Loc::getMessage('KIT_IX_DIR_NOT_WRITABLE'), $this->tmpdir);
+		if(!is_writable($this->uploadDir)) $this->errors[] = sprintf(Loc::getMessage('KIT_IX_DIR_NOT_WRITABLE'), $this->uploadDir);*/
 	}
 	
 	public static function getInstance($suffix='')
@@ -64,7 +64,7 @@ class Profile {
 	{
 		if(!static::$dbIsPrepared)
 		{
-			$profileDB = new \Bitrix\IxmlImportxml\ProfileTable();
+			$profileDB = new \Bitrix\KitImportxml\ProfileTable();
 			$conn = $profileDB->getEntity()->getConnection();
 			if(is_callable(array($conn, 'queryExecute')))
 			{
@@ -244,11 +244,11 @@ class Profile {
 		{
 			if($this->suffix=='highload')
 			{
-				$this->entity = new \Bitrix\IxmlImportxml\ProfileHlTable();
+				$this->entity = new \Bitrix\KitImportxml\ProfileHlTable();
 			}
 			else
 			{
-				$this->entity = new \Bitrix\IxmlImportxml\ProfileTable();
+				$this->entity = new \Bitrix\KitImportxml\ProfileTable();
 			}
 		}
 		return $this->entity;
@@ -298,7 +298,7 @@ class Profile {
 		$name = trim($name);
 		if(strlen($name)==0)
 		{
-			$APPLICATION->throwException(Loc::getMessage("IXML_IX_NOT_SET_PROFILE_NAME"));
+			$APPLICATION->throwException(Loc::getMessage("KIT_IX_NOT_SET_PROFILE_NAME"));
 			return false;
 		}
 		
@@ -306,7 +306,7 @@ class Profile {
 		
 		if($arProfile = $profileEntity::getList(array('filter'=>array('NAME'=>$name), 'select'=>array('ID')))->fetch())
 		{
-			$APPLICATION->throwException(Loc::getMessage("IXML_IX_PROFILE_NAME_EXISTS"));
+			$APPLICATION->throwException(Loc::getMessage("KIT_IX_PROFILE_NAME_EXISTS"));
 			return false;
 		}
 		
@@ -367,11 +367,11 @@ class Profile {
 		$arProfile = $profileEntity::getList(array('filter'=>array('ID'=>($ID + 1)), 'select'=>array('NAME', 'PARAMS')))->fetch();
 		if(!$arProfile) return false;
 		
-		$newName = $arProfile['NAME'].Loc::getMessage("IXML_IX_PROFILE_COPY");
+		$newName = $arProfile['NAME'].Loc::getMessage("KIT_IX_PROFILE_COPY");
 		$arParams = unserialize($arProfile['PARAMS']);
 		if($arParams['SETTINGS_DEFAULT']['DATA_FILE'] > 0)
 		{
-			$arParams['SETTINGS_DEFAULT']['DATA_FILE'] = \Bitrix\IxmlImportxml\Utils::CopyFile($arParams['SETTINGS_DEFAULT']['DATA_FILE'], true);
+			$arParams['SETTINGS_DEFAULT']['DATA_FILE'] = \Bitrix\KitImportxml\Utils::CopyFile($arParams['SETTINGS_DEFAULT']['DATA_FILE'], true);
 			$arProfile['PARAMS'] = serialize($arParams);
 		}
 		$dbRes = $profileEntity::add(array('NAME'=>$newName, 'PARAMS'=>$arProfile['PARAMS']));
@@ -403,7 +403,7 @@ class Profile {
 		$name = trim($name);
 		if(strlen($name)==0)
 		{
-			$APPLICATION->throwException(Loc::getMessage("IXML_IX_NOT_SET_PROFILE_NAME"));
+			$APPLICATION->throwException(Loc::getMessage("KIT_IX_NOT_SET_PROFILE_NAME"));
 			return false;
 		}
 		$profileEntity = $this->GetEntity();
@@ -451,8 +451,8 @@ class Profile {
 		{
 			if(1 || $bImported)
 			{
-				if(empty($arProfile) || !empty($arProfile['DATE_FINISH'])) return array('STATUS'=>'OK', 'MESSAGE'=>Loc::getMessage("IXML_IX_STATUS_COMPLETE"));
-				else return array('STATUS'=>'ERROR', 'MESSAGE'=>Loc::getMessage("IXML_IX_STATUS_FILE_ERROR"));
+				if(empty($arProfile) || !empty($arProfile['DATE_FINISH'])) return array('STATUS'=>'OK', 'MESSAGE'=>Loc::getMessage("KIT_IX_STATUS_COMPLETE"));
+				else return array('STATUS'=>'ERROR', 'MESSAGE'=>Loc::getMessage("KIT_IX_STATUS_FILE_ERROR"));
 			}
 			else return array('STATUS'=>'OK', 'MESSAGE'=>'');
 		}
@@ -460,10 +460,10 @@ class Profile {
 		$percent = round(((int)$arParams['total_read_line'] / (int)$arParams['total_file_line']) * 100);
 		$percent = min($percent, 99);
 		$status = 'OK';
-		if((time() - filemtime($tmpfile) < 4*60)) $statusText = Loc::getMessage("IXML_IX_STATUS_PROCCESS");
+		if((time() - filemtime($tmpfile) < 4*60)) $statusText = Loc::getMessage("KIT_IX_STATUS_PROCCESS");
 		else 
 		{
-			$statusText = Loc::getMessage("IXML_IX_STATUS_BREAK");
+			$statusText = Loc::getMessage("KIT_IX_STATUS_BREAK");
 			$status = 'ERROR';
 		}
 		return array('STATUS'=>'ERROR', 'MESSAGE'=>$statusText.' ('.$percent.'%)');
@@ -476,8 +476,8 @@ class Profile {
 		$arParams = \CUtil::JsObjectToPhp(file_get_contents($tmpfile));
 		$percent = round(((int)$arParams['total_read_line'] / (int)$arParams['total_file_line']) * 100);
 		$percent = min($percent, 99);
-		if((time() - filemtime($tmpfile) < 4*60)) $status = Loc::getMessage("IXML_IX_STATUS_PROCCESS");
-		else $status = Loc::getMessage("IXML_IX_STATUS_BREAK");
+		if((time() - filemtime($tmpfile) < 4*60)) $status = Loc::getMessage("KIT_IX_STATUS_PROCCESS");
+		else $status = Loc::getMessage("KIT_IX_STATUS_BREAK");
 		return $status.' ('.$percent.'%)';
 	}
 	
@@ -587,8 +587,8 @@ class Profile {
 	{
 		$arProfiles = $this->GetList();
 		?><select name="<?echo $fname;?>" id="<?echo $fname;?>" onchange="EProfile.Choose(this)"><?
-			?><option value=""><?echo Loc::getMessage("IXML_IX_NO_PROFILE"); ?></option><?
-			?><option value="new" <?if($_REQUEST[$fname]=='new'){echo 'selected';}?>><?echo Loc::getMessage("IXML_IX_NEW_PROFILE"); ?></option><?
+			?><option value=""><?echo Loc::getMessage("KIT_IX_NO_PROFILE"); ?></option><?
+			?><option value="new" <?if($_REQUEST[$fname]=='new'){echo 'selected';}?>><?echo Loc::getMessage("KIT_IX_NEW_PROFILE"); ?></option><?
 			foreach($arProfiles as $k=>$profile)
 			{
 				?><option value="<?echo $k;?>" <?if(strlen($_REQUEST[$fname])>0 && strval($_REQUEST[$fname])===strval($k)){echo 'selected';}?>><?echo $profile; ?></option><?
@@ -679,7 +679,7 @@ class Profile {
 			$arEventData['PROFILE_NAME'] = $arProfile['NAME'];
 			$arEventData['IMPORT_START_DATETIME'] = (is_callable(array($arProfile['DATE_START'], 'toString')) ? $arProfile['DATE_START']->toString() : '');
 			$arEventData['EMAIL_TO'] = \Bitrix\Main\Config\Option::get(static::$moduleId, 'NOTIFY_EMAIL');
-			\CEvent::Send('IXML_XMLIMPORT_START', $this->GetDefaultSiteId(), $arEventData);
+			\CEvent::Send('KIT_XMLIMPORT_START', $this->GetDefaultSiteId(), $arEventData);
 		}
 	}
 	
@@ -719,10 +719,10 @@ class Profile {
 			{
 				if($k < 3 || $arEventData[$v] > 0)
 				{
-					$arEventData['STAT_BLOCK'] .= Loc::getMessage("IXML_IX_EVENT_".$v).": ".$arEventData[$v]."\r\n";
+					$arEventData['STAT_BLOCK'] .= Loc::getMessage("KIT_IX_EVENT_".$v).": ".$arEventData[$v]."\r\n";
 				}
 			}
-			\CEvent::Send('IXML_XMLIMPORT_END', $this->GetDefaultSiteId(), $arEventData);
+			\CEvent::Send('KIT_XMLIMPORT_END', $this->GetDefaultSiteId(), $arEventData);
 		}
 		return $arEventData;
 	}
@@ -750,7 +750,7 @@ class Profile {
 	
 	public function CheckEventOnBeginImport()
 	{
-		$eventName = 'IXML_XMLIMPORT_START';
+		$eventName = 'KIT_XMLIMPORT_START';
 		$dbRes = \CEventType::GetList(array('TYPE_ID'=>$eventName));
 		if(!$dbRes->Fetch())
 		{
@@ -758,10 +758,10 @@ class Profile {
 			$et->Add(array(
 				"LID"           => "ru",
 				"EVENT_NAME"    => $eventName,
-				"NAME"          => Loc::getMessage("IXML_IX_EVENT_IMPORT_START"),
+				"NAME"          => Loc::getMessage("KIT_IX_EVENT_IMPORT_START"),
 				"DESCRIPTION"   => 
-					"#PROFILE_NAME# - ".Loc::getMessage("IXML_IX_EVENT_PROFILE_NAME")."\r\n".
-					"#IMPORT_START_DATETIME# - ".Loc::getMessage("IXML_IX_EVENT_TIME_BEGIN")
+					"#PROFILE_NAME# - ".Loc::getMessage("KIT_IX_EVENT_PROFILE_NAME")."\r\n".
+					"#IMPORT_START_DATETIME# - ".Loc::getMessage("KIT_IX_EVENT_TIME_BEGIN")
 				));
 		}
 		$dbRes = \CEventMessage::GetList(($by='id'), ($order='desc'), array('TYPE_ID'=>$eventName));
@@ -774,17 +774,17 @@ class Profile {
 				'LID' => $this->GetDefaultSiteId(),
 				'EMAIL_FROM' => '#DEFAULT_EMAIL_FROM#',
 				'EMAIL_TO' => '#EMAIL_TO#',
-				'SUBJECT' => '#SITE_NAME#: '.Loc::getMessage("IXML_IX_EVENT_BEGIN_PROFILE").' "#PROFILE_NAME#"',
+				'SUBJECT' => '#SITE_NAME#: '.Loc::getMessage("KIT_IX_EVENT_BEGIN_PROFILE").' "#PROFILE_NAME#"',
 				'MESSAGE' => 
-					Loc::getMessage("IXML_IX_EVENT_PROFILE_NAME").": #PROFILE_NAME#\r\n".
-					Loc::getMessage("IXML_IX_EVENT_TIME_BEGIN").": #IMPORT_START_DATETIME#"
+					Loc::getMessage("KIT_IX_EVENT_PROFILE_NAME").": #PROFILE_NAME#\r\n".
+					Loc::getMessage("KIT_IX_EVENT_TIME_BEGIN").": #IMPORT_START_DATETIME#"
 			));
 		}
 	}
 	
 	public function CheckEventOnEndImport()
 	{
-		$eventName = 'IXML_XMLIMPORT_END';
+		$eventName = 'KIT_XMLIMPORT_END';
 		$dbRes = \CEventType::GetList(array('TYPE_ID'=>$eventName));
 		if(!$dbRes->Fetch())
 		{
@@ -792,27 +792,27 @@ class Profile {
 			$et->Add(array(
 				"LID"           => "ru",
 				"EVENT_NAME"    => $eventName,
-				"NAME"          => Loc::getMessage("IXML_IX_EVENT_IMPORT_END"),
+				"NAME"          => Loc::getMessage("KIT_IX_EVENT_IMPORT_END"),
 				"DESCRIPTION"   => 
-					"#PROFILE_NAME# - ".Loc::getMessage("IXML_IX_EVENT_PROFILE_NAME")."\r\n".
-					"#IMPORT_START_DATETIME# - ".Loc::getMessage("IXML_IX_EVENT_TIME_BEGIN")."\r\n".
-					"#IMPORT_FINISH_DATETIME# - ".Loc::getMessage("IXML_IX_EVENT_TIME_END")."\r\n".
-					"#STAT_BLOCK# - ".Loc::getMessage("IXML_IX_EVENT_STAT_BLOCK")."\r\n".
-					"#TOTAL_LINE# - ".Loc::getMessage("IXML_IX_EVENT_TOTAL_LINE")."\r\n".
-					"#CORRECT_LINE# - ".Loc::getMessage("IXML_IX_EVENT_CORRECT_LINE")."\r\n".
-					"#ERROR_LINE# - ".Loc::getMessage("IXML_IX_EVENT_ERROR_LINE")."\r\n".
-					"#ELEMENT_ADDED_LINE# - ".Loc::getMessage("IXML_IX_EVENT_ELEMENT_ADDED_LINE")."\r\n".
-					"#ELEMENT_UPDATED_LINE# - ".Loc::getMessage("IXML_IX_EVENT_ELEMENT_UPDATED_LINE")."\r\n".
-					"#SECTION_ADDED_LINE# - ".Loc::getMessage("IXML_IX_EVENT_SECTION_ADDED_LINE")."\r\n".
-					"#SECTION_UPDATED_LINE# - ".Loc::getMessage("IXML_IX_EVENT_SECTION_UPDATED_LINE")."\r\n".
-					"#SKU_ADDED_LINE# - ".Loc::getMessage("IXML_IX_EVENT_SKU_ADDED_LINE")."\r\n".
-					"#SKU_UPDATED_LINE# - ".Loc::getMessage("IXML_IX_EVENT_SKU_UPDATED_LINE")."\r\n".
-					"#KILLED_LINE# - ".Loc::getMessage("IXML_IX_EVENT_KILLED_LINE")."\r\n".
-					"#ZERO_STOCK_LINE# - ".Loc::getMessage("IXML_IX_EVENT_ZERO_STOCK_LINE")."\r\n".
-					"#OLD_REMOVED_LINE# - ".Loc::getMessage("IXML_IX_EVENT_OLD_REMOVED_LINE")."\r\n".
-					"#OFFER_KILLED_LINE# - ".Loc::getMessage("IXML_IX_EVENT_OFFER_KILLED_LINE")."\r\n".
-					"#OFFER_ZERO_STOCK_LINE# - ".Loc::getMessage("IXML_IX_EVENT_OFFER_ZERO_STOCK_LINE")."\r\n".
-					"#OFFER_OLD_REMOVED_LINE# - ".Loc::getMessage("IXML_IX_EVENT_OFFER_OLD_REMOVED_LINE")
+					"#PROFILE_NAME# - ".Loc::getMessage("KIT_IX_EVENT_PROFILE_NAME")."\r\n".
+					"#IMPORT_START_DATETIME# - ".Loc::getMessage("KIT_IX_EVENT_TIME_BEGIN")."\r\n".
+					"#IMPORT_FINISH_DATETIME# - ".Loc::getMessage("KIT_IX_EVENT_TIME_END")."\r\n".
+					"#STAT_BLOCK# - ".Loc::getMessage("KIT_IX_EVENT_STAT_BLOCK")."\r\n".
+					"#TOTAL_LINE# - ".Loc::getMessage("KIT_IX_EVENT_TOTAL_LINE")."\r\n".
+					"#CORRECT_LINE# - ".Loc::getMessage("KIT_IX_EVENT_CORRECT_LINE")."\r\n".
+					"#ERROR_LINE# - ".Loc::getMessage("KIT_IX_EVENT_ERROR_LINE")."\r\n".
+					"#ELEMENT_ADDED_LINE# - ".Loc::getMessage("KIT_IX_EVENT_ELEMENT_ADDED_LINE")."\r\n".
+					"#ELEMENT_UPDATED_LINE# - ".Loc::getMessage("KIT_IX_EVENT_ELEMENT_UPDATED_LINE")."\r\n".
+					"#SECTION_ADDED_LINE# - ".Loc::getMessage("KIT_IX_EVENT_SECTION_ADDED_LINE")."\r\n".
+					"#SECTION_UPDATED_LINE# - ".Loc::getMessage("KIT_IX_EVENT_SECTION_UPDATED_LINE")."\r\n".
+					"#SKU_ADDED_LINE# - ".Loc::getMessage("KIT_IX_EVENT_SKU_ADDED_LINE")."\r\n".
+					"#SKU_UPDATED_LINE# - ".Loc::getMessage("KIT_IX_EVENT_SKU_UPDATED_LINE")."\r\n".
+					"#KILLED_LINE# - ".Loc::getMessage("KIT_IX_EVENT_KILLED_LINE")."\r\n".
+					"#ZERO_STOCK_LINE# - ".Loc::getMessage("KIT_IX_EVENT_ZERO_STOCK_LINE")."\r\n".
+					"#OLD_REMOVED_LINE# - ".Loc::getMessage("KIT_IX_EVENT_OLD_REMOVED_LINE")."\r\n".
+					"#OFFER_KILLED_LINE# - ".Loc::getMessage("KIT_IX_EVENT_OFFER_KILLED_LINE")."\r\n".
+					"#OFFER_ZERO_STOCK_LINE# - ".Loc::getMessage("KIT_IX_EVENT_OFFER_ZERO_STOCK_LINE")."\r\n".
+					"#OFFER_OLD_REMOVED_LINE# - ".Loc::getMessage("KIT_IX_EVENT_OFFER_OLD_REMOVED_LINE")
 				));
 		}
 		$dbRes = \CEventMessage::GetList(($by='id'), ($order='desc'), array('TYPE_ID'=>$eventName));
@@ -825,13 +825,13 @@ class Profile {
 				'LID' => $this->GetDefaultSiteId(),
 				'EMAIL_FROM' => '#DEFAULT_EMAIL_FROM#',
 				'EMAIL_TO' => '#EMAIL_TO#',
-				'SUBJECT' => '#SITE_NAME#: '.Loc::getMessage("IXML_IX_EVENT_END_PROFILE").' "#PROFILE_NAME#"',
+				'SUBJECT' => '#SITE_NAME#: '.Loc::getMessage("KIT_IX_EVENT_END_PROFILE").' "#PROFILE_NAME#"',
 				'MESSAGE' => 
-					Loc::getMessage("IXML_IX_EVENT_PROFILE_NAME").": #PROFILE_NAME#\r\n".
-					Loc::getMessage("IXML_IX_EVENT_TIME_BEGIN").": #IMPORT_START_DATETIME#\r\n".
-					Loc::getMessage("IXML_IX_EVENT_TIME_END").": #IMPORT_FINISH_DATETIME#\r\n".
+					Loc::getMessage("KIT_IX_EVENT_PROFILE_NAME").": #PROFILE_NAME#\r\n".
+					Loc::getMessage("KIT_IX_EVENT_TIME_BEGIN").": #IMPORT_START_DATETIME#\r\n".
+					Loc::getMessage("KIT_IX_EVENT_TIME_END").": #IMPORT_FINISH_DATETIME#\r\n".
 					"\r\n".
-					Loc::getMessage("IXML_IX_EVENT_STAT_BLOCK").": \r\n#STAT_BLOCK#"
+					Loc::getMessage("KIT_IX_EVENT_STAT_BLOCK").": \r\n#STAT_BLOCK#"
 			));
 		}
 	}
@@ -854,7 +854,7 @@ class Profile {
 		file_put_contents($arFiles['config'], base64_encode(serialize(
 			array(
 				'domain' => $_SERVER['HTTP_HOST'],
-				'encoding' => \Bitrix\IxmlImportxml\Utils::getSiteEncoding()
+				'encoding' => \Bitrix\KitImportxml\Utils::getSiteEncoding()
 			)
 		)));
 		
@@ -895,12 +895,12 @@ class Profile {
 	{
 		if(!isset($arPFile) || !is_array($arPFile) || $arPFile['error'] > 0 || $arPFile['size'] < 1)
 		{
-			return array('TYPE'=>'ERROR', 'MESSAGE'=>Loc::getMessage("IXML_IX_RESTORE_NOT_LOAD_FILE"));
+			return array('TYPE'=>'ERROR', 'MESSAGE'=>Loc::getMessage("KIT_IX_RESTORE_NOT_LOAD_FILE"));
 		}
 		$filename = $arPFile['name'];
-		if(ToLower(\Bitrix\IxmlImportxml\Utils::GetFileExtension($filename))!=='zip')
+		if(ToLower(\Bitrix\KitImportxml\Utils::GetFileExtension($filename))!=='zip')
 		{
-			return array('TYPE'=>'ERROR', 'MESSAGE'=>Loc::getMessage("IXML_IX_RESTORE_FILE_NOT_VALID"));
+			return array('TYPE'=>'ERROR', 'MESSAGE'=>Loc::getMessage("KIT_IX_RESTORE_FILE_NOT_VALID"));
 		}
 		
 		$tempPath = \CFile::GetTempName('', bx_basename($filename));
@@ -920,11 +920,11 @@ class Profile {
 		{
 			foreach($arFiles as $file) unlink($file);
 			rmdir($dir);
-			return array('TYPE'=>'ERROR', 'MESSAGE'=>Loc::getMessage("IXML_IX_RESTORE_FILE_NOT_VALID"));
+			return array('TYPE'=>'ERROR', 'MESSAGE'=>Loc::getMessage("KIT_IX_RESTORE_FILE_NOT_VALID"));
 		}
 		
 		$profileEntity = $this->GetEntity();
-		$encoding = \Bitrix\IxmlImportxml\Utils::getSiteEncoding();
+		$encoding = \Bitrix\KitImportxml\Utils::getSiteEncoding();
 		
 		if($arParams['RESTORE_TYPE']=='REPLACE')
 		{
@@ -985,6 +985,6 @@ class Profile {
 		foreach($arFiles as $file) unlink($file);
 		rmdir($dir);
 		
-		return array('TYPE'=>'SUCCESS', 'MESSAGE'=>Loc::getMessage("IXML_IX_RESTORE_SUCCESS"));
+		return array('TYPE'=>'SUCCESS', 'MESSAGE'=>Loc::getMessage("KIT_IX_RESTORE_SUCCESS"));
 	}
 }

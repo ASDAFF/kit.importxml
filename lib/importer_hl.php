@@ -3,14 +3,14 @@
  * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
  */
 
-namespace Bitrix\IxmlImportxml;
+namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 Loc::loadMessages(__FILE__);
 
 class ImporterHl {
-	protected static $moduleId = 'ixml.importxml';
+	protected static $moduleId = 'kit.importxml';
 	var $xmlParts = array();
 	var $rcurrencies = array('#USD#', '#EUR#');
 	
@@ -39,9 +39,9 @@ class ImporterHl {
 		$this->xpathMulti = ($this->params['XPATHS_MULTI'] ? unserialize(base64_decode($this->params['XPATHS_MULTI'])) : array());
 		if(!is_array($this->xpathMulti)) $this->xpathMulti = array();
 		
-		$this->fl = new \Bitrix\IxmlImportxml\FieldList();
-		$this->cloud = new \Bitrix\IxmlImportxml\Cloud();
-		$this->sftp = new \Bitrix\IxmlImportxml\Sftp();
+		$this->fl = new \Bitrix\KitImportxml\FieldList();
+		$this->cloud = new \Bitrix\KitImportxml\Cloud();
+		$this->sftp = new \Bitrix\KitImportxml\Sftp();
 		
 		$this->useProxy = false;
 		$this->proxySettings = array(
@@ -106,7 +106,7 @@ class ImporterHl {
 			$this->errorfile = $dir.$pid.'_highload_error.txt';
 			if($this->stepparams['total_line'] < 1)
 			{
-				$oProfile = \Bitrix\IxmlImportxml\Profile::getInstance('highload');
+				$oProfile = \Bitrix\KitImportxml\Profile::getInstance('highload');
 				$oProfile->UpdateFields($pid, array('DATE_START'=>new \Bitrix\Main\Type\DateTime()));
 				
 				if(file_exists($this->procfile)) unlink($this->procfile);
@@ -155,7 +155,7 @@ class ImporterHl {
 			if($this->stepparams['curstep'] == 'import' || $this->stepparams['curstep'] == 'import_end')
 			{
 				$this->stepparams['curstep'] = 'deactivate_elements';				
-				$this->stepparams['deactivate_element_last'] = \Bitrix\IxmlImportxml\Utils::SortFileIds($this->fileElementsId);
+				$this->stepparams['deactivate_element_last'] = \Bitrix\KitImportxml\Utils::SortFileIds($this->fileElementsId);
 				$this->stepparams['deactivate_element_first'] = 0;
 				$this->SaveStatusImport();
 				if($this->CheckTimeEnding($time)) return $this->GetBreakParams();
@@ -166,7 +166,7 @@ class ImporterHl {
 		
 			while($this->stepparams['deactivate_element_first'] < $this->stepparams['deactivate_element_last'])
 			{
-				$arUpdatedIds = \Bitrix\IxmlImportxml\Utils::GetPartIdsFromFile($this->fileElementsId, $this->stepparams['deactivate_element_first']);
+				$arUpdatedIds = \Bitrix\KitImportxml\Utils::GetPartIdsFromFile($this->fileElementsId, $this->stepparams['deactivate_element_first']);
 				if(empty($arUpdatedIds))
 				{
 					$this->stepparams['deactivate_element_first'] = $this->stepparams['deactivate_element_last'];
@@ -193,7 +193,7 @@ class ImporterHl {
 		
 		$this->SaveStatusImport(true);
 		
-		$oProfile = \Bitrix\IxmlImportxml\Profile::getInstance('highload');
+		$oProfile = \Bitrix\KitImportxml\Profile::getInstance('highload');
 		$oProfile->UpdateFileHash($this->pid, $this->filename);
 		
 		return $this->GetBreakParams('finish');
@@ -219,7 +219,7 @@ class ImporterHl {
 				{
 					$emptyFieldNames[] = $arFieldsDef[$field]['NAME_LANG'];
 				}
-				$this->errors[] = sprintf(Loc::getMessage("IXML_IX_NOT_SET_UID"), implode(', ', $emptyFieldNames));
+				$this->errors[] = sprintf(Loc::getMessage("KIT_IX_NOT_SET_UID"), implode(', ', $emptyFieldNames));
 				return false;
 			}
 		}
@@ -250,9 +250,9 @@ class ImporterHl {
 			}
 		}
 		
-		//$this->fileEncoding = \Bitrix\IxmlImportxml\Utils::GetXmlEncoding($this->filename);
+		//$this->fileEncoding = \Bitrix\KitImportxml\Utils::GetXmlEncoding($this->filename);
 		$this->fileEncoding = 'utf-8';
-		$this->siteEncoding = \Bitrix\IxmlImportxml\Utils::getSiteEncoding();
+		$this->siteEncoding = \Bitrix\KitImportxml\Utils::getSiteEncoding();
 		//$this->xmlObject = simplexml_load_file($this->filename);
 		
 		$this->InitXml($type);
@@ -266,7 +266,7 @@ class ImporterHl {
 		{
 			if(!isset($this->xmlCurrentRow)) $this->xmlCurrentRow = intval($this->stepparams['xmlCurrentRow']);
 			if(preg_match('/\/offers$/', $this->params['GROUPS']['ELEMENT'])) $this->CheckGroupParams('ELEMENT', $this->params['GROUPS']['ELEMENT'], $this->params['GROUPS']['ELEMENT'].'/offer');
-			if(preg_match('/\/'.Loc::getMessage("IXML_IX_PRODUCTS_TAG_1C").'$/', $this->params['GROUPS']['ELEMENT'])) $this->CheckGroupParams('ELEMENT', $this->params['GROUPS']['ELEMENT'], $this->params['GROUPS']['ELEMENT'].'/'.Loc::getMessage("IXML_IX_PRODUCT_TAG_1C"));
+			if(preg_match('/\/'.Loc::getMessage("KIT_IX_PRODUCTS_TAG_1C").'$/', $this->params['GROUPS']['ELEMENT'])) $this->CheckGroupParams('ELEMENT', $this->params['GROUPS']['ELEMENT'], $this->params['GROUPS']['ELEMENT'].'/'.Loc::getMessage("KIT_IX_PRODUCT_TAG_1C"));
 			
 			$count = 0;
 			$this->xmlElements = $this->GetXmlObject($count, $this->xmlCurrentRow, $this->params['GROUPS']['ELEMENT']);
@@ -1607,7 +1607,7 @@ class ImporterHl {
 				{
 					$idn = new \idna_convert();
 					$oldHost = $arUrl['host'];
-					if(!\CUtil::DetectUTF8($oldHost)) $oldHost = \Bitrix\IxmlImportxml\Utils::Win1251Utf8($oldHost);
+					if(!\CUtil::DetectUTF8($oldHost)) $oldHost = \Bitrix\KitImportxml\Utils::Win1251Utf8($oldHost);
 					$file = str_replace($arUrl['host'], $idn->encode($oldHost), $file);
 				}
 			}
@@ -1625,7 +1625,7 @@ class ImporterHl {
 				$ob = new \Bitrix\Main\Web\HttpClient($arOptions);
 				$ob->setHeader('User-Agent', 'BitrixSM HttpClient class');
 				try{
-					if(!\CUtil::DetectUTF8($file)) $file = \Bitrix\IxmlImportxml\Utils::Win1251Utf8($file);
+					if(!\CUtil::DetectUTF8($file)) $file = \Bitrix\KitImportxml\Utils::Win1251Utf8($file);
 					$file = preg_replace_callback('/[^:\/?=&#@]+/', create_function('$m', 'return rawurlencode($m[0]);'), $file);
 					if($ob->download($file, $tempPath) && $ob->getStatus()!=404) $file = $tempPath2;
 					else return array();
@@ -1636,7 +1636,7 @@ class ImporterHl {
 		
 		if(!file_exists($file) && !$arFile['name'] && !\CUtil::DetectUTF8($file))
 		{
-			$file = \Bitrix\IxmlImportxml\Utils::Win1251Utf8($file);
+			$file = \Bitrix\KitImportxml\Utils::Win1251Utf8($file);
 			$arFile = \CFile::MakeFileArray($file);
 		}
 		
@@ -1751,8 +1751,8 @@ class ImporterHl {
 	
 	public function GetBoolValue($val, $numReturn = false)
 	{
-		$trueVals = array_map('trim', explode(',', Loc::getMessage("IXML_IX_FIELD_VAL_Y")));
-		$falseVals = array_map('trim', explode(',', Loc::getMessage("IXML_IX_FIELD_VAL_N")));
+		$trueVals = array_map('trim', explode(',', Loc::getMessage("KIT_IX_FIELD_VAL_Y")));
+		$falseVals = array_map('trim', explode(',', Loc::getMessage("KIT_IX_FIELD_VAL_N")));
 		if(in_array(ToLower($val), $trueVals))
 		{
 			return ($numReturn ? 1 : 'Y');
@@ -2338,7 +2338,7 @@ class ImporterHl {
 	{
 		$fileId = (int)$fileId;
 		if($this->params['ELEMENT_IMAGES_FORCE_UPDATE']=='Y' || !$fileId) return true;
-		$arFile = \Bitrix\IxmlImportxml\Utils::GetFileArray($fileId);
+		$arFile = \Bitrix\KitImportxml\Utils::GetFileArray($fileId);
 		$arNewFileVal = $arNewFile;
 		if(isset($arNewFileVal['VALUE'])) $arNewFileVal = $arNewFileVal['VALUE'];
 		if(isset($arNewFileVal['DESCRIPTION'])) $arNewFile['description'] = $arNewFile['DESCRIPTION'];
@@ -2406,7 +2406,7 @@ class ImporterHl {
 		$arError = error_get_last();
 		if(!is_array($arError) || !isset($arError['type']) || !in_array($arError['type'], array(E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR, E_RECOVERABLE_ERROR))) return;
 		
-		$this->EndWithError(sprintf(Loc::getMessage("IXML_IX_FATAL_ERROR"), $arError['type'], $arError['message'], $arError['file'], $arError['line']));
+		$this->EndWithError(sprintf(Loc::getMessage("KIT_IX_FATAL_ERROR"), $arError['type'], $arError['message'], $arError['file'], $arError['line']));
 	}
 	
 	public function HandleError($code, $message, $file, $line)
@@ -2420,7 +2420,7 @@ class ImporterHl {
 		{
 			$this->EndWithError(\Bitrix\Main\Diag\ExceptionHandlerFormatter::format($exception));
 		}
-		$this->EndWithError(sprintf(Loc::getMessage("IXML_IX_FATAL_ERROR"), '', $exception->getMessage(), $exception->getFile(), $exception->getLine()));
+		$this->EndWithError(sprintf(Loc::getMessage("KIT_IX_FATAL_ERROR"), '', $exception->getMessage(), $exception->getFile(), $exception->getLine()));
 	}
 	
 	public function EndWithError($error)

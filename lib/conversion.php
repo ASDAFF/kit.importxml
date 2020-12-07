@@ -3,7 +3,7 @@
  * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
  */
 
-namespace Bitrix\IxmlImportxml;
+namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Localization\Loc;
 Loc::loadMessages(__FILE__);
@@ -597,7 +597,7 @@ class Conversion
 		
 		$arElement2 = array();
 		//$dbResElements = \CIblockElement::GetList(array(), $arFilter, false, array('nTopCount'=>1), $arSelectElementFields);
-		$dbResElements = \Bitrix\IxmlImportxml\DataManager\IblockElement::GetList($arFilter, $arSelectElementFields, array(), 1);
+		$dbResElements = \Bitrix\KitImportxml\DataManager\IblockElement::GetList($arFilter, $arSelectElementFields, array(), 1);
 		if($arElement = $dbResElements->Fetch())
 		{			
 			foreach($arElement as $k=>$v)
@@ -851,7 +851,7 @@ class Conversion
 	{
 		if($val)
 		{
-			$arFile = \Bitrix\IxmlImportxml\Utils::GetFileArray($val);
+			$arFile = \Bitrix\KitImportxml\Utils::GetFileArray($val);
 			if($arFile)
 			{
 				$val = $arFile['SRC'];
@@ -868,7 +868,7 @@ class Conversion
 	{
 		if($val)
 		{
-			$arFile = \Bitrix\IxmlImportxml\Utils::GetFileArray($val);
+			$arFile = \Bitrix\KitImportxml\Utils::GetFileArray($val);
 			if($arFile)
 			{
 				$val = $arFile['DESCRIPTION'];
@@ -922,7 +922,7 @@ class Conversion
 			if(!isset($this->propVals[$arProp['ID']][$selectField][$val]))
 			{
 				//$dbRes = \CIBlockElement::GetList(array(), array("ID"=>$val), false, false, array($selectField));
-				$dbRes = \Bitrix\IxmlImportxml\DataManager\IblockElement::GetList(array("ID"=>$val), array($selectField));
+				$dbRes = \Bitrix\KitImportxml\DataManager\IblockElement::GetList(array("ID"=>$val), array($selectField));
 				if($arElem = $dbRes->Fetch())
 				{
 					$selectedField = $selectField;

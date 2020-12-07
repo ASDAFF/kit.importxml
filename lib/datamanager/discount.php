@@ -3,7 +3,7 @@
  * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
  */
 
-namespace Bitrix\IxmlImportxml\DataManager;
+namespace Bitrix\KitImportxml\DataManager;
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -11,7 +11,7 @@ Loc::loadMessages(__FILE__);
 
 class Discount
 {
-	protected static $moduleId = 'ixml.importxml';
+	protected static $moduleId = 'kit.importxml';
 		
 	public function __construct($ie=false)
 	{
@@ -133,9 +133,9 @@ class Discount
 						if(!$arFieldsProductDiscount['CURRENCY']) $arFieldsProductDiscount['CURRENCY'] = $this->ie->params['DEFAULT_CURRENCY'];
 						if(!$arFieldsProductDiscount['NAME'])
 						{
-							if($arFieldsProductDiscount['VALUE_TYPE']=='F') $arFieldsProductDiscount['NAME'] = Loc::getMessage("IXML_IX_DISCOUNT_NAME_TYPE_F").' '.$arFieldsProductDiscount['VALUE'].' '.$arFieldsProductDiscount['CURRENCY'];
-							elseif($arFieldsProductDiscount['VALUE_TYPE']=='S') $arFieldsProductDiscount['NAME'] = Loc::getMessage("IXML_IX_DISCOUNT_NAME_TYPE_S").' '.$arFieldsProductDiscount['VALUE'].' '.$arFieldsProductDiscount['CURRENCY'];
-							else $arFieldsProductDiscount['NAME'] = Loc::getMessage("IXML_IX_DISCOUNT_NAME_TYPE_P").' '. $arFieldsProductDiscount['VALUE'].'%';
+							if($arFieldsProductDiscount['VALUE_TYPE']=='F') $arFieldsProductDiscount['NAME'] = Loc::getMessage("KIT_IX_DISCOUNT_NAME_TYPE_F").' '.$arFieldsProductDiscount['VALUE'].' '.$arFieldsProductDiscount['CURRENCY'];
+							elseif($arFieldsProductDiscount['VALUE_TYPE']=='S') $arFieldsProductDiscount['NAME'] = Loc::getMessage("KIT_IX_DISCOUNT_NAME_TYPE_S").' '.$arFieldsProductDiscount['VALUE'].' '.$arFieldsProductDiscount['CURRENCY'];
+							else $arFieldsProductDiscount['NAME'] = Loc::getMessage("KIT_IX_DISCOUNT_NAME_TYPE_P").' '. $arFieldsProductDiscount['VALUE'].'%';
 						}
 						\CCatalogDiscount::Add($arFieldsProductDiscount);
 					}
@@ -343,7 +343,7 @@ class Discount
 			if($dbRes->SelectedRowsCount()==0)
 			{
 				$arDiscountFields['LID'] = $siteId;
-				$arDiscountFields['NAME'] = Loc::getMessage("IXML_IX_DISCOUNT_PRODUCT_GIFT").' '.$name;
+				$arDiscountFields['NAME'] = Loc::getMessage("KIT_IX_DISCOUNT_PRODUCT_GIFT").' '.$name;
 				$arDiscountFields['PRIORITY'] = 1;
 				$arDiscountFields['LAST_DISCOUNT'] = 'Y';
 				$arDiscountFields['USER_GROUPS'] = array(2);
@@ -487,9 +487,9 @@ class Discount
 				//if(!$arFieldsProductDiscount['CURRENCY']) $arFieldsProductDiscount['CURRENCY'] = $this->ie->params['DEFAULT_CURRENCY'];
 				if(!$arFieldsProductDiscount['NAME'])
 				{
-					if($arFieldsProductDiscount['VALUE_TYPE']=='F') $arFieldsProductDiscount['NAME'] = Loc::getMessage("IXML_IX_DISCOUNT_NAME_TYPE_F").' '.$arFieldsProductDiscount['VALUE'].' '.$arFieldsProductDiscount['CURRENCY'];
-					elseif($arFieldsProductDiscount['VALUE_TYPE']=='S') $arFieldsProductDiscount['NAME'] = Loc::getMessage("IXML_IX_DISCOUNT_NAME_TYPE_S").' '.$arFieldsProductDiscount['VALUE'].' '.$arFieldsProductDiscount['CURRENCY'];
-					else $arFieldsProductDiscount['NAME'] = Loc::getMessage("IXML_IX_DISCOUNT_NAME_TYPE_P").' '. $arFieldsProductDiscount['VALUE'].'%';
+					if($arFieldsProductDiscount['VALUE_TYPE']=='F') $arFieldsProductDiscount['NAME'] = Loc::getMessage("KIT_IX_DISCOUNT_NAME_TYPE_F").' '.$arFieldsProductDiscount['VALUE'].' '.$arFieldsProductDiscount['CURRENCY'];
+					elseif($arFieldsProductDiscount['VALUE_TYPE']=='S') $arFieldsProductDiscount['NAME'] = Loc::getMessage("KIT_IX_DISCOUNT_NAME_TYPE_S").' '.$arFieldsProductDiscount['VALUE'].' '.$arFieldsProductDiscount['CURRENCY'];
+					else $arFieldsProductDiscount['NAME'] = Loc::getMessage("KIT_IX_DISCOUNT_NAME_TYPE_P").' '. $arFieldsProductDiscount['VALUE'].'%';
 				}
 				$arFieldsProductDiscount2 = $this->PrepareSaleDiscountFields($arFieldsProductDiscount);
 				$discountId = \CSaleDiscount::Add($arFieldsProductDiscount2);
@@ -611,7 +611,7 @@ class Discount
 				//if(!$arFieldsProductDiscount['CURRENCY']) $arFieldsProductDiscount['CURRENCY'] = $this->ie->params['DEFAULT_CURRENCY'];
 				if(!$arFieldsProductDiscount['NAME'])
 				{
-					$arFieldsProductDiscount['NAME'] = Loc::getMessage("IXML_IX_DISCOUNT_NAME_SHARE");
+					$arFieldsProductDiscount['NAME'] = Loc::getMessage("KIT_IX_DISCOUNT_NAME_SHARE");
 				}
 				$arFieldsProductDiscount2 = $this->PrepareSaleDiscountFields($arFieldsProductDiscount);
 				$discountId = \CSaleDiscount::Add($arFieldsProductDiscount2);
@@ -856,7 +856,7 @@ class Discount
 	{
 		if(!isset($this->dpEntity))
 		{
-			$this->dpEntity = new \Bitrix\IxmlImportxml\DataManager\DiscountProductTable();
+			$this->dpEntity = new \Bitrix\KitImportxml\DataManager\DiscountProductTable();
 			$tblName = $this->dpEntity->getTableName();
 			$conn = $this->dpEntity->getEntity()->getConnection();
 			if(!$conn->isTableExists($tblName))

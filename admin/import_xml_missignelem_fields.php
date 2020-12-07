@@ -5,7 +5,7 @@
 
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_before.php");
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/iblock/prolog.php");
-$moduleId = 'ixml.importxml';
+$moduleId = 'kit.importxml';
 CModule::IncludeModule('iblock');
 CModule::IncludeModule($moduleId);
 IncludeModuleLangFile(__FILE__);
@@ -19,7 +19,7 @@ $IBLOCK_ID = (int)$arGet['IBLOCK_ID'];
 $isOffers = false;
 if(strpos($INPUT_ID, 'OFFER_')===0)
 {
-	$IBLOCK_ID = \Bitrix\IxmlImportxml\Utils::GetOfferIblock($IBLOCK_ID);
+	$IBLOCK_ID = \Bitrix\KitImportxml\Utils::GetOfferIblock($IBLOCK_ID);
 	$isOffers = true;
 }
 
@@ -46,20 +46,20 @@ while($arr = $dbRes->Fetch())
 	$arDefaultProps[$arr['ID']] = $arr;
 }
 
-$arDefaultCatFields = \Bitrix\IxmlImportxml\FieldList::GetCatalogDefaultFields($IBLOCK_ID);
-$arDefaultElFields = \Bitrix\IxmlImportxml\FieldList::GetIblockElementDefaultFields();
+$arDefaultCatFields = \Bitrix\KitImportxml\FieldList::GetCatalogDefaultFields($IBLOCK_ID);
+$arDefaultElFields = \Bitrix\KitImportxml\FieldList::GetIblockElementDefaultFields();
 
 require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_admin.php");
 ?>
 <form action="" method="post" enctype="multipart/form-data" name="field_settings">
 	<input type="hidden" name="action" value="save">
-	<table width="100%" class="ixml-ix-list-settings">
+	<table width="100%" class="kit-ix-list-settings">
 		<col width="50%">
 		<col width="50%">
 		
 		<tr class="heading">
 			<td colspan="2">
-				<?echo GetMessage(($isOffers ? "IXML_IX_LIST_SETTING_PROPERTIES_DEFAULT_OFFER" : "IXML_IX_LIST_SETTING_PROPERTIES_DEFAULT")); ?>
+				<?echo GetMessage(($isOffers ? "KIT_IX_LIST_SETTING_PROPERTIES_DEFAULT_OFFER" : "KIT_IX_LIST_SETTING_PROPERTIES_DEFAULT")); ?>
 			</td>
 		</tr>
 		<?
@@ -71,29 +71,29 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				elseif(isset($arDefaultCatFields[$k])) $fieldName = $arDefaultCatFields[$k]['NAME'];
 				else $fieldName = $arDefaultElFields[$k]['NAME'];
 				?>
-				<tr class="ixml-ix-list-settings-defaults">
+				<tr class="kit-ix-list-settings-defaults">
 					<td class="adm-detail-content-cell-l"><?echo $fieldName;?>:</td>
 					<td class="adm-detail-content-cell-r">
 						<input type="text" name="DEFAULTS[<?echo $k;?>]" value="<?echo htmlspecialcharsex($v);?>">
-						<a class="delete" href="javascript:void(0)" onclick="ESettings.RemoveDefaultProp(this);" title="<?echo GetMessage("IXML_IX_LIST_SETTING_DELETE"); ?>"></a>
+						<a class="delete" href="javascript:void(0)" onclick="ESettings.RemoveDefaultProp(this);" title="<?echo GetMessage("KIT_IX_LIST_SETTING_DELETE"); ?>"></a>
 					</td>
 				</tr>
 				<?
 			}
 		}
 		?>		
-		<tr class="ixml-ix-list-settings-defaults" style="display: none;">
+		<tr class="kit-ix-list-settings-defaults" style="display: none;">
 			<td class="adm-detail-content-cell-l"></td>
 			<td class="adm-detail-content-cell-r">
 				<input type="text" name="empty" value="">
-				<a class="delete" href="javascript:void(0)" onclick="ESettings.RemoveDefaultProp(this);" title="<?echo GetMessage("IXML_IX_LIST_SETTING_DELETE"); ?>"></a>
+				<a class="delete" href="javascript:void(0)" onclick="ESettings.RemoveDefaultProp(this);" title="<?echo GetMessage("KIT_IX_LIST_SETTING_DELETE"); ?>"></a>
 			</td>
 		</tr>
 		<tr>
-			<td colspan="2" class="ixml-ix-chosen-td">
-				<select name="prop_default" style="min-width: 200px;" class="ixml-ix-chosen-multi" onchange="ESettings.AddDefaultProp(this)">
-					<option value=""><?echo GetMessage('IXML_IX_PLACEHOLDER_CHOOSE');?></option>
-					<optgroup label="<?echo GetMessage('IXML_IX_LIST_SETTING_ELEMENT');?>">
+			<td colspan="2" class="kit-ix-chosen-td">
+				<select name="prop_default" style="min-width: 200px;" class="kit-ix-chosen-multi" onchange="ESettings.AddDefaultProp(this)">
+					<option value=""><?echo GetMessage('KIT_IX_PLACEHOLDER_CHOOSE');?></option>
+					<optgroup label="<?echo GetMessage('KIT_IX_LIST_SETTING_ELEMENT');?>">
 						<?
 						foreach($arDefaultElFields as $elKey=>$elField)
 						{
@@ -102,7 +102,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 						?>
 					</optgroup>
 					<?if(!empty($arDefaultProps)){?>
-						<optgroup label="<?echo GetMessage('IXML_IX_LIST_SETTING_PROPERTIES');?>">
+						<optgroup label="<?echo GetMessage('KIT_IX_LIST_SETTING_PROPERTIES');?>">
 							<?
 							foreach($arDefaultProps as $prop)
 							{
@@ -112,7 +112,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 						</optgroup>
 					<?}?>
 					<?if(!empty($arDefaultCatFields)){?>
-						<optgroup label="<?echo GetMessage('IXML_IX_LIST_SETTING_CATALOG');?>">
+						<optgroup label="<?echo GetMessage('KIT_IX_LIST_SETTING_CATALOG');?>">
 							<?
 							foreach($arDefaultCatFields as $cKey=>$cField)
 							{

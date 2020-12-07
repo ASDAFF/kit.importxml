@@ -12,16 +12,16 @@ $_SERVER["DOCUMENT_ROOT"] = realpath(dirname(__FILE__).'/../../../..');
 if(!array_key_exists('REQUEST_URI', $_SERVER)) $_SERVER["REQUEST_URI"] = substr(__FILE__, strlen($_SERVER["DOCUMENT_ROOT"]));
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_before.php");
 @set_time_limit(0);
-$moduleId = 'ixml.importxml';
-$moduleRunnerClass = 'CIxmlImportXMLRunner';
+$moduleId = 'kit.importxml';
+$moduleRunnerClass = 'CKitImportXMLRunner';
 \Bitrix\Main\Loader::includeModule("iblock");
 \Bitrix\Main\Loader::includeModule('catalog');
 \Bitrix\Main\Loader::includeModule("currency");
 \Bitrix\Main\Loader::includeModule($moduleId);
 $PROFILE_ID = $argv[1];
 
-$oProfile = \Bitrix\IxmlImportxml\Profile::getInstance();
-\Bitrix\IxmlImportxml\Utils::RemoveTmpFiles(0); //Remove old dirs
+$oProfile = \Bitrix\KitImportxml\Profile::getInstance();
+\Bitrix\KitImportxml\Utils::RemoveTmpFiles(0); //Remove old dirs
 
 $arProfiles = array_map('trim', explode(',', $PROFILE_ID));
 foreach($arProfiles as $PROFILE_ID)
@@ -33,7 +33,7 @@ foreach($arProfiles as $PROFILE_ID)
 		continue;
 	}
 	
-	$oProfile = \Bitrix\IxmlImportxml\Profile::getInstance();
+	$oProfile = \Bitrix\KitImportxml\Profile::getInstance();
 	$arProfileFields = $oProfile->GetFieldsByID($PROFILE_ID);
 	if($arProfileFields['ACTIVE']=='N')
 	{
@@ -62,7 +62,7 @@ foreach($arProfiles as $PROFILE_ID)
 		$fileLink = '';
 		if($params['EMAIL_DATA_FILE'])
 		{
-			if($newFileId = \Bitrix\IxmlImportxml\SMail::GetNewFile($params['EMAIL_DATA_FILE']))
+			if($newFileId = \Bitrix\KitImportxml\SMail::GetNewFile($params['EMAIL_DATA_FILE']))
 			{
 				$arFile = CFile::GetFileArray($newFileId);
 				$fileLink = $_SERVER["DOCUMENT_ROOT"].$arFile['SRC'];
@@ -79,7 +79,7 @@ foreach($arProfiles as $PROFILE_ID)
 			$i = 5;
 			while($i > 0 && (empty($arFile) || $arFile['size']==0 || ($arFile['size']<1024 && stripos(file_get_contents($arFile['tmp_name']), '<?xml')===false && (sleep(300) || 1))))
 			{
-				$arFile = \Bitrix\IxmlImportxml\Utils::MakeFileArray($params['EXT_DATA_FILE'], 86400);
+				$arFile = \Bitrix\KitImportxml\Utils::MakeFileArray($params['EXT_DATA_FILE'], 86400);
 				$i--;
 			}
 			$fileSum = (file_exists($arFile['tmp_name']) ? md5_file($arFile['tmp_name']) : '');
@@ -93,7 +93,7 @@ foreach($arProfiles as $PROFILE_ID)
 		{
 			if(!$newFileId && $arFile)
 			{
-				$newFileId = \Bitrix\IxmlImportxml\Utils::SaveFile($arFile, $moduleId);
+				$newFileId = \Bitrix\KitImportxml\Utils::SaveFile($arFile, $moduleId);
 			}
 		}
 		
@@ -122,7 +122,7 @@ foreach($arProfiles as $PROFILE_ID)
 		else
 		{
 			$arParams['IMPORT_MODE'] = 'CRON';
-			$ie = new \Bitrix\IxmlImportxml\Importer($DATA_FILE_NAME, $params, $EXTRASETTINGS, $arParams, $pid);
+			$ie = new \Bitrix\KitImportxml\Importer($DATA_FILE_NAME, $params, $EXTRASETTINGS, $arParams, $pid);
 			$ie->GetBreakParams('finish');
 			echo date('Y-m-d H:i:s').": file not exists\r\n"."Profile id = ".$PROFILE_ID."\r\n\r\n";
 		}
@@ -131,7 +131,7 @@ foreach($arProfiles as $PROFILE_ID)
 
 	if(COption::GetOptionString($moduleId, 'CRON_CONTINUE_LOADING', 'N')=='Y')
 	{
-		$oProfile = \Bitrix\IxmlImportxml\Profile::getInstance();
+		$oProfile = \Bitrix\KitImportxml\Profile::getInstance();
 		$arParams = $oProfile->GetProccessParamsFromPidFile($PROFILE_ID);
 		if($arParams===false)
 		{
@@ -150,7 +150,7 @@ foreach($arProfiles as $PROFILE_ID)
 		elseif($newFileId===0)
 		{
 			$arParams['IMPORT_MODE'] = 'CRON';
-			$ie = new \Bitrix\IxmlImportxml\Importer($DATA_FILE_NAME, $params, $EXTRASETTINGS, $arParams, $pid);
+			$ie = new \Bitrix\KitImportxml\Importer($DATA_FILE_NAME, $params, $EXTRASETTINGS, $arParams, $pid);
 			$ie->GetBreakParams('finish');
 			echo date('Y-m-d H:i:s').": file not exists\r\n"."Profile id = ".$PROFILE_ID."\r\n\r\n";
 			continue;

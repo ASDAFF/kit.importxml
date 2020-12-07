@@ -7,8 +7,8 @@ if (!CModule::IncludeModule("iblock"))
 	return false;
 
 IncludeModuleLangFile(__FILE__);
-$moduleId = 'ixml.importxml';
-$moduleFilePrefix = 'ixml_import_xml';
+$moduleId = 'kit.importxml';
+$moduleFilePrefix = 'kit_import_xml';
 $moduleIdUl = str_replace('.', '_', $moduleId);
 
 $aMenu = array();
@@ -33,10 +33,10 @@ if($bUserIsAdmin || $bHasWRight)
 	if($bUserIsAdmin || $bHasWRight)
 	{
 		$aSubMenu[] = array(
-			"text" => GetMessage("IXML_MENU_IMPORT_TITLE"),
+			"text" => GetMessage("KIT_MENU_IMPORT_TITLE"),
 			"url" => $moduleFilePrefix.".php?lang=".LANGUAGE_ID,
 			"more_url" => array($moduleFilePrefix."_profile_list.php"),
-			"title" => GetMessage("IXML_MENU_IMPORT_TITLE"),
+			"title" => GetMessage("KIT_MENU_IMPORT_TITLE"),
 			"module_id" => $moduleId,
 			"items_id" => "menu_".$moduleIdUl,
 			"sort" => 100,
@@ -46,9 +46,9 @@ if($bUserIsAdmin || $bHasWRight)
 		if(CModule::IncludeModule('highloadblock'))
 		{
 			$aSubMenu[] = array(
-				"text" => GetMessage("IXML_MENU_IMPORT_TITLE_HIGHLOAD"),
+				"text" => GetMessage("KIT_MENU_IMPORT_TITLE_HIGHLOAD"),
 				"url" => $moduleFilePrefix."_highload.php?lang=".LANGUAGE_ID,
-				"title" => GetMessage("IXML_MENU_IMPORT_TITLE_HIGHLOAD"),
+				"title" => GetMessage("KIT_MENU_IMPORT_TITLE_HIGHLOAD"),
 				"module_id" => $moduleId,
 				"items_id" => "menu_".$moduleIdUl,
 				"sort" => 200,
@@ -57,9 +57,9 @@ if($bUserIsAdmin || $bHasWRight)
 		}
 		
 		/*$aSubMenu[] = array(
-			"text" => GetMessage("IXML_MENU_IMPORT_TITLE_STAT"),
+			"text" => GetMessage("KIT_MENU_IMPORT_TITLE_STAT"),
 			"url" => $moduleFilePrefix."_event_log.php?lang=".LANGUAGE_ID,
-			"title" => GetMessage("IXML_MENU_IMPORT_TITLE_STAT"),
+			"title" => GetMessage("KIT_MENU_IMPORT_TITLE_STAT"),
 			"module_id" => $moduleId,
 			"items_id" => "menu_".$moduleIdUl,
 			"sort" => 300,
@@ -70,8 +70,8 @@ if($bUserIsAdmin || $bHasWRight)
 			"parent_menu" => "global_menu_content",
 			"section" => $moduleIdUl,
 			"sort" => 1200,
-			"text" => GetMessage("IXML_MENU_IMPORT_TITLE_PARENT"),
-			"title" => GetMessage("IXML_MENU_IMPORT_TITLE_PARENT"),
+			"text" => GetMessage("KIT_MENU_IMPORT_TITLE_PARENT"),
+			"title" => GetMessage("KIT_MENU_IMPORT_TITLE_PARENT"),
 			"icon" => $moduleIdUl."_menu_import_icon",
 			"items_id" => "menu_".$moduleIdUl."_parent",
 			"module_id" => $moduleId,

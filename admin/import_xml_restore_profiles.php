@@ -5,7 +5,7 @@
 
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_before.php");
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/iblock/prolog.php");
-$moduleId = 'ixml.importxml';
+$moduleId = 'kit.importxml';
 CModule::IncludeModule($moduleId);
 IncludeModuleLangFile(__FILE__);
 
@@ -17,7 +17,7 @@ if($_POST['action']=='save')
 	$APPLICATION->RestartBuffer();
 	if(ob_get_contents()) ob_end_clean();
 	
-	$oProfile = new \Bitrix\IxmlImportxml\Profile();
+	$oProfile = new \Bitrix\KitImportxml\Profile();
 	$arResult = $oProfile->RestoreBackup($_FILES['RESTORE_FILE'], $_POST['PARAMS']);
 	echo \CUtil::PhpToJSObject($arResult);
 	

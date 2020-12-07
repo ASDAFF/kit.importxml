@@ -3,7 +3,7 @@
  * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
  */
 
-namespace Bitrix\IxmlImportxml;
+namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Localization\Loc;
 
@@ -25,7 +25,7 @@ class MailHeader
 		else
 			$str = quoted_printable_decode(str_replace("_", " ", $str));
 
-		$str = \Bitrix\IxmlImportxml\MailUtil::ConvertCharset($str, $encoding, $charset);
+		$str = \Bitrix\KitImportxml\MailUtil::ConvertCharset($str, $encoding, $charset);
 
 		return $str;
 	}
@@ -37,13 +37,13 @@ class MailHeader
 		if(!preg_match("'=\?(.*)\?(B|Q)\?(.*)\?='i", $str))
 		{
 			if(strlen($charset_document)>0 && $charset_document!=$charset_to)
-				$str = \Bitrix\IxmlImportxml\MailUtil::ConvertCharset($str, $charset_document, $charset_to);
+				$str = \Bitrix\KitImportxml\MailUtil::ConvertCharset($str, $charset_document, $charset_to);
 		}
 		else
 		{
 			$str = preg_replace_callback(
 				"'=\?(.*?)\?(B|Q)\?(.*?)\?='i",
-				create_function('$m', "return \Bitrix\IxmlImportxml\MailHeader::ConvertHeader(\$m[1], \$m[2], \$m[3], '".AddSlashes($charset_to)."');"),
+				create_function('$m', "return \Bitrix\KitImportxml\MailHeader::ConvertHeader(\$m[1], \$m[2], \$m[3], '".AddSlashes($charset_to)."');"),
 				$str
 			);
 		}
@@ -132,7 +132,7 @@ class MailHeader
 			else if (preg_match("'filename\*=([^;]+)'i", $cd, $res))
 			{
 				list($fncharset, $fnstr) = preg_split("/'[^']*'/", trim($res[1], '"'));
-				$this->filename = \Bitrix\IxmlImportxml\MailUtil::ConvertCharset(rawurldecode($fnstr), $fncharset, $charset);
+				$this->filename = \Bitrix\KitImportxml\MailUtil::ConvertCharset(rawurldecode($fnstr), $fncharset, $charset);
 			}
 		}
 

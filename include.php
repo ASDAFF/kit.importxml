@@ -5,11 +5,11 @@
 
 include_once(dirname(__FILE__).'/install/demo.php');
 
-if(!class_exists('CIxmlImportXMLRunner'))
+if(!class_exists('CKitImportXMLRunner'))
 {
-	class CIxmlImportXMLRunner
+	class CKitImportXMLRunner
 	{
-		protected static $moduleId = 'ixml.importxml';
+		protected static $moduleId = 'kit.importxml';
 		
 		static function GetModuleId()
 		{
@@ -38,20 +38,20 @@ if(!class_exists('CIxmlImportXMLRunner'))
 		static function ImportIblock($filename, $params, $fparams, $stepparams, $pid = false)
 		{
 			if(self::DemoExpired()) return array();
-			$ie = new \Bitrix\IxmlImportxml\Importer($filename, $params, $fparams, $stepparams, $pid);
+			$ie = new \Bitrix\KitImportxml\Importer($filename, $params, $fparams, $stepparams, $pid);
 			return $ie->Import();
 		}
 		
 		static function ImportHighloadblock($filename, $params, $fparams, $stepparams, $pid = false)
 		{
 			if(self::DemoExpired()) return array();
-			$ie = new \Bitrix\IxmlImportxml\ImporterHl($filename, $params, $fparams, $stepparams, $pid);
+			$ie = new \Bitrix\KitImportxml\ImporterHl($filename, $params, $fparams, $stepparams, $pid);
 			return $ie->Import();
 		}
 	}
 }
 
-$moduleId = CIxmlImportXMLRunner::GetModuleId();
+$moduleId = CKitImportXMLRunner::GetModuleId();
 $moduleJsId = str_replace('.', '_', $moduleId);
 $pathJS = '/bitrix/js/'.$moduleId;
 $pathCSS = '/bitrix/panel/'.$moduleId;
@@ -59,43 +59,43 @@ $pathLang = BX_ROOT.'/modules/'.$moduleId.'/lang/'.LANGUAGE_ID;
 CModule::AddAutoloadClasses(
 	$moduleId,
 	array(
-		'\Bitrix\IxmlImportxml\Profile' => "lib/profile.php",
-		'\Bitrix\IxmlImportxml\ProfileTable' => "lib/profile_table.php",
-		'\Bitrix\IxmlImportxml\ProfileHlTable' => "lib/profile_hl_table.php",
-		'\Bitrix\IxmlImportxml\Utils' => "lib/utils.php",
-		'\Bitrix\IxmlImportxml\Json2Xml' => "lib/json2xml.php",
-		'\Bitrix\IxmlImportxml\Sftp' => "lib/sftp.php",
-		'\Bitrix\IxmlImportxml\Conversion' => "lib/conversion.php",
-		'\Bitrix\IxmlImportxml\Cloud' => "lib/cloud.php",
-		'\Bitrix\IxmlImportxml\Cloud\MailRu' => "lib/cloud/mail_ru.php",
-		'\Bitrix\IxmlImportxml\ZipArchive' => "lib/zip_archive.php",
-		'\Bitrix\IxmlImportxml\XMLViewer' => "lib/xml_viewer.php",
-		'\Bitrix\IxmlImportxml\FieldList' => "lib/field_list.php",
-		'\Bitrix\IxmlImportxml\Importer' => "lib/importer.php",
-		'\Bitrix\IxmlImportxml\ImporterHl' => "lib/importer_hl.php",
-		'\Bitrix\IxmlImportxml\Logger' => "lib/logger.php",
-		'\Bitrix\IxmlImportxml\Extrasettings' => "lib/extrasettings.php",
-		'\Bitrix\IxmlImportxml\CFileInput' => "lib/file_input.php",
-		'\Bitrix\IxmlImportxml\Imap' => "lib/mail/imap.php",
-		'\Bitrix\IxmlImportxml\SMail' => "lib/mail/mail.php",
-		'\Bitrix\IxmlImportxml\MailHeader' => "lib/mail/mail_header.php",
-		'\Bitrix\IxmlImportxml\MailMessage' => "lib/mail/mail_message.php",
-		'\Bitrix\IxmlImportxml\MailUtil' => "lib/mail/mail_util.php",
-		'\Bitrix\IxmlImportxml\DataManager\Discount' => "lib/datamanager/discount.php",
-		'\Bitrix\IxmlImportxml\DataManager\DiscountProductTable' => "lib/datamanager/discount_product_table.php",
-		'\Bitrix\IxmlImportxml\DataManager\Price' => "lib/datamanager/price.php",
-		'\Bitrix\IxmlImportxml\DataManager\PriceD7' => "lib/datamanager/price_d7.php",
-		'\Bitrix\IxmlImportxml\DataManager\Product' => "lib/datamanager/product.php",
-		'\Bitrix\IxmlImportxml\DataManager\ProductD7' => "lib/datamanager/product_d7.php",
-		'\Bitrix\IxmlImportxml\DataManager\IblockElement' => "lib/datamanager/iblockelement.php",
-		'\Bitrix\IxmlImportxml\ClassManager' => "lib/class_manager.php",
+		'\Bitrix\KitImportxml\Profile' => "lib/profile.php",
+		'\Bitrix\KitImportxml\ProfileTable' => "lib/profile_table.php",
+		'\Bitrix\KitImportxml\ProfileHlTable' => "lib/profile_hl_table.php",
+		'\Bitrix\KitImportxml\Utils' => "lib/utils.php",
+		'\Bitrix\KitImportxml\Json2Xml' => "lib/json2xml.php",
+		'\Bitrix\KitImportxml\Sftp' => "lib/sftp.php",
+		'\Bitrix\KitImportxml\Conversion' => "lib/conversion.php",
+		'\Bitrix\KitImportxml\Cloud' => "lib/cloud.php",
+		'\Bitrix\KitImportxml\Cloud\MailRu' => "lib/cloud/mail_ru.php",
+		'\Bitrix\KitImportxml\ZipArchive' => "lib/zip_archive.php",
+		'\Bitrix\KitImportxml\XMLViewer' => "lib/xml_viewer.php",
+		'\Bitrix\KitImportxml\FieldList' => "lib/field_list.php",
+		'\Bitrix\KitImportxml\Importer' => "lib/importer.php",
+		'\Bitrix\KitImportxml\ImporterHl' => "lib/importer_hl.php",
+		'\Bitrix\KitImportxml\Logger' => "lib/logger.php",
+		'\Bitrix\KitImportxml\Extrasettings' => "lib/extrasettings.php",
+		'\Bitrix\KitImportxml\CFileInput' => "lib/file_input.php",
+		'\Bitrix\KitImportxml\Imap' => "lib/mail/imap.php",
+		'\Bitrix\KitImportxml\SMail' => "lib/mail/mail.php",
+		'\Bitrix\KitImportxml\MailHeader' => "lib/mail/mail_header.php",
+		'\Bitrix\KitImportxml\MailMessage' => "lib/mail/mail_message.php",
+		'\Bitrix\KitImportxml\MailUtil' => "lib/mail/mail_util.php",
+		'\Bitrix\KitImportxml\DataManager\Discount' => "lib/datamanager/discount.php",
+		'\Bitrix\KitImportxml\DataManager\DiscountProductTable' => "lib/datamanager/discount_product_table.php",
+		'\Bitrix\KitImportxml\DataManager\Price' => "lib/datamanager/price.php",
+		'\Bitrix\KitImportxml\DataManager\PriceD7' => "lib/datamanager/price_d7.php",
+		'\Bitrix\KitImportxml\DataManager\Product' => "lib/datamanager/product.php",
+		'\Bitrix\KitImportxml\DataManager\ProductD7' => "lib/datamanager/product_d7.php",
+		'\Bitrix\KitImportxml\DataManager\IblockElement' => "lib/datamanager/iblockelement.php",
+		'\Bitrix\KitImportxml\ClassManager' => "lib/class_manager.php",
 	)
 );
 
 $initFile = $_SERVER["DOCUMENT_ROOT"].BX_ROOT.'/php_interface/include/'.$moduleId.'/init.php';
 if(file_exists($initFile)) include_once($initFile);
 
-$arJSIxmlImportXmlConfig = array(
+$arJSKitImportXmlConfig = array(
 	$moduleJsId => array(
 		'js' => $pathJS.'/script.js',
 		'css' => $pathCSS.'/styles.css',
@@ -115,7 +115,7 @@ $arJSIxmlImportXmlConfig = array(
 	)
 );
 
-foreach ($arJSIxmlImportXmlConfig as $ext => $arExt) {
+foreach ($arJSKitImportXmlConfig as $ext => $arExt) {
 	CJSCore::RegisterExt($ext, $arExt);
 }
 ?>

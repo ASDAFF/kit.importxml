@@ -3,7 +3,7 @@
  * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
  */
 
-namespace Bitrix\IxmlImportxml;
+namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -18,7 +18,7 @@ class Json2Xml
 	
 	public function __construct()
 	{
-		$this->siteEncoding = \Bitrix\IxmlImportxml\Utils::getSiteEncoding();
+		$this->siteEncoding = \Bitrix\KitImportxml\Utils::getSiteEncoding();
 	}
 	
 	public function Convert($fileJson, $fileXml)

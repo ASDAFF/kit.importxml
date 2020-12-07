@@ -3,7 +3,7 @@
  * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
  */
 
-namespace Bitrix\IxmlImportxml;
+namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Localization\Loc;
 
@@ -13,7 +13,7 @@ class MailMessage
 {
 	function ParseHeader($message_header, $charset)
 	{
-		$h = new \Bitrix\IxmlImportxml\MailHeader();
+		$h = new \Bitrix\KitImportxml\MailHeader();
 		$h->Parse($message_header, $charset);
 		return $h;
 	}
@@ -27,7 +27,7 @@ class MailMessage
 		elseif ($encoding == 'quoted-printable')
 			$body = quoted_printable_decode($body);
 		elseif ($encoding == 'x-uue')
-			$body = \Bitrix\IxmlImportxml\MailUtil::uue_decode($body);
+			$body = \Bitrix\KitImportxml\MailUtil::uue_decode($body);
 
 		$content_type = strtolower($header->content_type);
 		if (
@@ -36,7 +36,7 @@ class MailMessage
 			&& strpos($content_type, 'csv') === false
 		)
 		{
-			$body = \Bitrix\IxmlImportxml\MailUtil::convertCharset($body, $header->charset, $charset);
+			$body = \Bitrix\KitImportxml\MailUtil::convertCharset($body, $header->charset, $charset);
 		}
 
 		return array(

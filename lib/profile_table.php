@@ -3,7 +3,7 @@
  * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
  */
 
-namespace Bitrix\IxmlImportxml;
+namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Entity;
 use Bitrix\Main\Localization\Loc;
@@ -21,7 +21,7 @@ Loc::loadMessages(__FILE__);
  * <li> SORT int optional default 500
  * </ul>
  *
- * @package Bitrix\IxmlImportxml
+ * @package Bitrix\KitImportxml
  **/
 
 class ProfileTable extends Entity\DataManager
@@ -43,7 +43,7 @@ class ProfileTable extends Entity\DataManager
 	 */
 	public static function getTableName()
 	{
-		return 'b_ixmlimportxml_profile';
+		return 'b_kitimportxml_profile';
 	}
 
 	/**
@@ -58,43 +58,43 @@ class ProfileTable extends Entity\DataManager
 				'data_type' => 'integer',
 				'primary' => true,
 				'autocomplete' => true,
-				'title' => Loc::getMessage('IXML_IX_PROFILE_ENTITY_ID_FIELD'),
+				'title' => Loc::getMessage('KIT_IX_PROFILE_ENTITY_ID_FIELD'),
 			),
 			'ACTIVE' => array(
 				'data_type' => 'boolean',
 				'values' => array('N', 'Y'),
 				'default_value' => 'Y',
-				'title' => Loc::getMessage('IXML_IX_PROFILE_ENTITY_ACTIVE_FIELD'),
+				'title' => Loc::getMessage('KIT_IX_PROFILE_ENTITY_ACTIVE_FIELD'),
 			),
 			'NAME' => array(
 				'data_type' => 'string',
 				'required' => true,
 				'validation' => array(__CLASS__, 'validateName'),
-				'title' => Loc::getMessage('IXML_IX_PROFILE_ENTITY_NAME_FIELD'),
+				'title' => Loc::getMessage('KIT_IX_PROFILE_ENTITY_NAME_FIELD'),
 			),
 			'PARAMS' => array(
 				'data_type' => 'text',
 				'default_value' => '',
-				'title' => Loc::getMessage('IXML_IX_PROFILE_ENTITY_PARAMS_FIELD'),
+				'title' => Loc::getMessage('KIT_IX_PROFILE_ENTITY_PARAMS_FIELD'),
 			),
 			'DATE_START' => array(
 				'data_type' => 'datetime',
 				'default_value' => '',
-				'title' => Loc::getMessage('IXML_IX_PROFILE_ENTITY_DATE_START_FIELD'),
+				'title' => Loc::getMessage('KIT_IX_PROFILE_ENTITY_DATE_START_FIELD'),
 			),
 			'DATE_FINISH' => array(
 				'data_type' => 'datetime',
 				'default_value' => '',
-				'title' => Loc::getMessage('IXML_IX_PROFILE_ENTITY_DATE_FINISH_FIELD'),
+				'title' => Loc::getMessage('KIT_IX_PROFILE_ENTITY_DATE_FINISH_FIELD'),
 			),
 			'SORT' => array(
 				'data_type' => 'integer',
 				'default_value' => 500,
-				'title' => Loc::getMessage('IXML_IX_PROFILE_ENTITY_SORT_FIELD'),
+				'title' => Loc::getMessage('KIT_IX_PROFILE_ENTITY_SORT_FIELD'),
 			),
 			'FILE_HASH' => array(
 				'data_type' => 'string',
-				'title' => Loc::getMessage('IXML_IX_PROFILE_ENTITY_FILE_HASH_FIELD'),
+				'title' => Loc::getMessage('KIT_IX_PROFILE_ENTITY_FILE_HASH_FIELD'),
 			)
 		);
 	}

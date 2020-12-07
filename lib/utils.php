@@ -3,14 +3,14 @@
  * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
  */
 
-namespace Bitrix\IxmlImportxml;
+namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 Loc::loadMessages(__FILE__);
 
 class Utils {
-	protected static $moduleId = 'ixml.importxml';
+	protected static $moduleId = 'kit.importxml';
 	protected static $fileSystemEncoding = null;
 	protected static $siteEncoding = null;
 	protected static $cpSpecCharLetters = null;
@@ -150,7 +150,7 @@ class Utils {
 	
 	public static function SaveFile($arFile, $strSavePath, $bForceMD5=false, $bSkipExt=false)
 	{
-		$oProfile = \Bitrix\IxmlImportxml\Profile::getInstance();
+		$oProfile = \Bitrix\KitImportxml\Profile::getInstance();
 		$isUtf = (bool)(defined("BX_UTF") && BX_UTF);
 		if(\CUtil::DetectUTF8($arFile["name"]))
 		{
@@ -975,11 +975,11 @@ class Utils {
 				}
 			}
 			
-			$path = preg_replace_callback('/\{DATE_(\S*)\}/', array('\Bitrix\IxmlImportxml\Utils', 'GetDateFormat'), $path);
+			$path = preg_replace_callback('/\{DATE_(\S*)\}/', array('\Bitrix\KitImportxml\Utils', 'GetDateFormat'), $path);
 			if(!$maxTime) $maxTime = min(intval(ini_get('max_execution_time')) - 5, 1800);
 			if(ini_get('max_execution_time')==='0') $maxTime = 300;
 			elseif($maxTime<=0) $maxTime = 50;
-			$cloud = new \Bitrix\IxmlImportxml\Cloud();
+			$cloud = new \Bitrix\KitImportxml\Cloud();
 			if($service = $cloud->GetService($path))
 			{
 				$arFile = $cloud->MakeFileArray($service, $path);
@@ -996,7 +996,7 @@ class Utils {
 					{
 						$idn = new \idna_convert();
 						$oldHost = $arUrl['host'];
-						if(!\CUtil::DetectUTF8($oldHost)) $oldHost = \Bitrix\IxmlImportxml\Utils::Win1251Utf8($oldHost);
+						if(!\CUtil::DetectUTF8($oldHost)) $oldHost = \Bitrix\KitImportxml\Utils::Win1251Utf8($oldHost);
 						$path = str_replace($arUrl['host'], $idn->encode($oldHost), $path);
 					}
 				}
@@ -1122,7 +1122,7 @@ class Utils {
 			}
 			elseif(preg_match('/ftp(s)?:\/\//', $path))
 			{
-				$sftp = new \Bitrix\IxmlImportxml\Sftp();
+				$sftp = new \Bitrix\KitImportxml\Sftp();
 				$arFile = $sftp->MakeFileArray($path, array('TIMEOUT'=>20));
 			}
 			else
@@ -1203,7 +1203,7 @@ class Utils {
 			$tempPath = \CFile::GetTempName('', \Bitrix\Main\IO\Path::convertLogicalToPhysical($arFile['name']).'.xml');
 			$dir = \Bitrix\Main\IO\Path::getDirectory($tempPath);
 			\Bitrix\Main\IO\Directory::createDirectory($dir);
-			$j2x = new \Bitrix\IxmlImportxml\Json2Xml();
+			$j2x = new \Bitrix\KitImportxml\Json2Xml();
 			$j2x->Convert($arFile['tmp_name'], $tempPath);
 			$arFile = \CFile::MakeFileArray($tempPath);
 		}
@@ -1283,7 +1283,7 @@ class Utils {
 	
 	public static function AddFileInputActions()
 	{
-		//AddEventHandler("main", "OnEndBufferContent", Array("\Bitrix\IxmlImportxml\Utils", "AddFileInputActionsHandler"));
+		//AddEventHandler("main", "OnEndBufferContent", Array("\Bitrix\KitImportxml\Utils", "AddFileInputActionsHandler"));
 	}
 	
 	public static function AddFileInputActionsHandler(&$content)
@@ -1291,7 +1291,7 @@ class Utils {
 		return;
 		//if(!function_exists('imap_open')) return;
 		
-		$comment = 'IXML_IX_CHOOSE_FILE';
+		$comment = 'KIT_IX_CHOOSE_FILE';
 		$commentBegin = '<!--'.$comment.'-->';
 		$commentEnd = '<!--/'.$comment.'-->';
 		$pos1 = strpos($content, $commentBegin);
@@ -1319,14 +1319,14 @@ class Utils {
 				$arConfig = \CUtil::JsObjectToPhp($json);
 				array_walk_recursive($arConfig, create_function('&$n, $k', 'if($n=="true"){$n=true;}elseif($n=="false"){$n=false;}'));
 				$arConfigEmail = array(
-					'TEXT' => Loc::getMessage("IXML_IX_FILE_SOURCE_EMAIL"),
+					'TEXT' => Loc::getMessage("KIT_IX_FILE_SOURCE_EMAIL"),
 					'GLOBAL_ICON' => 'adm-menu-upload-email',
 					'ONCLICK' => 'EProfile.ShowEmailForm();'
 				);
 				$arConfig['menuNew'][] = $arConfigEmail;
 				$arConfig['menuExist'][] = $arConfigEmail;
 				$arConfigLinkAuth = array(
-					'TEXT' => Loc::getMessage("IXML_IX_FILE_SOURCE_LINKAUTH"),
+					'TEXT' => Loc::getMessage("KIT_IX_FILE_SOURCE_LINKAUTH"),
 					'GLOBAL_ICON' => 'adm-menu-upload-linkauth',
 					'ONCLICK' => 'EProfile.ShowFileAuthForm();'
 				);
@@ -1425,43 +1425,43 @@ class Utils {
 		<div class="find_form_inner">
 		<?
 		$arFindFields = Array();
-		//$arFindFields["IBEL_A_F_ID"] = Loc::getMessage("IXML_IX_IBEL_A_F_ID");
-		$arFindFields["IBEL_A_F_PARENT"] = Loc::getMessage("IXML_IX_IBEL_A_F_PARENT");
+		//$arFindFields["IBEL_A_F_ID"] = Loc::getMessage("KIT_IX_IBEL_A_F_ID");
+		$arFindFields["IBEL_A_F_PARENT"] = Loc::getMessage("KIT_IX_IBEL_A_F_PARENT");
 
-		$arFindFields["IBEL_A_F_MODIFIED_WHEN"] = Loc::getMessage("IXML_IX_IBEL_A_F_MODIFIED_WHEN");
-		$arFindFields["IBEL_A_F_MODIFIED_BY"] = Loc::getMessage("IXML_IX_IBEL_A_F_MODIFIED_BY");
-		$arFindFields["IBEL_A_F_CREATED_WHEN"] = Loc::getMessage("IXML_IX_IBEL_A_F_CREATED_WHEN");
-		$arFindFields["IBEL_A_F_CREATED_BY"] = Loc::getMessage("IXML_IX_IBEL_A_F_CREATED_BY");
+		$arFindFields["IBEL_A_F_MODIFIED_WHEN"] = Loc::getMessage("KIT_IX_IBEL_A_F_MODIFIED_WHEN");
+		$arFindFields["IBEL_A_F_MODIFIED_BY"] = Loc::getMessage("KIT_IX_IBEL_A_F_MODIFIED_BY");
+		$arFindFields["IBEL_A_F_CREATED_WHEN"] = Loc::getMessage("KIT_IX_IBEL_A_F_CREATED_WHEN");
+		$arFindFields["IBEL_A_F_CREATED_BY"] = Loc::getMessage("KIT_IX_IBEL_A_F_CREATED_BY");
 
-		$arFindFields["IBEL_A_F_ACTIVE_FROM"] = Loc::getMessage("IXML_IX_IBEL_A_ACTFROM");
-		$arFindFields["IBEL_A_F_ACTIVE_TO"] = Loc::getMessage("IXML_IX_IBEL_A_ACTTO");
-		$arFindFields["IBEL_A_F_ACT"] = Loc::getMessage("IXML_IX_IBEL_A_F_ACT");
-		$arFindFields["IBEL_A_F_NAME"] = Loc::getMessage("IXML_IX_IBEL_A_F_NAME");
-		$arFindFields["IBEL_A_F_DESC"] = Loc::getMessage("IXML_IX_IBEL_A_F_DESC");
-		$arFindFields["IBEL_A_CODE"] = Loc::getMessage("IXML_IX_IBEL_A_CODE");
-		$arFindFields["IBEL_A_EXTERNAL_ID"] = Loc::getMessage("IXML_IX_IBEL_A_EXTERNAL_ID");
-		$arFindFields["IBEL_A_PREVIEW_PICTURE"] = Loc::getMessage("IXML_IX_IBEL_A_PREVIEW_PICTURE");
-		$arFindFields["IBEL_A_DETAIL_PICTURE"] = Loc::getMessage("IXML_IX_IBEL_A_DETAIL_PICTURE");
-		$arFindFields["IBEL_A_TAGS"] = Loc::getMessage("IXML_IX_IBEL_A_TAGS");
+		$arFindFields["IBEL_A_F_ACTIVE_FROM"] = Loc::getMessage("KIT_IX_IBEL_A_ACTFROM");
+		$arFindFields["IBEL_A_F_ACTIVE_TO"] = Loc::getMessage("KIT_IX_IBEL_A_ACTTO");
+		$arFindFields["IBEL_A_F_ACT"] = Loc::getMessage("KIT_IX_IBEL_A_F_ACT");
+		$arFindFields["IBEL_A_F_NAME"] = Loc::getMessage("KIT_IX_IBEL_A_F_NAME");
+		$arFindFields["IBEL_A_F_DESC"] = Loc::getMessage("KIT_IX_IBEL_A_F_DESC");
+		$arFindFields["IBEL_A_CODE"] = Loc::getMessage("KIT_IX_IBEL_A_CODE");
+		$arFindFields["IBEL_A_EXTERNAL_ID"] = Loc::getMessage("KIT_IX_IBEL_A_EXTERNAL_ID");
+		$arFindFields["IBEL_A_PREVIEW_PICTURE"] = Loc::getMessage("KIT_IX_IBEL_A_PREVIEW_PICTURE");
+		$arFindFields["IBEL_A_DETAIL_PICTURE"] = Loc::getMessage("KIT_IX_IBEL_A_DETAIL_PICTURE");
+		$arFindFields["IBEL_A_TAGS"] = Loc::getMessage("KIT_IX_IBEL_A_TAGS");
 		
 		if ($bCatalog)
 		{
-			if(is_array($productTypeList)) $arFindFields["CATALOG_TYPE"] = Loc::getMessage("IXML_IX_CATALOG_TYPE");
-			$arFindFields["CATALOG_BUNDLE"] = Loc::getMessage("IXML_IX_CATALOG_BUNDLE");
-			$arFindFields["CATALOG_AVAILABLE"] = Loc::getMessage("IXML_IX_CATALOG_AVAILABLE");
-			$arFindFields["CATALOG_QUANTITY"] = Loc::getMessage("IXML_IX_CATALOG_QUANTITY");
+			if(is_array($productTypeList)) $arFindFields["CATALOG_TYPE"] = Loc::getMessage("KIT_IX_CATALOG_TYPE");
+			$arFindFields["CATALOG_BUNDLE"] = Loc::getMessage("KIT_IX_CATALOG_BUNDLE");
+			$arFindFields["CATALOG_AVAILABLE"] = Loc::getMessage("KIT_IX_CATALOG_AVAILABLE");
+			$arFindFields["CATALOG_QUANTITY"] = Loc::getMessage("KIT_IX_CATALOG_QUANTITY");
 			if(is_array($arStores))
 			{
 				foreach($arStores as $arStore)
 				{
-					$arFindFields["CATALOG_STORE".$arStore['ID']."_QUANTITY"] = sprintf(Loc::getMessage("IXML_IX_CATALOG_STORE_QUANTITY"), $arStore['TITLE']);
+					$arFindFields["CATALOG_STORE".$arStore['ID']."_QUANTITY"] = sprintf(Loc::getMessage("KIT_IX_CATALOG_STORE_QUANTITY"), $arStore['TITLE']);
 				}
 			}
 			if(is_array($arPrices))
 			{
 				foreach($arPrices as $arPrice)
 				{
-					$arFindFields["CATALOG_PRICE_".$arPrice['ID']] = sprintf(Loc::getMessage("IXML_IX_CATALOG_PRICE"), $arPrice['NAME_LANG']);
+					$arFindFields["CATALOG_PRICE_".$arPrice['ID']] = sprintf(Loc::getMessage("KIT_IX_CATALOG_PRICE"), $arPrice['NAME_LANG']);
 				}
 			}
 		}
@@ -1475,7 +1475,7 @@ class Utils {
 		$oFilter->Begin();
 		?>
 			<?/*?><tr>
-				<td><?echo Loc::getMessage("IXML_IX_FILTER_FROMTO_ID")?>:</td>
+				<td><?echo Loc::getMessage("KIT_IX_FILTER_FROMTO_ID")?>:</td>
 				<td nowrap>
 					<input type="text" name="<?echo $sf;?>[find_el_id_start]" size="10" value="<?echo htmlspecialcharsex($arFields['find_el_id_start'])?>">
 					...
@@ -1484,11 +1484,11 @@ class Utils {
 			</tr><?*/?>
 
 			<tr>
-				<td><?echo Loc::getMessage("IXML_IX_FIELD_SECTION_ID")?>:</td>
+				<td><?echo Loc::getMessage("KIT_IX_FIELD_SECTION_ID")?>:</td>
 				<td>
 					<select name="<?echo $sf;?>[find_section_section][]" multiple size="5">
-						<option value="-1"<?if((is_array($arFields['find_section_section']) && in_array("-1", $arFields['find_section_section'])) || $arFields['find_section_section']=="-1")echo" selected"?>><?echo Loc::getMessage("IXML_IX_VALUE_ANY")?></option>
-						<option value="0"<?if((is_array($arFields['find_section_section']) && in_array("0", $arFields['find_section_section'])) || $arFields['find_section_section']=="0")echo" selected"?>><?echo Loc::getMessage("IXML_IX_UPPER_LEVEL")?></option>
+						<option value="-1"<?if((is_array($arFields['find_section_section']) && in_array("-1", $arFields['find_section_section'])) || $arFields['find_section_section']=="-1")echo" selected"?>><?echo Loc::getMessage("KIT_IX_VALUE_ANY")?></option>
+						<option value="0"<?if((is_array($arFields['find_section_section']) && in_array("0", $arFields['find_section_section'])) || $arFields['find_section_section']=="0")echo" selected"?>><?echo Loc::getMessage("KIT_IX_UPPER_LEVEL")?></option>
 						<?
 						$bsections = \CIBlockSection::GetTreeList(Array("IBLOCK_ID"=>$IBLOCK_ID), array("ID", "NAME", "DEPTH_LEVEL"));
 						while($ar = $bsections->GetNext()):
@@ -1496,17 +1496,17 @@ class Utils {
 						endwhile;
 						?>
 					</select><br>
-					<input type="checkbox" name="<?echo $sf;?>[find_el_subsections]" value="Y"<?if($arFields['find_el_subsections']=="Y")echo" checked"?>> <?echo Loc::getMessage("IXML_IX_INCLUDING_SUBSECTIONS")?>
+					<input type="checkbox" name="<?echo $sf;?>[find_el_subsections]" value="Y"<?if($arFields['find_el_subsections']=="Y")echo" checked"?>> <?echo Loc::getMessage("KIT_IX_INCLUDING_SUBSECTIONS")?>
 				</td>
 			</tr>
 
 			<tr>
-				<td><?echo Loc::getMessage("IXML_IX_FIELD_TIMESTAMP_X")?>:</td>
+				<td><?echo Loc::getMessage("KIT_IX_FIELD_TIMESTAMP_X")?>:</td>
 				<td><?echo CalendarPeriod($sf."[find_el_timestamp_from]", htmlspecialcharsex($arFields['find_el_timestamp_from']), $sf."[find_el_timestamp_to]", htmlspecialcharsex($arFields['find_el_timestamp_to']), "filter_form", "Y")?></font></td>
 			</tr>
 
 			<tr>
-				<td><?=Loc::getMessage("IXML_IX_FIELD_MODIFIED_BY")?>:</td>
+				<td><?=Loc::getMessage("KIT_IX_FIELD_MODIFIED_BY")?>:</td>
 				<td>
 					<?echo FindUserID(
 						$sf."[find_el_modified_user_id]",
@@ -1523,12 +1523,12 @@ class Utils {
 			</tr>
 
 			<tr>
-				<td><?echo Loc::getMessage("IXML_IX_EL_ADMIN_DCREATE")?>:</td>
+				<td><?echo Loc::getMessage("KIT_IX_EL_ADMIN_DCREATE")?>:</td>
 				<td><?echo CalendarPeriod($sf."[find_el_created_from]", htmlspecialcharsex($arFields['find_el_created_from']), $sf."[find_el_created_to]", htmlspecialcharsex($arFields['find_el_created_to']), "filter_form", "Y")?></td>
 			</tr>
 
 			<tr>
-				<td><?echo Loc::getMessage("IXML_IX_EL_ADMIN_WCREATE")?></td>
+				<td><?echo Loc::getMessage("KIT_IX_EL_ADMIN_WCREATE")?></td>
 				<td>
 					<?echo FindUserID(
 						$sf."[find_el_created_user_id]",
@@ -1545,65 +1545,65 @@ class Utils {
 			</tr>
 
 			<tr>
-				<td><?echo Loc::getMessage("IXML_IX_EL_A_ACTFROM")?>:</td>
+				<td><?echo Loc::getMessage("KIT_IX_EL_A_ACTFROM")?>:</td>
 				<td><?echo CalendarPeriod($sf."[find_el_date_active_from_from]", htmlspecialcharsex($arFields['find_el_date_active_from_from']), $sf."[find_el_date_active_from_to]", htmlspecialcharsex($arFields['find_el_date_active_from_to']), "filter_form")?></td>
 			</tr>
 
 			<tr>
-				<td><?echo Loc::getMessage("IXML_IX_EL_A_ACTTO")?>:</td>
+				<td><?echo Loc::getMessage("KIT_IX_EL_A_ACTTO")?>:</td>
 				<td><?echo CalendarPeriod($sf."[find_el_date_active_to_from]", htmlspecialcharsex($arFields['find_el_date_active_to_from']), $sf."[find_el_date_active_to_to]", htmlspecialcharsex($arFields['find_el_date_active_to_to']), "filter_form")?></td>
 			</tr>
 
 			<tr>
-				<td><?echo Loc::getMessage("IXML_IX_FIELD_ACTIVE")?>:</td>
+				<td><?echo Loc::getMessage("KIT_IX_FIELD_ACTIVE")?>:</td>
 				<td>
 					<select name="<?echo $sf;?>[find_el_active]">
-						<option value=""><?=htmlspecialcharsex(Loc::getMessage('IXML_IX_VALUE_ANY'))?></option>
-						<option value="Y"<?if($arFields['find_el_active']=="Y")echo " selected"?>><?=htmlspecialcharsex(Loc::getMessage("IXML_IX_YES"))?></option>
-						<option value="N"<?if($arFields['find_el_active']=="N")echo " selected"?>><?=htmlspecialcharsex(Loc::getMessage("IXML_IX_NO"))?></option>
+						<option value=""><?=htmlspecialcharsex(Loc::getMessage('KIT_IX_VALUE_ANY'))?></option>
+						<option value="Y"<?if($arFields['find_el_active']=="Y")echo " selected"?>><?=htmlspecialcharsex(Loc::getMessage("KIT_IX_YES"))?></option>
+						<option value="N"<?if($arFields['find_el_active']=="N")echo " selected"?>><?=htmlspecialcharsex(Loc::getMessage("KIT_IX_NO"))?></option>
 					</select>
 				</td>
 			</tr>
 
 			<tr>
-				<td><?echo Loc::getMessage("IXML_IX_FIELD_NAME")?>:</td>
+				<td><?echo Loc::getMessage("KIT_IX_FIELD_NAME")?>:</td>
 				<td><input type="text" name="<?echo $sf;?>[find_el_name]" value="<?echo htmlspecialcharsex($arFields['find_el_name'])?>" size="30"></td>
 			</tr>
 			<tr>
-				<td><?echo Loc::getMessage("IXML_IX_EL_ADMIN_DESC")?></td>
+				<td><?echo Loc::getMessage("KIT_IX_EL_ADMIN_DESC")?></td>
 				<td><input type="text" name="<?echo $sf;?>[find_el_intext]" value="<?echo htmlspecialcharsex($arFields['find_el_intext'])?>" size="30"></td>
 			</tr>
 
 			<tr>
-				<td><?=Loc::getMessage("IXML_IX_EL_A_CODE")?>:</td>
+				<td><?=Loc::getMessage("KIT_IX_EL_A_CODE")?>:</td>
 				<td><input type="text" name="<?echo $sf;?>[find_el_code]" value="<?echo htmlspecialcharsex($arFields['find_el_code'])?>" size="30"></td>
 			</tr>
 			<tr>
-				<td><?=Loc::getMessage("IXML_IX_EL_A_EXTERNAL_ID")?>:</td>
+				<td><?=Loc::getMessage("KIT_IX_EL_A_EXTERNAL_ID")?>:</td>
 				<td><input type="text" name="<?echo $sf;?>[find_el_external_id]" value="<?echo htmlspecialcharsex($arFields['find_el_external_id'])?>" size="30"></td>
 			</tr>
 			<tr>
-				<td><?=Loc::getMessage("IXML_IX_EL_A_PREVIEW_PICTURE")?>:</td>
+				<td><?=Loc::getMessage("KIT_IX_EL_A_PREVIEW_PICTURE")?>:</td>
 				<td>
 					<select name="<?echo $sf;?>[find_el_preview_picture]">
-						<option value=""><?=htmlspecialcharsex(Loc::getMessage('IXML_IX_VALUE_ANY'))?></option>
-						<option value="Y"<?if($arFields['find_el_preview_picture']=="Y")echo " selected"?>><?=htmlspecialcharsex(Loc::getMessage("IXML_IX_IS_NOT_EMPTY"))?></option>
-						<option value="N"<?if($arFields['find_el_preview_picture']=="N")echo " selected"?>><?=htmlspecialcharsex(Loc::getMessage("IXML_IX_IS_EMPTY"))?></option>
+						<option value=""><?=htmlspecialcharsex(Loc::getMessage('KIT_IX_VALUE_ANY'))?></option>
+						<option value="Y"<?if($arFields['find_el_preview_picture']=="Y")echo " selected"?>><?=htmlspecialcharsex(Loc::getMessage("KIT_IX_IS_NOT_EMPTY"))?></option>
+						<option value="N"<?if($arFields['find_el_preview_picture']=="N")echo " selected"?>><?=htmlspecialcharsex(Loc::getMessage("KIT_IX_IS_EMPTY"))?></option>
 					</select>
 				</td>
 			</tr>
 			<tr>
-				<td><?=Loc::getMessage("IXML_IX_EL_A_DETAIL_PICTURE")?>:</td>
+				<td><?=Loc::getMessage("KIT_IX_EL_A_DETAIL_PICTURE")?>:</td>
 				<td>
 					<select name="<?echo $sf;?>[find_el_detail_picture]">
-						<option value=""><?=htmlspecialcharsex(Loc::getMessage('IXML_IX_VALUE_ANY'))?></option>
-						<option value="Y"<?if($arFields['find_el_detail_picture']=="Y")echo " selected"?>><?=htmlspecialcharsex(Loc::getMessage("IXML_IX_IS_NOT_EMPTY"))?></option>
-						<option value="N"<?if($arFields['find_el_detail_picture']=="N")echo " selected"?>><?=htmlspecialcharsex(Loc::getMessage("IXML_IX_IS_EMPTY"))?></option>
+						<option value=""><?=htmlspecialcharsex(Loc::getMessage('KIT_IX_VALUE_ANY'))?></option>
+						<option value="Y"<?if($arFields['find_el_detail_picture']=="Y")echo " selected"?>><?=htmlspecialcharsex(Loc::getMessage("KIT_IX_IS_NOT_EMPTY"))?></option>
+						<option value="N"<?if($arFields['find_el_detail_picture']=="N")echo " selected"?>><?=htmlspecialcharsex(Loc::getMessage("KIT_IX_IS_EMPTY"))?></option>
 					</select>
 				</td>
 			</tr>
 			<tr>
-				<td><?=Loc::getMessage("IXML_IX_EL_A_TAGS")?>:</td>
+				<td><?=Loc::getMessage("KIT_IX_EL_A_TAGS")?>:</td>
 				<td>
 					<input type="text" name="<?echo $sf;?>[find_el_tags]" value="<?echo htmlspecialcharsex($arFields['find_el_tags'])?>" size="30">
 				</td>
@@ -1614,10 +1614,10 @@ class Utils {
 				if(is_array($productTypeList))
 				{
 				?><tr>
-					<td><?=Loc::getMessage("IXML_IX_CATALOG_TYPE"); ?>:</td>
+					<td><?=Loc::getMessage("KIT_IX_CATALOG_TYPE"); ?>:</td>
 					<td>
 						<select name="<?echo $sf;?>[find_el_catalog_type][]" multiple>
-							<option value=""><?=htmlspecialcharsex(Loc::getMessage('IXML_IX_VALUE_ANY'))?></option>
+							<option value=""><?=htmlspecialcharsex(Loc::getMessage('KIT_IX_VALUE_ANY'))?></option>
 							<?
 							$catalogTypes = (!empty($arFields['find_el_catalog_type']) ? $arFields['find_el_catalog_type'] : array());
 							foreach ($productTypeList as $productType => $productTypeName)
@@ -1634,34 +1634,34 @@ class Utils {
 				}
 				?>
 				<tr>
-					<td><?echo Loc::getMessage("IXML_IX_CATALOG_BUNDLE")?>:</td>
+					<td><?echo Loc::getMessage("KIT_IX_CATALOG_BUNDLE")?>:</td>
 					<td>
 						<select name="<?echo $sf;?>[find_el_catalog_bundle]">
-							<option value=""><?=htmlspecialcharsex(Loc::getMessage('IXML_IX_VALUE_ANY'))?></option>
-							<option value="Y"<?if($arFields['find_el_catalog_bundle']=="Y")echo " selected"?>><?=htmlspecialcharsex(Loc::getMessage("IXML_IX_YES"))?></option>
-							<option value="N"<?if($arFields['find_el_catalog_bundle']=="N")echo " selected"?>><?=htmlspecialcharsex(Loc::getMessage("IXML_IX_NO"))?></option>
+							<option value=""><?=htmlspecialcharsex(Loc::getMessage('KIT_IX_VALUE_ANY'))?></option>
+							<option value="Y"<?if($arFields['find_el_catalog_bundle']=="Y")echo " selected"?>><?=htmlspecialcharsex(Loc::getMessage("KIT_IX_YES"))?></option>
+							<option value="N"<?if($arFields['find_el_catalog_bundle']=="N")echo " selected"?>><?=htmlspecialcharsex(Loc::getMessage("KIT_IX_NO"))?></option>
 						</select>
 					</td>
 				</tr>
 				<tr>
-					<td><?echo Loc::getMessage("IXML_IX_CATALOG_AVAILABLE")?>:</td>
+					<td><?echo Loc::getMessage("KIT_IX_CATALOG_AVAILABLE")?>:</td>
 					<td>
 						<select name="<?echo $sf;?>[find_el_catalog_available]">
-							<option value=""><?=htmlspecialcharsex(Loc::getMessage('IXML_IX_VALUE_ANY'))?></option>
-							<option value="Y"<?if($arFields['find_el_catalog_available']=="Y")echo " selected"?>><?=htmlspecialcharsex(Loc::getMessage("IXML_IX_YES"))?></option>
-							<option value="N"<?if($arFields['find_el_catalog_available']=="N")echo " selected"?>><?=htmlspecialcharsex(Loc::getMessage("IXML_IX_NO"))?></option>
+							<option value=""><?=htmlspecialcharsex(Loc::getMessage('KIT_IX_VALUE_ANY'))?></option>
+							<option value="Y"<?if($arFields['find_el_catalog_available']=="Y")echo " selected"?>><?=htmlspecialcharsex(Loc::getMessage("KIT_IX_YES"))?></option>
+							<option value="N"<?if($arFields['find_el_catalog_available']=="N")echo " selected"?>><?=htmlspecialcharsex(Loc::getMessage("KIT_IX_NO"))?></option>
 						</select>
 					</td>
 				</tr>
 				<tr>
-					<td><?echo Loc::getMessage("IXML_IX_CATALOG_QUANTITY")?>:</td>
+					<td><?echo Loc::getMessage("KIT_IX_CATALOG_QUANTITY")?>:</td>
 					<td>
 						<select name="<?echo $sf;?>[find_el_catalog_quantity_comp]">
-							<option value="eq" <?if($arFields['find_el_catalog_quantity_comp']=='eq'){echo 'selected';}?>><?=Loc::getMessage('IXML_IX_COMPARE_EQ')?></option>
-							<option value="gt" <?if($arFields['find_el_catalog_quantity_comp']=='gt'){echo 'selected';}?>><?=Loc::getMessage('IXML_IX_COMPARE_GT')?></option>
-							<option value="geq" <?if($arFields['find_el_catalog_quantity_comp']=='geq'){echo 'selected';}?>><?=Loc::getMessage('IXML_IX_COMPARE_GEQ')?></option>
-							<option value="lt" <?if($arFields['find_el_catalog_quantity_comp']=='lt'){echo 'selected';}?>><?=Loc::getMessage('IXML_IX_COMPARE_LT')?></option>
-							<option value="leq" <?if($arFields['find_el_catalog_quantity_comp']=='leq'){echo 'selected';}?>><?=Loc::getMessage('IXML_IX_COMPARE_LEQ')?></option>
+							<option value="eq" <?if($arFields['find_el_catalog_quantity_comp']=='eq'){echo 'selected';}?>><?=Loc::getMessage('KIT_IX_COMPARE_EQ')?></option>
+							<option value="gt" <?if($arFields['find_el_catalog_quantity_comp']=='gt'){echo 'selected';}?>><?=Loc::getMessage('KIT_IX_COMPARE_GT')?></option>
+							<option value="geq" <?if($arFields['find_el_catalog_quantity_comp']=='geq'){echo 'selected';}?>><?=Loc::getMessage('KIT_IX_COMPARE_GEQ')?></option>
+							<option value="lt" <?if($arFields['find_el_catalog_quantity_comp']=='lt'){echo 'selected';}?>><?=Loc::getMessage('KIT_IX_COMPARE_LT')?></option>
+							<option value="leq" <?if($arFields['find_el_catalog_quantity_comp']=='leq'){echo 'selected';}?>><?=Loc::getMessage('KIT_IX_COMPARE_LEQ')?></option>
 						</select>
 						<input type="text" name="<?echo $sf;?>[find_el_catalog_quantity]" value="<?echo htmlspecialcharsex($arFields['find_el_catalog_quantity'])?>" size="10">
 					</td>
@@ -1674,14 +1674,14 @@ class Utils {
 					{
 						?>
 						<tr>
-							<td><?echo sprintf(Loc::getMessage("IXML_IX_CATALOG_STORE_QUANTITY"), $arStore['TITLE'])?>:</td>
+							<td><?echo sprintf(Loc::getMessage("KIT_IX_CATALOG_STORE_QUANTITY"), $arStore['TITLE'])?>:</td>
 							<td>
 								<select name="<?echo $sf;?>[find_el_catalog_store<?echo $arStore['ID'];?>_quantity_comp]">
-									<option value="eq" <?if($arFields['find_el_catalog_store'.$arStore['ID'].'_quantity_comp']=='eq'){echo 'selected';}?>><?=Loc::getMessage('IXML_IX_COMPARE_EQ')?></option>
-									<option value="gt" <?if($arFields['find_el_catalog_store'.$arStore['ID'].'_quantity_comp']=='gt'){echo 'selected';}?>><?=Loc::getMessage('IXML_IX_COMPARE_GT')?></option>
-									<option value="geq" <?if($arFields['find_el_catalog_store'.$arStore['ID'].'_quantity_comp']=='geq'){echo 'selected';}?>><?=Loc::getMessage('IXML_IX_COMPARE_GEQ')?></option>
-									<option value="lt" <?if($arFields['find_el_catalog_store'.$arStore['ID'].'_quantity_comp']=='lt'){echo 'selected';}?>><?=Loc::getMessage('IXML_IX_COMPARE_LT')?></option>
-									<option value="leq" <?if($arFields['find_el_catalog_store'.$arStore['ID'].'_quantity_comp']=='leq'){echo 'selected';}?>><?=Loc::getMessage('IXML_IX_COMPARE_LEQ')?></option>
+									<option value="eq" <?if($arFields['find_el_catalog_store'.$arStore['ID'].'_quantity_comp']=='eq'){echo 'selected';}?>><?=Loc::getMessage('KIT_IX_COMPARE_EQ')?></option>
+									<option value="gt" <?if($arFields['find_el_catalog_store'.$arStore['ID'].'_quantity_comp']=='gt'){echo 'selected';}?>><?=Loc::getMessage('KIT_IX_COMPARE_GT')?></option>
+									<option value="geq" <?if($arFields['find_el_catalog_store'.$arStore['ID'].'_quantity_comp']=='geq'){echo 'selected';}?>><?=Loc::getMessage('KIT_IX_COMPARE_GEQ')?></option>
+									<option value="lt" <?if($arFields['find_el_catalog_store'.$arStore['ID'].'_quantity_comp']=='lt'){echo 'selected';}?>><?=Loc::getMessage('KIT_IX_COMPARE_LT')?></option>
+									<option value="leq" <?if($arFields['find_el_catalog_store'.$arStore['ID'].'_quantity_comp']=='leq'){echo 'selected';}?>><?=Loc::getMessage('KIT_IX_COMPARE_LEQ')?></option>
 								</select>
 								<input type="text" name="<?echo $sf;?>[find_el_catalog_store<?echo $arStore['ID'];?>_quantity]" value="<?echo htmlspecialcharsex($arFields['find_el_catalog_store'.$arStore['ID'].'_quantity'])?>" size="10">
 							</td>
@@ -1696,15 +1696,15 @@ class Utils {
 					{
 						?>
 						<tr>
-							<td><?echo sprintf(Loc::getMessage("IXML_IX_CATALOG_PRICE"), $arPrice['NAME_LANG'])?>:</td>
+							<td><?echo sprintf(Loc::getMessage("KIT_IX_CATALOG_PRICE"), $arPrice['NAME_LANG'])?>:</td>
 							<td>
 								<select name="<?echo $sf;?>[find_el_catalog_price_<?echo $arPrice['ID'];?>_comp]">
-									<option value="eq" <?if($arFields['find_el_catalog_price_'.$arPrice['ID'].'_comp']=='eq'){echo 'selected';}?>><?=Loc::getMessage('IXML_IX_COMPARE_EQ')?></option>
-									<option value="empty" <?if($arFields['find_el_catalog_price_'.$arPrice['ID'].'_comp']=='empty'){echo 'selected';}?>><?=Loc::getMessage('IXML_IX_COMPARE_EMPTY')?></option>
-									<option value="gt" <?if($arFields['find_el_catalog_price_'.$arPrice['ID'].'_comp']=='gt'){echo 'selected';}?>><?=Loc::getMessage('IXML_IX_COMPARE_GT')?></option>
-									<option value="geq" <?if($arFields['find_el_catalog_price_'.$arPrice['ID'].'_comp']=='geq'){echo 'selected';}?>><?=Loc::getMessage('IXML_IX_COMPARE_GEQ')?></option>
-									<option value="lt" <?if($arFields['find_el_catalog_price_'.$arPrice['ID'].'_comp']=='lt'){echo 'selected';}?>><?=Loc::getMessage('IXML_IX_COMPARE_LT')?></option>
-									<option value="leq" <?if($arFields['find_el_catalog_price_'.$arPrice['ID'].'_comp']=='leq'){echo 'selected';}?>><?=Loc::getMessage('IXML_IX_COMPARE_LEQ')?></option>
+									<option value="eq" <?if($arFields['find_el_catalog_price_'.$arPrice['ID'].'_comp']=='eq'){echo 'selected';}?>><?=Loc::getMessage('KIT_IX_COMPARE_EQ')?></option>
+									<option value="empty" <?if($arFields['find_el_catalog_price_'.$arPrice['ID'].'_comp']=='empty'){echo 'selected';}?>><?=Loc::getMessage('KIT_IX_COMPARE_EMPTY')?></option>
+									<option value="gt" <?if($arFields['find_el_catalog_price_'.$arPrice['ID'].'_comp']=='gt'){echo 'selected';}?>><?=Loc::getMessage('KIT_IX_COMPARE_GT')?></option>
+									<option value="geq" <?if($arFields['find_el_catalog_price_'.$arPrice['ID'].'_comp']=='geq'){echo 'selected';}?>><?=Loc::getMessage('KIT_IX_COMPARE_GEQ')?></option>
+									<option value="lt" <?if($arFields['find_el_catalog_price_'.$arPrice['ID'].'_comp']=='lt'){echo 'selected';}?>><?=Loc::getMessage('KIT_IX_COMPARE_LT')?></option>
+									<option value="leq" <?if($arFields['find_el_catalog_price_'.$arPrice['ID'].'_comp']=='leq'){echo 'selected';}?>><?=Loc::getMessage('KIT_IX_COMPARE_LEQ')?></option>
 								</select>
 								<input type="text" name="<?echo $sf;?>[find_el_catalog_price_<?echo $arPrice['ID'];?>]" value="<?echo htmlspecialcharsex($arFields['find_el_catalog_price_'.$arPrice['ID']])?>" size="10">
 							</td>
@@ -1734,17 +1734,17 @@ class Utils {
 						),
 					));
 				elseif($arProp["PROPERTY_TYPE"]=='S'):?>
-					<select class="ixml-ix-filter-chval" name="<?echo $sf;?>[find_el_vtype_property_<?=$arProp["ID"]?>]"><option value=""><?echo Loc::getMessage("IXML_IX_IS_VALUE")?></option><option value="empty"<?if($arFields["find_el_vtype_property_".$arProp["ID"]]=='empty'){echo ' selected';}?>><?echo Loc::getMessage("IXML_IX_IS_EMPTY")?></option><option value="not_empty"<?if($arFields["find_el_vtype_property_".$arProp["ID"]]=='not_empty'){echo ' selected';}?>><?echo Loc::getMessage("IXML_IX_IS_NOT_EMPTY")?></option></select><input type="text" name="<?echo $sf;?>[find_el_property_<?=$arProp["ID"]?>]" value="<?echo htmlspecialcharsex($arFields["find_el_property_".$arProp["ID"]])?>" size="30">
+					<select class="kit-ix-filter-chval" name="<?echo $sf;?>[find_el_vtype_property_<?=$arProp["ID"]?>]"><option value=""><?echo Loc::getMessage("KIT_IX_IS_VALUE")?></option><option value="empty"<?if($arFields["find_el_vtype_property_".$arProp["ID"]]=='empty'){echo ' selected';}?>><?echo Loc::getMessage("KIT_IX_IS_EMPTY")?></option><option value="not_empty"<?if($arFields["find_el_vtype_property_".$arProp["ID"]]=='not_empty'){echo ' selected';}?>><?echo Loc::getMessage("KIT_IX_IS_NOT_EMPTY")?></option></select><input type="text" name="<?echo $sf;?>[find_el_property_<?=$arProp["ID"]?>]" value="<?echo htmlspecialcharsex($arFields["find_el_property_".$arProp["ID"]])?>" size="30">
 				<?elseif($arProp["PROPERTY_TYPE"]=='N' || $arProp["PROPERTY_TYPE"]=='E'):?>
-					<select class="ixml-ix-filter-chval" name="<?echo $sf;?>[find_el_vtype_property_<?=$arProp["ID"]?>]"><option value=""><?echo Loc::getMessage("IXML_IX_IS_VALUE")?></option><option value="empty"<?if($arFields["find_el_vtype_property_".$arProp["ID"]]=='empty'){echo ' selected';}?>><?echo Loc::getMessage("IXML_IX_IS_EMPTY")?></option><option value="not_empty"<?if($arFields["find_el_vtype_property_".$arProp["ID"]]=='not_empty'){echo ' selected';}?>><?echo Loc::getMessage("IXML_IX_IS_NOT_EMPTY")?></option></select><input type="text" name="<?echo $sf;?>[find_el_property_<?=$arProp["ID"]?>]" value="<?echo htmlspecialcharsex($arFields["find_el_property_".$arProp["ID"]])?>" size="30">
+					<select class="kit-ix-filter-chval" name="<?echo $sf;?>[find_el_vtype_property_<?=$arProp["ID"]?>]"><option value=""><?echo Loc::getMessage("KIT_IX_IS_VALUE")?></option><option value="empty"<?if($arFields["find_el_vtype_property_".$arProp["ID"]]=='empty'){echo ' selected';}?>><?echo Loc::getMessage("KIT_IX_IS_EMPTY")?></option><option value="not_empty"<?if($arFields["find_el_vtype_property_".$arProp["ID"]]=='not_empty'){echo ' selected';}?>><?echo Loc::getMessage("KIT_IX_IS_NOT_EMPTY")?></option></select><input type="text" name="<?echo $sf;?>[find_el_property_<?=$arProp["ID"]?>]" value="<?echo htmlspecialcharsex($arFields["find_el_property_".$arProp["ID"]])?>" size="30">
 				<?elseif($arProp["PROPERTY_TYPE"]=='L'):?>
 					<?
 					$propVal = $arFields["find_el_property_".$arProp["ID"]];
 					if(!is_array($propVal)) $propVal = array($propVal);
 					?>
 					<select name="<?echo $sf;?>[find_el_property_<?=$arProp["ID"]?>][]" multiple size="5">
-						<option value=""><?echo Loc::getMessage("IXML_IX_VALUE_ANY")?></option>
-						<option value="NOT_REF"<?if(in_array("NOT_REF", $propVal))echo " selected"?>><?echo Loc::getMessage("IXML_IX_ELEMENT_EDIT_NOT_SET")?></option><?
+						<option value=""><?echo Loc::getMessage("KIT_IX_VALUE_ANY")?></option>
+						<option value="NOT_REF"<?if(in_array("NOT_REF", $propVal))echo " selected"?>><?echo Loc::getMessage("KIT_IX_ELEMENT_EDIT_NOT_SET")?></option><?
 						$dbrPEnum = \CIBlockPropertyEnum::GetList(Array("SORT"=>"ASC", "NAME"=>"ASC"), Array("PROPERTY_ID"=>$arProp["ID"]));
 						while($arPEnum = $dbrPEnum->GetNext()):
 						?>
@@ -1967,7 +1967,7 @@ class Utils {
 	
 	public static function RemoveTmpFiles($maxTime = 5, $suffix='')
 	{
-		$oProfile = \Bitrix\IxmlImportxml\Profile::getInstance($suffix);
+		$oProfile = \Bitrix\KitImportxml\Profile::getInstance($suffix);
 		$timeBegin = time();
 		$docRoot = $_SERVER["DOCUMENT_ROOT"];
 		$tmpDir = $docRoot.'/upload/tmp/'.static::$moduleId.'/';
@@ -2083,7 +2083,7 @@ class Utils {
 	public static function ConvertDataEncoding($val, $fileEncoding, $siteEncoding)
 	{
 		if($siteEncoding==$fileEncoding) return $val;
-		$val = \Bitrix\IxmlImportxml\Utils::ReplaceCpSpecChars($val, $siteEncoding);
+		$val = \Bitrix\KitImportxml\Utils::ReplaceCpSpecChars($val, $siteEncoding);
 		$val = \Bitrix\Main\Text\Encoding::convertEncodingArray($val, $fileEncoding, $siteEncoding);
 		return $val;
 	}

@@ -3,7 +3,7 @@
  * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
  */
 
-namespace Bitrix\IxmlImportxml;
+namespace Bitrix\KitImportxml;
 
 class ClassManager
 {
@@ -20,11 +20,11 @@ class ClassManager
 	{
 		if(static::VersionGeqThen('catalog', '17.6.0'))
 		{
-			return new \Bitrix\IxmlImportxml\DataManager\ProductD7($this->ie);
+			return new \Bitrix\KitImportxml\DataManager\ProductD7($this->ie);
 		}
 		else
 		{
-			return new \Bitrix\IxmlImportxml\DataManager\Product($this->ie);
+			return new \Bitrix\KitImportxml\DataManager\Product($this->ie);
 		}
 	}
 	
@@ -32,11 +32,11 @@ class ClassManager
 	{
 		if(static::VersionGeqThen('catalog', '17.6.0'))
 		{
-			return new \Bitrix\IxmlImportxml\DataManager\PriceD7($this->ie);
+			return new \Bitrix\KitImportxml\DataManager\PriceD7($this->ie);
 		}
 		else
 		{
-			return new \Bitrix\IxmlImportxml\DataManager\Price($this->ie);
+			return new \Bitrix\KitImportxml\DataManager\Price($this->ie);
 		}
 	}
 	

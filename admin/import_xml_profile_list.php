@@ -4,8 +4,8 @@
  */
 
 require_once ($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_before.php");
-$moduleId = 'ixml.importxml';
-$moduleFilePrefix = 'ixml_import_xml';
+$moduleId = 'kit.importxml';
+$moduleFilePrefix = 'kit_import_xml';
 $moduleJsId = str_replace('.', '_', $moduleId);
 $moduleDemoExpiredFunc = $moduleJsId.'_demo_expired';
 $moduleShowDemoFunc = $moduleJsId.'_show_demo';
@@ -25,8 +25,8 @@ if ($moduleDemoExpiredFunc()) {
 $MODULE_RIGHT = $APPLICATION->GetGroupRight($moduleId);
 if($MODULE_RIGHT < "W") $APPLICATION->AuthForm(GetMessage("ACCESS_DENIED"));
 
-$oProfile = new \Bitrix\IxmlImportxml\Profile();
-$sTableID = "tbl_ixmlimportxml_profile";
+$oProfile = new \Bitrix\KitImportxml\Profile();
+$sTableID = "tbl_kitimportxml_profile";
 $instance = \Bitrix\Main\Application::getInstance();
 $context = $instance->getContext();
 $request = $context->getRequest();
@@ -59,9 +59,9 @@ if($lAdmin->EditAction())
 		if ($ID <= 0 || !$lAdmin->IsUpdated($ID))
 			continue;
 
-		$oProfile = new \Bitrix\IxmlImportxml\Profile();
+		$oProfile = new \Bitrix\KitImportxml\Profile();
 		
-		$dbRes = \Bitrix\IxmlImportxml\ProfileTable::update($ID, $arFields);
+		$dbRes = \Bitrix\KitImportxml\ProfileTable::update($ID, $arFields);
 		if(!$dbRes->isSuccess())
 		{
 			$error = '';
@@ -75,7 +75,7 @@ if($lAdmin->EditAction())
 			if($error)
 				$lAdmin->AddUpdateError($error, $ID);
 			else
-				$lAdmin->AddUpdateError(GetMessage("IXML_IX_ERROR_UPDATING_REC")." (".$arFields["ID"].", ".$arFields["NAME"].", ".$arFields["SORT"].")", $ID);
+				$lAdmin->AddUpdateError(GetMessage("KIT_IX_ERROR_UPDATING_REC")." (".$arFields["ID"].", ".$arFields["NAME"].", ".$arFields["SORT"].")", $ID);
 		}
 	}
 }
@@ -85,7 +85,7 @@ if(($arID = $lAdmin->GroupAction()))
 	if($_REQUEST['action_target']=='selected')
 	{
 		$arID = Array();
-		$dbResultList = \Bitrix\IxmlImportxml\ProfileTable::getList(array('filter'=>$filter, 'select'=>array('ID')));
+		$dbResultList = \Bitrix\KitImportxml\ProfileTable::getList(array('filter'=>$filter, 'select'=>array('ID')));
 		while($arResult = $dbResultList->Fetch())
 			$arID[] = $arResult['ID'];
 	}
@@ -98,7 +98,7 @@ if(($arID = $lAdmin->GroupAction()))
 		switch ($_REQUEST['action'])
 		{
 			case "delete":
-				$dbRes = \Bitrix\IxmlImportxml\ProfileTable::delete($ID);
+				$dbRes = \Bitrix\KitImportxml\ProfileTable::delete($ID);
 				if(!$dbRes->isSuccess())
 				{
 					$error = '';
@@ -112,7 +112,7 @@ if(($arID = $lAdmin->GroupAction()))
 					if($error)
 						$lAdmin->AddGroupError($error, $ID);
 					else
-						$lAdmin->AddGroupError(GetMessage("IXML_IX_ERROR_DELETING_TYPE"), $ID);
+						$lAdmin->AddGroupError(GetMessage("KIT_IX_ERROR_DELETING_TYPE"), $ID);
 				}
 				break;
 		}
@@ -126,7 +126,7 @@ $params = array(
 
 $params['order'] = array(ToUpper($by) => ToUpper($order));
 
-$dbRes = \Bitrix\IxmlImportxml\ProfileTable::getList($params);
+$dbRes = \Bitrix\KitImportxml\ProfileTable::getList($params);
 
 $result = array();
 
@@ -142,23 +142,23 @@ $dbRes->InitFromArray($result);
 $dbRes = new CAdminResult($dbRes, $sTableID);
 $dbRes->NavStart();
 
-$lAdmin->NavText($dbRes->GetNavPrint(GetMessage("IXML_IX_PROFILE_LIST")));
+$lAdmin->NavText($dbRes->GetNavPrint(GetMessage("KIT_IX_PROFILE_LIST")));
 
 $lAdmin->AddHeaders(array(
 	array("id"=>"ID", "content"=>"ID", 	"sort"=>"ID", "default"=>true),
-	array("id"=>"ACTIVE", "content"=>GetMessage("IXML_IX_PL_ACTIVE"), "sort"=>"ACTIVE", "default"=>true),
-	array("id"=>"NAME", "content"=>GetMessage("IXML_IX_PL_NAME"), "sort"=>"NAME", "default"=>true),
-	array("id"=>"DATE_START", "content"=>GetMessage("IXML_IX_PL_DATE_START"), "sort"=>"DATE_START", "default"=>true),
-	array("id"=>"DATE_FINISH", "content"=>GetMessage("IXML_IX_PL_DATE_FINISH"), "sort"=>"DATE_FINISH", "default"=>true),
-	array("id"=>"SORT", "content"=>GetMessage("IXML_IX_PL_SORT"), "sort"=>"SORT", "default"=>true),
-	array("id"=>"STATUS", "content"=>GetMessage("IXML_IX_PL_STATUS"), "default"=>true),
+	array("id"=>"ACTIVE", "content"=>GetMessage("KIT_IX_PL_ACTIVE"), "sort"=>"ACTIVE", "default"=>true),
+	array("id"=>"NAME", "content"=>GetMessage("KIT_IX_PL_NAME"), "sort"=>"NAME", "default"=>true),
+	array("id"=>"DATE_START", "content"=>GetMessage("KIT_IX_PL_DATE_START"), "sort"=>"DATE_START", "default"=>true),
+	array("id"=>"DATE_FINISH", "content"=>GetMessage("KIT_IX_PL_DATE_FINISH"), "sort"=>"DATE_FINISH", "default"=>true),
+	array("id"=>"SORT", "content"=>GetMessage("KIT_IX_PL_SORT"), "sort"=>"SORT", "default"=>true),
+	array("id"=>"STATUS", "content"=>GetMessage("KIT_IX_PL_STATUS"), "default"=>true),
 ));
 
-$oProfile = new \Bitrix\IxmlImportxml\Profile();
+$oProfile = new \Bitrix\KitImportxml\Profile();
 $arVisibleColumns = $lAdmin->GetVisibleHeaderColumns();
 while ($arProfile = $dbRes->NavNext(true, "f_"))
 {
-	$row =& $lAdmin->AddRow(($f_ID+1), $arProfile, $moduleFilePrefix.".php?PROFILE_ID=".$f_ID."&lang=".LANG, GetMessage("IXML_IX_TO_PROFILE"));
+	$row =& $lAdmin->AddRow(($f_ID+1), $arProfile, $moduleFilePrefix.".php?PROFILE_ID=".$f_ID."&lang=".LANG, GetMessage("KIT_IX_TO_PROFILE"));
 
 	$row->AddField("ID", "<a href=\"".$moduleFilePrefix.".php?PROFILE_ID=".$f_ID."&lang=".LANG."\">".$f_ID."</a>");
 	$row->AddCheckField("ACTIVE", $f_ACTIVE);
@@ -169,10 +169,10 @@ while ($arProfile = $dbRes->NavNext(true, "f_"))
 	$row->AddField("STATUS", $oProfile->GetStatus($f_ID));
 	
 	$arActions = array();
-	$arActions[] = array("ICON"=>"edit", "TEXT"=>GetMessage("IXML_IX_TO_PROFILE_ACT"), "ACTION"=>$lAdmin->ActionRedirect($moduleFilePrefix.".php?PROFILE_ID=".$f_ID."&lang=".LANG), "DEFAULT"=>true);
+	$arActions[] = array("ICON"=>"edit", "TEXT"=>GetMessage("KIT_IX_TO_PROFILE_ACT"), "ACTION"=>$lAdmin->ActionRedirect($moduleFilePrefix.".php?PROFILE_ID=".$f_ID."&lang=".LANG), "DEFAULT"=>true);
 
 	$arActions[] = array("SEPARATOR" => true);
-	$arActions[] = array("ICON"=>"delete", "TEXT"=>GetMessage("IXML_IX_PROFILE_DELETE"), "ACTION"=>"if(confirm('".GetMessageJS("IXML_IX_PROFILE_DELETE_CONFIRM")."')) ".$lAdmin->ActionDoGroup(($f_ID+1), "delete"));
+	$arActions[] = array("ICON"=>"delete", "TEXT"=>GetMessage("KIT_IX_PROFILE_DELETE"), "ACTION"=>"if(confirm('".GetMessageJS("KIT_IX_PROFILE_DELETE_CONFIRM")."')) ".$lAdmin->ActionDoGroup(($f_ID+1), "delete"));
 
 	$row->AddActions($arActions);
 }
@@ -199,7 +199,7 @@ $lAdmin->AddGroupActionTable(
 
 $lAdmin->CheckListMode();
 
-$APPLICATION->SetTitle(GetMessage("IXML_IX_PROFILE_LIST_TITLE"));
+$APPLICATION->SetTitle(GetMessage("KIT_IX_PROFILE_LIST_TITLE"));
 require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_after.php");
 
 if (!$moduleDemoExpiredFunc()) {
@@ -208,22 +208,22 @@ if (!$moduleDemoExpiredFunc()) {
 
 $aMenu = array(
 	array(
-		"TEXT" => GetMessage("IXML_IX_BACK_TO_IMPORT"),
+		"TEXT" => GetMessage("KIT_IX_BACK_TO_IMPORT"),
 		"ICON" => "btn_list",
 		"LINK" => "/bitrix/admin/".$moduleFilePrefix.".php?lang=".LANG
 	),
 	array(
-		"TEXT"=>GetMessage("IXML_IX_MENU_EXPORT_IMPORT_PROFILES"),
-		"TITLE"=>GetMessage("IXML_IX_MENU_EXPORT_IMPORT_PROFILES"),
+		"TEXT"=>GetMessage("KIT_IX_MENU_EXPORT_IMPORT_PROFILES"),
+		"TITLE"=>GetMessage("KIT_IX_MENU_EXPORT_IMPORT_PROFILES"),
 		"MENU" => array(
 			array(
-				"TEXT" => GetMessage("IXML_IX_MENU_EXPORT_PROFILES"),
-				"TITLE" => GetMessage("IXML_IX_MENU_EXPORT_PROFILES"),
+				"TEXT" => GetMessage("KIT_IX_MENU_EXPORT_PROFILES"),
+				"TITLE" => GetMessage("KIT_IX_MENU_EXPORT_PROFILES"),
 				"LINK" => "/bitrix/admin/".$moduleFilePrefix."_profile_list.php?mode=export"
 			),
 			array(
-				"TEXT" => GetMessage("IXML_IX_MENU_IMPORT_PROFILES"),
-				"TITLE" => GetMessage("IXML_IX_MENU_IMPORT_PROFILES"),
+				"TEXT" => GetMessage("KIT_IX_MENU_IMPORT_PROFILES"),
+				"TITLE" => GetMessage("KIT_IX_MENU_IMPORT_PROFILES"),
 				"ONCLICK" => "EProfileList.ShowRestoreWindow();"
 			)
 		),
@@ -247,7 +247,7 @@ $oFilter = new CAdminFilter(
 $oFilter->Begin();
 ?>
 	<tr>
-		<td><?echo GetMessage("IXML_IX_F_NAME")?>:</td>
+		<td><?echo GetMessage("KIT_IX_F_NAME")?>:</td>
 		<td>
 			<input type="text" name="filter_name" value="<?echo htmlspecialcharsex($filter_name)?>">
 		</td>

@@ -2,16 +2,16 @@
  * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
  */
 
-var ixmlIXModuleName = 'ixml.importxml';
-var ixmlIXModuleFilePrefix = 'ixml_import_xml';
+var kitIXModuleName = 'kit.importxml';
+var kitIXModuleFilePrefix = 'kit_import_xml';
 var EIXPreview = {
 	Init: function()
 	{
-		eval('var params = ' + $('#ixml_ix_xml_wrap input[name="settings_json"]').val() + ';');
-		eval('var extraparams = ' + $('#ixml_ix_xml_wrap input[name="extrasettings_json"]').val() + ';');
-		$('#ixml_ix_xml_wrap input[name="settings_json"]').remove();
-		$('#ixml_ix_xml_wrap input[name="extrasettings_json"]').remove();
-		$('#ixml_ix_xml_wrap input[name="defaultsettings_json"]').remove();
+		eval('var params = ' + $('#kit_ix_xml_wrap input[name="settings_json"]').val() + ';');
+		eval('var extraparams = ' + $('#kit_ix_xml_wrap input[name="extrasettings_json"]').val() + ';');
+		$('#kit_ix_xml_wrap input[name="settings_json"]').remove();
+		$('#kit_ix_xml_wrap input[name="extrasettings_json"]').remove();
+		$('#kit_ix_xml_wrap input[name="defaultsettings_json"]').remove();
 
 		if(params.GROUPS)
 		{
@@ -30,7 +30,7 @@ var EIXPreview = {
 			var selectNames = ['section_fields', 'subsection_fields', 'element_fields', 'property_fields'];
 			for(var j=0; j<selectNames.length; j++)
 			{
-				var select = $('#ixml_ix_xml_wrap select[name="'+selectNames[j]+'"]');
+				var select = $('#kit_ix_xml_wrap select[name="'+selectNames[j]+'"]');
 				for(var i in params.FIELDS)
 				{
 					arVals = params.FIELDS[i].split(';');
@@ -49,10 +49,10 @@ var EIXPreview = {
 	
 	ShowBaseElements: function(link)
 	{
-		this.currentTag = $(link).closest('.ixml_ix_xml_struct_item');
+		this.currentTag = $(link).closest('.kit_ix_xml_struct_item');
 		var menuItems = [];
 		menuItems.push({
-			TEXT: BX.message("IXML_IX_GROUP_ELEMENT"),
+			TEXT: BX.message("KIT_IX_GROUP_ELEMENT"),
 			ONCLICK: 'EIXPreview.SetBaseElement("ELEMENT")'
 		});
 		BX.adminShowMenu(link, menuItems, {active_class: "bx-adm-scale-menu-butt-active"});
@@ -65,13 +65,13 @@ var EIXPreview = {
 			var obj = this;
 			this.UnsetBaseElement(type);
 			
-			$(this.currentTag).closest('.ixml_ix_xml_struct_item').attr('data-base-element', type.toLowerCase());
-			$(this.currentTag).find('> .ixml_ix_group_value').html('<input type="hidden" name="SETTINGS[GROUPS]['+type+']" value=""><span>'+BX.message("IXML_IX_GROUP_"+type)+'<a href="javascript:void(0)" onclick="return EIXPreview.UnsetBaseElement(\''+type+'\')" class="ixml_ix_group_value_close" title="'+BX.message("IXML_IX_REMOVE_FIELD")+'"></a></span>');
-			$('#ixml_ix_xml_wrap input[name="SETTINGS[GROUPS]['+type+']"]').val(this.GetXPathByTag(this.currentTag));
-			var objValue = $(this.currentTag).find('.ixml_ix_str_value');
-			objValue.addClass('ixml_ix_str_value_active');
-			objValue.find('.ixml_ix_str_value_val').bind('click', function(){obj.ShowElementFields(this);});
-			$(this.currentTag).find('.ixml_ix_str_value[data-attr]').bind('contextmenu', function(e){return obj.ShowAttrActions(e, this);});
+			$(this.currentTag).closest('.kit_ix_xml_struct_item').attr('data-base-element', type.toLowerCase());
+			$(this.currentTag).find('> .kit_ix_group_value').html('<input type="hidden" name="SETTINGS[GROUPS]['+type+']" value=""><span>'+BX.message("KIT_IX_GROUP_"+type)+'<a href="javascript:void(0)" onclick="return EIXPreview.UnsetBaseElement(\''+type+'\')" class="kit_ix_group_value_close" title="'+BX.message("KIT_IX_REMOVE_FIELD")+'"></a></span>');
+			$('#kit_ix_xml_wrap input[name="SETTINGS[GROUPS]['+type+']"]').val(this.GetXPathByTag(this.currentTag));
+			var objValue = $(this.currentTag).find('.kit_ix_str_value');
+			objValue.addClass('kit_ix_str_value_active');
+			objValue.find('.kit_ix_str_value_val').bind('click', function(){obj.ShowElementFields(this);});
+			$(this.currentTag).find('.kit_ix_str_value[data-attr]').bind('contextmenu', function(e){return obj.ShowAttrActions(e, this);});
 		}
 	},
 	
@@ -79,15 +79,15 @@ var EIXPreview = {
 	{
 		if(type)
 		{
-			var oldInput = $('#ixml_ix_xml_wrap input[name="SETTINGS[GROUPS]['+type+']"]');
+			var oldInput = $('#kit_ix_xml_wrap input[name="SETTINGS[GROUPS]['+type+']"]');
 			if(oldInput.length > 0)
 			{
-				oldInput.closest('.ixml_ix_xml_struct_item').removeAttr('data-base-element');
-				var objValue = oldInput.closest('.ixml_ix_xml_struct_item').find('.ixml_ix_str_value');
-				objValue.find('.ixml_ix_str_value_field .ixml_ix_str_value_close').trigger('click');
-				objValue.removeClass('ixml_ix_str_value_active');
-				objValue.find('.ixml_ix_str_value_val').unbind('click').unbind('contextmenu');
-				oldInput.closest('.ixml_ix_group_value').html('');
+				oldInput.closest('.kit_ix_xml_struct_item').removeAttr('data-base-element');
+				var objValue = oldInput.closest('.kit_ix_xml_struct_item').find('.kit_ix_str_value');
+				objValue.find('.kit_ix_str_value_field .kit_ix_str_value_close').trigger('click');
+				objValue.removeClass('kit_ix_str_value_active');
+				objValue.find('.kit_ix_str_value_val').unbind('click').unbind('contextmenu');
+				oldInput.closest('.kit_ix_group_value').html('');
 			}
 		}
 	},
@@ -96,7 +96,7 @@ var EIXPreview = {
 	{
 		if($(tag).attr('data-attr')) var xpath = '@'+$(tag).attr('data-attr');
 		else var xpath = $(tag).attr('data-name');
-		while((tag = $(tag).parent()) && tag.hasClass('ixml_ix_xml_struct_item'))
+		while((tag = $(tag).parent()) && tag.hasClass('kit_ix_xml_struct_item'))
 		{
 			xpath = $(tag).attr('data-name') + '/'+ xpath;
 		}
@@ -105,7 +105,7 @@ var EIXPreview = {
 	
 	GetXPathByVal: function(valObj)
 	{
-		var xpath = this.GetXPathByTag(valObj.closest('.ixml_ix_xml_struct_item'));
+		var xpath = this.GetXPathByTag(valObj.closest('.kit_ix_xml_struct_item'));
 		if(valObj.attr('data-attr'))
 		{
 			xpath += '/@'+valObj.attr('data-attr');
@@ -116,9 +116,9 @@ var EIXPreview = {
 	GetTagByXPath: function(xpath)
 	{
 		var arPath = xpath.split('/');
-		var parent = $('#ixml_ix_xml_wrap .ixml_ix_xml_struct');
+		var parent = $('#kit_ix_xml_wrap .kit_ix_xml_struct');
 		var i = 0;
-		while(i < arPath.length && (parent = parent.find('> .ixml_ix_xml_struct_item[data-name="'+arPath[i]+'"]')) && parent.length > 0){i++;}
+		while(i < arPath.length && (parent = parent.find('> .kit_ix_xml_struct_item[data-name="'+arPath[i]+'"]')) && parent.length > 0){i++;}
 		if(i < arPath.length) return false;
 		return parent;
 	},
@@ -135,7 +135,7 @@ var EIXPreview = {
 		var tag = this.GetTagByXPath(xpath);
 		if(tag==false) return false;
 		
-		var valObj = tag.find('> .ixml_ix_str_value' + (attr.length > 0 ? '[data-attr="'+attr+'"]' : ':not([data-attr])'));
+		var valObj = tag.find('> .kit_ix_str_value' + (attr.length > 0 ? '[data-attr="'+attr+'"]' : ':not([data-attr])'));
 		return valObj;
 	},
 	
@@ -144,8 +144,8 @@ var EIXPreview = {
 		var obj = this;
 		valObj = $(valObj);
 		var copySettings = ((typeof event == 'object') && (event.ctrlKey || event.shiftKey));
-		var fieldsCode = valObj.closest('.ixml_ix_xml_struct_item[data-base-element]').attr('data-base-element');
-		var pSelect = $('#ixml_ix_xml_wrap select[name="'+fieldsCode+'_fields"]');
+		var fieldsCode = valObj.closest('.kit_ix_xml_struct_item[data-base-element]').attr('data-base-element');
+		var pSelect = $('#kit_ix_xml_wrap select[name="'+fieldsCode+'_fields"]');
 		var select = $(pSelect).clone();
 		var options = select[0].options;
 		var oldValue = this.GetFieldValue(valObj);
@@ -154,7 +154,7 @@ var EIXPreview = {
 			if(oldValue==options.item(i).value) options.item(i).selected = true;
 		}
 		
-		var chosenId = 'ixmlix_select_chosen';
+		var chosenId = 'kitix_select_chosen';
 		$('#'+chosenId).remove();
 		var offset = valObj.offset();
 		var div = $('<div></div>');
@@ -173,7 +173,7 @@ var EIXPreview = {
 			var settings = false;
 			if(copySettings)
 			{
-				settings = valObj.prev('.ixml_ix_str_value_field').find('.ixml_ix_str_value_settings input').val();
+				settings = valObj.prev('.kit_ix_str_value_field').find('.kit_ix_str_value_settings input').val();
 				if(settings.length > 0) eval('settings = '+settings+';');
 			}
 			if(typeof settings == 'object')
@@ -210,15 +210,15 @@ var EIXPreview = {
 	{
 		return;
 		this.currentAttr = $(valObj);
-		var linkObj = $(valObj).prev('.ixml_ix_str_value_cm');
+		var linkObj = $(valObj).prev('.kit_ix_str_value_cm');
 		if(linkObj.length == 0)
 		{
-			$(valObj).before('<a href="javascript:void(0)" class="ixml_ix_str_value_cm"></a>');
-			linkObj = $(valObj).prev('.ixml_ix_str_value_cm');
+			$(valObj).before('<a href="javascript:void(0)" class="kit_ix_str_value_cm"></a>');
+			linkObj = $(valObj).prev('.kit_ix_str_value_cm');
 			
 			var menuItems = [];
 			menuItems.push({
-				TEXT: BX.message("IXML_IX_SHOW_ALL_ATTRIBUTES"),
+				TEXT: BX.message("KIT_IX_SHOW_ALL_ATTRIBUTES"),
 				ONCLICK: 'EIXPreview.SetGroupTags()'
 			});
 			BX.adminShowMenu(linkObj[0], menuItems, {active_class: "bx-adm-scale-menu-butt-active"});
@@ -253,7 +253,7 @@ var EIXPreview = {
 	SetFieldValue: function(valObj, option, num, extraparams)
 	{
 		valObj = $(valObj);
-		var valObjParent = valObj.closest('.ixml_ix_str_value');
+		var valObjParent = valObj.closest('.kit_ix_str_value');
 		if((typeof option == 'object') && option.value)
 		{
 			var textValue = '';
@@ -266,7 +266,7 @@ var EIXPreview = {
 			textValue += option.text;
 			var xpath = this.GetXPathByVal(valObjParent);
 			
-			if(valObj.hasClass('ixml_ix_str_value_field'))
+			if(valObj.hasClass('kit_ix_str_value_field'))
 			{
 				var span = valObj;
 				if(!num && num!==0)
@@ -281,36 +281,36 @@ var EIXPreview = {
 			else
 			{
 				var obj = this;
-				var valObjVal = valObjParent.find('.ixml_ix_str_value_val');
-				if(!valObjVal.hasClass('ixml_ix_str_value_val_selected'))
+				var valObjVal = valObjParent.find('.kit_ix_str_value_val');
+				if(!valObjVal.hasClass('kit_ix_str_value_val_selected'))
 				{
-					valObjVal.addClass('ixml_ix_str_value_val_selected').unbind('click');
-					//valObjParent.append('<a href="javascript:void(0)" onclick="return EIXPreview.ShowElementFields(this, event)" class="ixml_ix_str_value_add" title="'+BX.message("IXML_IX_ADD_FIELD")+'"></a>');
-					var addLink = $('<a href="javascript:void(0)" class="ixml_ix_str_value_add" title="'+BX.message("IXML_IX_ADD_FIELD")+'\r\n\r\n'+BX.message("IXML_IX_ADD_FIELD_COPY_SETTING")+'"></a>');
+					valObjVal.addClass('kit_ix_str_value_val_selected').unbind('click');
+					//valObjParent.append('<a href="javascript:void(0)" onclick="return EIXPreview.ShowElementFields(this, event)" class="kit_ix_str_value_add" title="'+BX.message("KIT_IX_ADD_FIELD")+'"></a>');
+					var addLink = $('<a href="javascript:void(0)" class="kit_ix_str_value_add" title="'+BX.message("KIT_IX_ADD_FIELD")+'\r\n\r\n'+BX.message("KIT_IX_ADD_FIELD_COPY_SETTING")+'"></a>');
 					addLink.bind('click', function(e){return EIXPreview.ShowElementFields(this, e)});
 					valObjParent.append(addLink);
 				}
 				if(!num && num!==0)
 				{
-					var inputs = $('#ixml_ix_xml_wrap input[name^="SETTINGS[FIELDS]["]');
+					var inputs = $('#kit_ix_xml_wrap input[name^="SETTINGS[FIELDS]["]');
 					var i = 0;
-					while($('#ixml_ix_xml_wrap input[name="SETTINGS[FIELDS]['+i+']"]').length > 0)
+					while($('#kit_ix_xml_wrap input[name="SETTINGS[FIELDS]['+i+']"]').length > 0)
 					{
 						i++;
 					}
 					num = i;
 				}
-				var span = $('<span class="ixml_ix_str_value_field"><input type="hidden" name="SETTINGS[FIELDS]['+num+']" value=""><span></span><a href="javascript:void(0)" onclick="return EIXPreview.ShowFieldSettings(event, this)" class="ixml_ix_str_value_settings" id="field_settings_'+num+'" title="'+BX.message("IXML_IX_FIELD_SETTINGS")+'"><input name="EXTRASETTINGS['+num+']" value="" type="hidden"></a><a href="javascript:void(0)" onclick="return EIXPreview.DeleteFieldValue(event, this)" class="ixml_ix_str_value_close" title="'+BX.message("IXML_IX_REMOVE_FIELD")+'"></a></span>');
-				span.insertBefore(valObjParent.find('.ixml_ix_str_value_add'));
+				var span = $('<span class="kit_ix_str_value_field"><input type="hidden" name="SETTINGS[FIELDS]['+num+']" value=""><span></span><a href="javascript:void(0)" onclick="return EIXPreview.ShowFieldSettings(event, this)" class="kit_ix_str_value_settings" id="field_settings_'+num+'" title="'+BX.message("KIT_IX_FIELD_SETTINGS")+'"><input name="EXTRASETTINGS['+num+']" value="" type="hidden"></a><a href="javascript:void(0)" onclick="return EIXPreview.DeleteFieldValue(event, this)" class="kit_ix_str_value_close" title="'+BX.message("KIT_IX_REMOVE_FIELD")+'"></a></span>');
+				span.insertBefore(valObjParent.find('.kit_ix_str_value_add'));
 				//valObjParent.append(span);
 				
 				if(typeof extraparams=='object')
 				{
-					span.find('.ixml_ix_str_value_settings input').val(JSON.stringify(extraparams));
+					span.find('.kit_ix_str_value_settings input').val(JSON.stringify(extraparams));
 				}
 				else
 				{
-					span.find('.ixml_ix_str_value_settings').addClass("inactive");
+					span.find('.kit_ix_str_value_settings').addClass("inactive");
 				}
 				span.bind('click', function(){obj.ShowElementFields(this);});
 			}
@@ -321,9 +321,9 @@ var EIXPreview = {
 		}
 		else
 		{
-			if(valObj.hasClass('ixml_ix_str_value_field'))
+			if(valObj.hasClass('kit_ix_str_value_field'))
 			{
-				valObj.find('a.ixml_ix_str_value_close').trigger('click');
+				valObj.find('a.kit_ix_str_value_close').trigger('click');
 			}
 		}
 	},
@@ -331,20 +331,20 @@ var EIXPreview = {
 	DeleteFieldValue: function(e, link)
 	{
 		e.stopPropagation();
-		var parent = $(link).closest('.ixml_ix_str_value');
-		$(link).closest('.ixml_ix_str_value_field').remove();
-		if(parent.find('.ixml_ix_str_value_field').length==0)
+		var parent = $(link).closest('.kit_ix_str_value');
+		$(link).closest('.kit_ix_str_value_field').remove();
+		if(parent.find('.kit_ix_str_value_field').length==0)
 		{
 			var obj = this;
-			parent.find('.ixml_ix_str_value_val').removeClass('ixml_ix_str_value_val_selected').bind('click', function(){obj.ShowElementFields(this);});
-			parent.find('.ixml_ix_str_value_add').remove();
+			parent.find('.kit_ix_str_value_val').removeClass('kit_ix_str_value_val_selected').bind('click', function(){obj.ShowElementFields(this);});
+			parent.find('.kit_ix_str_value_add').remove();
 		}
 		return false;
 	},
 	
 	ShowBaseElements2: function(link)
 	{
-		var pSelect = $('#ixml_ix_xml_wrap select[name="group"]');
+		var pSelect = $('#kit_ix_xml_wrap select[name="group"]');
 		var select = $(pSelect).clone();
 		var options = select[0].options;
 		/*for(var i=0; i<options.length; i++)
@@ -352,7 +352,7 @@ var EIXPreview = {
 			if(inputVal.value==options.item(i).value) options.item(i).selected = true;
 		}*/
 		
-		var chosenId = 'ixmlix_select_chosen';
+		var chosenId = 'kitix_select_chosen';
 		$('#'+chosenId).remove();
 		var offset = $(link).offset();
 		var div = $('<div></div>');
@@ -407,7 +407,7 @@ var EIXPreview = {
 	{
 		e.stopPropagation();
 		
-		var parent = $(btn).closest('.ixml_ix_str_value_field');
+		var parent = $(btn).closest('.kit_ix_str_value_field');
 		var title = parent.find('>span:eq(0)').html().replace(/\s+\{\d+\}$/, '');
 		var val = this.GetFieldValue(parent);
 		var name = $(btn).find('input[type=hidden]').attr('name');
@@ -415,10 +415,10 @@ var EIXPreview = {
 		
 		var form = $(btn).closest('form')[0];
 		var postextra = $('input', btn).val();
-		var poststruct = $('#ixml_ix_xml_wrap input[name="struct_base64"]').val();
-		var fieldsCode = $(btn).closest('.ixml_ix_xml_struct_item[data-base-element]').attr('data-base-element');
+		var poststruct = $('#kit_ix_xml_wrap input[name="struct_base64"]').val();
+		var fieldsCode = $(btn).closest('.kit_ix_xml_struct_item[data-base-element]').attr('data-base-element');
 		var xPathList = {};
-		var groups = $('#ixml_ix_xml_wrap input[name^="SETTINGS[GROUPS]["]');
+		var groups = $('#kit_ix_xml_wrap input[name^="SETTINGS[GROUPS]["]');
 		for(var i=0; i<groups.length; i++)
 		{
 			var groupCode = groups[i].name.replace(/^.*\[([^\[]*)\]$/, '$1');
@@ -426,8 +426,8 @@ var EIXPreview = {
 		}
 		
 		var dialogParams = {
-			'title':BX.message("IXML_IX_POPUP_FIELD_SETTINGS_TITLE") + ' "' + title + '" {'+index+'}',
-			'content_url':'/bitrix/admin/'+ixmlIXModuleFilePrefix+'_field_settings_hl.php?field='+val+'&field_name='+name+'&index='+index+'&PROFILE_ID='+form.PROFILE_ID.value,
+			'title':BX.message("KIT_IX_POPUP_FIELD_SETTINGS_TITLE") + ' "' + title + '" {'+index+'}',
+			'content_url':'/bitrix/admin/'+kitIXModuleFilePrefix+'_field_settings_hl.php?field='+val+'&field_name='+name+'&index='+index+'&PROFILE_ID='+form.PROFILE_ID.value,
 			'width':'900',
 			'height':'400',
 			'resizable':true,
@@ -600,8 +600,8 @@ var EProfile = {
 	ShowCron: function()
 	{
 		var dialog = new BX.CAdminDialog({
-			'title':BX.message("IXML_IX_POPUP_CRON_TITLE"),
-			'content_url':'/bitrix/admin/'+ixmlIXModuleFilePrefix+'_cron_settings.php?suffix=highload',
+			'title':BX.message("KIT_IX_POPUP_CRON_TITLE"),
+			'content_url':'/bitrix/admin/'+kitIXModuleFilePrefix+'_cron_settings.php?suffix=highload',
 			'width':'800',
 			'height':'350',
 			'resizable':true});
@@ -629,7 +629,7 @@ var EProfile = {
 	{
 		var form = $(btn).closest('form');
 		$.post(form[0].getAttribute('action'), form.serialize()+'&subaction='+btn.name, function(data){
-			$('#ixml-ix-cron-result').html(data);
+			$('#kit-ix-cron-result').html(data);
 		});
 	},
 	
@@ -671,7 +671,7 @@ var EProfile = {
 	ToggleAdditionalSettings: function(link)
 	{
 		if(link) link = $(link);
-		else link = $('.ixml_ix_head_more');
+		else link = $('.kit_ix_head_more');
 		if(link.length==0) return;
 		$(link).each(function(){
 			var tr = $(this).closest('tr');
@@ -716,8 +716,8 @@ var EProfile = {
 		var input = $(link).prev('input[type=hidden]');
 		
 		var dialogParams = {
-			'title':BX.message(input.attr('id').indexOf('OFFER_')==0 ? "IXML_IX_POPUP_MISSINGOFFER_FIELDS_TITLE" : "IXML_IX_POPUP_MISSINGELEM_FIELDS_TITLE"),
-			'content_url':'/bitrix/admin/'+ixmlIXModuleFilePrefix+'_missignelem_fields.php?IBLOCK_ID='+iblockId+'&INPUT_ID='+input.attr('id')+'&OLDDEFAULTS='+input.val(),
+			'title':BX.message(input.attr('id').indexOf('OFFER_')==0 ? "KIT_IX_POPUP_MISSINGOFFER_FIELDS_TITLE" : "KIT_IX_POPUP_MISSINGELEM_FIELDS_TITLE"),
+			'content_url':'/bitrix/admin/'+kitIXModuleFilePrefix+'_missignelem_fields.php?IBLOCK_ID='+iblockId+'&INPUT_ID='+input.attr('id')+'&OLDDEFAULTS='+input.val(),
 			'width':'800',
 			'height':'400',
 			'resizable':true
@@ -744,7 +744,7 @@ var EProfile = {
 			$('input[type=checkbox]', this.DIV).each(function(){
 				BX.adminFormTools.modifyCheckbox(this);
 			});
-			$('select.ixml-ix-chosen-multi').chosen();
+			$('select.kit-ix-chosen-multi').chosen();
 		});
 			
 		dialog.Show();
@@ -756,14 +756,14 @@ var EProfile = {
 	{
 		var pid = $('#PROFILE_ID').val();
 		var post = '';
-		var json = $('.ixml-ix-file-choose input[name="SETTINGS_DEFAULT[EMAIL_DATA_FILE]"]').val();
+		var json = $('.kit-ix-file-choose input[name="SETTINGS_DEFAULT[EMAIL_DATA_FILE]"]').val();
 		if(json)
 		{
 			eval('post = {EMAIL_SETTINGS: '+json+'};');
 		}
 		var dialog = new BX.CAdminDialog({
-			'title':BX.message("IXML_IX_POPUP_SOURCE_EMAIL"),
-			'content_url':'/bitrix/admin/'+ixmlIXModuleFilePrefix+'_source_email.php?PROFILE_ID='+pid,
+			'title':BX.message("KIT_IX_POPUP_SOURCE_EMAIL"),
+			'content_url':'/bitrix/admin/'+kitIXModuleFilePrefix+'_source_email.php?PROFILE_ID='+pid,
 			'content_post': post,
 			'width':'900',
 			'height':'450',
@@ -802,8 +802,8 @@ var EProfile = {
 			data: post,
 			success: function(data){
 				eval('var res = '+data+';');
-				if(res.result=='success') $('#connect_result').html('<div class="success">'+BX.message("IXML_IX_SOURCE_EMAIL_SUCCESS")+'</div>');
-				else $('#connect_result').html('<div class="fail">'+BX.message("IXML_IX_SOURCE_EMAIL_FAIL")+'</div>');
+				if(res.result=='success') $('#connect_result').html('<div class="success">'+BX.message("KIT_IX_SOURCE_EMAIL_SUCCESS")+'</div>');
+				else $('#connect_result').html('<div class="fail">'+BX.message("KIT_IX_SOURCE_EMAIL_FAIL")+'</div>');
 				
 				if(res.folders)
 				{
@@ -820,7 +820,7 @@ var EProfile = {
 				}
 			},
 			error: function(){
-				$('#connect_result').html('<div class="fail">'+BX.message("IXML_IX_SOURCE_EMAIL_FAIL")+'</div>');
+				$('#connect_result').html('<div class="fail">'+BX.message("KIT_IX_SOURCE_EMAIL_FAIL")+'</div>');
 			},
 			timeout: 5000
 		});
@@ -830,14 +830,14 @@ var EProfile = {
 	{
 		var pid = $('#PROFILE_ID').val();
 		var post = '';
-		var json = $('.ixml-ix-file-choose input[name="EXT_DATA_FILE"]').val();
+		var json = $('.kit-ix-file-choose input[name="EXT_DATA_FILE"]').val();
 		if(json && json.substr(0,1)=='{')
 		{
 			eval('post = {AUTH_SETTINGS: '+json+'};');
 		}
 		var dialog = new BX.CAdminDialog({
-			'title':BX.message("IXML_IX_POPUP_SOURCE_LINKAUTH"),
-			'content_url':'/bitrix/admin/'+ixmlIXModuleFilePrefix+'_source_linkauth.php?PROFILE_ID='+pid,
+			'title':BX.message("KIT_IX_POPUP_SOURCE_LINKAUTH"),
+			'content_url':'/bitrix/admin/'+kitIXModuleFilePrefix+'_source_linkauth.php?PROFILE_ID='+pid,
 			'content_post': post,
 			'width':'900',
 			'height':'450',
@@ -868,18 +868,18 @@ var EProfile = {
 	
 	SetLinkAuthParams: function(jData)
 	{
-		if($('.ixml-ix-file-choose input[name="EXT_DATA_FILE"]').length == 0)
+		if($('.kit-ix-file-choose input[name="EXT_DATA_FILE"]').length == 0)
 		{
-			$(".ixml-ix-file-choose").prepend('<input type="hidden" name="EXT_DATA_FILE" value="">');
+			$(".kit-ix-file-choose").prepend('<input type="hidden" name="EXT_DATA_FILE" value="">');
 		}
-		$('.ixml-ix-file-choose input[name="EXT_DATA_FILE"]').val(JSON.stringify(jData));
-		$('.ixml-ix-file-choose input[name="SETTINGS_DEFAULT[EMAIL_DATA_FILE]"]').val('');
+		$('.kit-ix-file-choose input[name="EXT_DATA_FILE"]').val(JSON.stringify(jData));
+		$('.kit-ix-file-choose input[name="SETTINGS_DEFAULT[EMAIL_DATA_FILE]"]').val('');
 		BX.WindowManager.Get().Close();
 	},
 	
 	LauthAddVar: function(link)
 	{
-		var tr = $(link).closest('tr').prev('tr.ixml-ix-lauth-var');
+		var tr = $(link).closest('tr').prev('tr.kit-ix-lauth-var');
 		var newTr = tr.clone();
 		newTr.find('input').val('');
 		tr.after(newTr);
@@ -895,11 +895,11 @@ var EProfile = {
 			data: post,
 			success: function(data){
 				eval('var res = '+data+';');
-				if(res.result=='success') $('#connect_result').html('<div class="success">'+BX.message("IXML_IX_SOURCE_LAUTH_SUCCESS")+'</div>');
-				else $('#connect_result').html('<div class="fail">'+BX.message("IXML_IX_SOURCE_LAUTH_FAIL")+'</div>');
+				if(res.result=='success') $('#connect_result').html('<div class="success">'+BX.message("KIT_IX_SOURCE_LAUTH_SUCCESS")+'</div>');
+				else $('#connect_result').html('<div class="fail">'+BX.message("KIT_IX_SOURCE_LAUTH_FAIL")+'</div>');
 			},
 			error: function(){
-				$('#connect_result').html('<div class="fail">'+BX.message("IXML_IX_SOURCE_LAUTH_FAIL")+'</div>');
+				$('#connect_result').html('<div class="fail">'+BX.message("KIT_IX_SOURCE_LAUTH_FAIL")+'</div>');
 			},
 			timeout: 20000
 		});
@@ -929,7 +929,7 @@ var EProfile = {
 					var countVars = varInputs.length;
 					while(countVars < res.VARS.length)
 					{
-						$('td.ixml-ix-lauth-addvar a', form).trigger('click');
+						$('td.kit-ix-lauth-addvar a', form).trigger('click');
 						countVars++;
 					}
 					varInputs = $('input[name="vars[]"]', form);
@@ -978,7 +978,7 @@ var EImport = {
 		var obj = this;
 		$.ajax({
 			type: "GET",
-			url: '/upload/tmp/'+ixmlIXModuleName+'/'+this.pid+'.txt?hash='+(new Date()).getTime(),
+			url: '/upload/tmp/'+kitIXModuleName+'/'+this.pid+'.txt?hash='+(new Date()).getTime(),
 			success: function(data){
 				var finish = false;
 				if(data && data.substr(0, 1)=='{' && data.substr(data.length-1)=='}')
@@ -1105,7 +1105,7 @@ var EImport = {
 			error: function(){
 				obj.errorStatus = true;
 				$('#block_error_import').show();
-				var timeBlock = document.getElementById('ixml_ix_auto_continue_time');
+				var timeBlock = document.getElementById('kit_ix_auto_continue_time');
 				if(timeBlock)
 				{
 					timeBlock.innerHTML = '';
@@ -1119,7 +1119,7 @@ var EImport = {
 	TimeoutOnAutoConinue: function()
 	{
 		var obj = this;
-		var timeBlock = document.getElementById('ixml_ix_auto_continue_time');
+		var timeBlock = document.getElementById('kit_ix_auto_continue_time');
 		var time = timeBlock.innerHTML;
 		if(time.length==0)
 		{
@@ -1256,7 +1256,7 @@ var ESettings = {
 	
 	AddMargin: function(link)
 	{
-		var div = $(link).closest('td').find('.ixml-ix-settings-margin:eq(0)');
+		var div = $(link).closest('td').find('.kit-ix-settings-margin:eq(0)');
 		if(!div.is(':visible'))
 		{
 			div.show();
@@ -1271,10 +1271,10 @@ var ESettings = {
 	
 	RemoveMargin: function(link)
 	{
-		var divs = $(link).closest('td').find('.ixml-ix-settings-margin');
+		var divs = $(link).closest('td').find('.kit-ix-settings-margin');
 		if(divs.length > 1)
 		{
-			$(link).closest('.ixml-ix-settings-margin').remove();
+			$(link).closest('.kit-ix-settings-margin').remove();
 		}
 		else
 		{
@@ -1361,7 +1361,7 @@ var ESettings = {
 	
 	BindConversionEvents: function()
 	{
-		$('.ixml-ix-settings-conversion').each(function(){
+		$('.kit-ix-settings-conversion').each(function(){
 			var parent = this;
 			$('select.field_cell', parent).bind('change', function(){
 				if(this.value=='ELSE' || this.value=='LOADED')
@@ -1380,7 +1380,7 @@ var ESettings = {
 	
 	AddConversion: function(link)
 	{
-		var prevDiv = $(link).prev('.ixml-ix-settings-conversion');
+		var prevDiv = $(link).prev('.kit-ix-settings-conversion');
 		if(!prevDiv.is(':visible'))
 		{
 			prevDiv.show();
@@ -1396,8 +1396,8 @@ var ESettings = {
 	
 	RemoveConversion: function(link)
 	{
-		var div = $(link).closest('.ixml-ix-settings-conversion');
-		if($(link).closest('td').find('.ixml-ix-settings-conversion').length > 1)
+		var div = $(link).closest('.kit-ix-settings-conversion');
+		if($(link).closest('td').find('.kit-ix-settings-conversion').length > 1)
 		{
 			div.remove();
 		}
@@ -1451,7 +1451,7 @@ var ESettings = {
 	
 	ShowPHPExpression: function(link)
 	{
-		var div = $(link).next('.ixml-ix-settings-phpexpression');
+		var div = $(link).next('.kit-ix-settings-phpexpression');
 		if(div.is(':visible')) div.hide();
 		else div.show();
 	},
@@ -1495,7 +1495,7 @@ var ESettings = {
 		var parent = $(select).closest('tr');
 		var inputName = 'DEFAULTS['+select.value+']';
 		if($(parent).closest('table').find('input[name="'+inputName+'"]').length > 0) return;
-		var tmpl = parent.prev('tr.ixml-ix-list-settings-defaults');
+		var tmpl = parent.prev('tr.kit-ix-list-settings-defaults');
 		var tr = tmpl.clone();
 		tr.css('display', '');
 		$('.adm-detail-content-cell-l', tr).html(select.options[select.selectedIndex].innerHTML+':');
@@ -1526,14 +1526,14 @@ var EHelper = {
 	ShowHelp: function(index)
 	{
 		var dialog = new BX.CAdminDialog({
-			'title':BX.message("IXML_IX_POPUP_HELP_TITLE"),
-			'content_url':'/bitrix/admin/'+ixmlIXModuleFilePrefix+'_popup_help.php',
+			'title':BX.message("KIT_IX_POPUP_HELP_TITLE"),
+			'content_url':'/bitrix/admin/'+kitIXModuleFilePrefix+'_popup_help.php',
 			'width':'900',
 			'height':'450',
 			'resizable':true});
 			
 		BX.addCustomEvent(dialog, 'onWindowRegister', function(){
-			$('#ixml-ix-help-faq > li > a').bind('click', function(){
+			$('#kit-ix-help-faq > li > a').bind('click', function(){
 				var div = $(this).next('div');
 				if(div.is(':visible')) div.stop().slideUp();
 				else div.stop().slideDown();
@@ -1542,7 +1542,7 @@ var EHelper = {
 			
 			if(index > 0)
 			{
-				$('#ixml-ix-help-tabs .ixml-ix-tabs-heads a:eq('+parseInt(index)+')').trigger('click');
+				$('#kit-ix-help-tabs .kit-ix-tabs-heads a:eq('+parseInt(index)+')').trigger('click');
 			}
 		});
 			
@@ -1551,9 +1551,9 @@ var EHelper = {
 	
 	SetTab: function(link)
 	{
-		var parent = $(link).closest('.ixml-ix-tabs');
-		var heads = $('.ixml-ix-tabs-heads a', parent);
-		var bodies = $('.ixml-ix-tabs-bodies > div', parent);
+		var parent = $(link).closest('.kit-ix-tabs');
+		var heads = $('.kit-ix-tabs-heads a', parent);
+		var bodies = $('.kit-ix-tabs-bodies > div', parent);
 		var index = 0;
 		for(var i=0; i<heads.length; i++)
 		{
@@ -1580,7 +1580,7 @@ $(document).ready(function(){
 		if(jQuerySrc)
 		{
 			$.getScript(jQuerySrc, function(){
-				$.getScript('/bitrix/js/'+ixmlIXModuleName+'/chosen/chosen.jquery.min.js');
+				$.getScript('/bitrix/js/'+kitIXModuleName+'/chosen/chosen.jquery.min.js');
 			});
 		}
 	}
@@ -1597,15 +1597,15 @@ $(document).ready(function(){
 
 	EProfile.Init();
 	
-	if($('#ixml-ix-updates-message').length > 0)
+	if($('#kit-ix-updates-message').length > 0)
 	{
-		$.post('/bitrix/admin/'+ixmlIXModuleFilePrefix+'.php?lang='+BX.message('LANGUAGE_ID'), 'MODE=AJAX&ACTION=SHOW_MODULE_MESSAGE', function(data){
+		$.post('/bitrix/admin/'+kitIXModuleFilePrefix+'.php?lang='+BX.message('LANGUAGE_ID'), 'MODE=AJAX&ACTION=SHOW_MODULE_MESSAGE', function(data){
 			data = $(data);
-			var inner = $('#ixml-ix-updates-message-inner', data);
+			var inner = $('#kit-ix-updates-message-inner', data);
 			if(inner.length > 0 && inner.html().length > 0)
 			{
-				$('#ixml-ix-updates-message-inner').replaceWith(inner);
-				$('#ixml-ix-updates-message').show();
+				$('#kit-ix-updates-message-inner').replaceWith(inner);
+				$('#kit-ix-updates-message').show();
 			}
 		});
 	}

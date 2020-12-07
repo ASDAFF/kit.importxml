@@ -4,8 +4,8 @@
  */
 
 require_once ($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_before.php");
-$moduleId = 'ixml.importxml';
-$moduleFilePrefix = 'ixml_import_xml';
+$moduleId = 'kit.importxml';
+$moduleFilePrefix = 'kit_import_xml';
 $moduleJsId = str_replace('.', '_', $moduleId);
 $moduleDemoExpiredFunc = $moduleJsId.'_demo_expired';
 $moduleShowDemoFunc = $moduleJsId.'_show_demo';
@@ -27,8 +27,8 @@ if ($moduleDemoExpiredFunc()) {
 $MODULE_RIGHT = $APPLICATION->GetGroupRight($moduleId);
 if($MODULE_RIGHT < "W") $APPLICATION->AuthForm(GetMessage("ACCESS_DENIED"));
 
-//$oProfile = new \Bitrix\IxmlImportxml\Profile('highload');
-$oProfile = \Bitrix\IxmlImportxml\Profile::getInstance('highload');
+//$oProfile = new \Bitrix\KitImportxml\Profile('highload');
+$oProfile = \Bitrix\KitImportxml\Profile::getInstance('highload');
 if(strlen($PROFILE_ID) > 0 && $PROFILE_ID!=='new')
 {
 	$oProfile->Apply($SETTINGS_DEFAULT, $SETTINGS, $PROFILE_ID);
@@ -72,7 +72,7 @@ if ($REQUEST_METHOD == "POST" && $MODE=='AJAX')
 {
 	if($ACTION=='DELETE_TMP_DIRS')
 	{
-		\Bitrix\IxmlImportxml\Utils::RemoveTmpFiles(5, 'highload');
+		\Bitrix\KitImportxml\Utils::RemoveTmpFiles(5, 'highload');
 		die();
 	}
 	
@@ -80,7 +80,7 @@ if ($REQUEST_METHOD == "POST" && $MODE=='AJAX')
 	{
 		$APPLICATION->RestartBuffer();
 		if(ob_get_contents()) ob_end_clean();
-		$oProfile = new \Bitrix\IxmlImportxml\Profile('highload');
+		$oProfile = new \Bitrix\KitImportxml\Profile('highload');
 		$oProfile->RemoveProcessedProfile($PROCCESS_PROFILE_ID);
 		die();
 	}
@@ -89,14 +89,14 @@ if ($REQUEST_METHOD == "POST" && $MODE=='AJAX')
 	{
 		$APPLICATION->RestartBuffer();
 		if(ob_get_contents()) ob_end_clean();
-		$oProfile = new \Bitrix\IxmlImportxml\Profile('highload');
+		$oProfile = new \Bitrix\KitImportxml\Profile('highload');
 		echo CUtil::PhpToJSObject($oProfile->GetProccessParams($PROCCESS_PROFILE_ID));
 		die();
 	}
 	
 	if($ACTION=='GET_UID')
 	{
-		$fl = new \Bitrix\IxmlImportxml\FieldList($SETTINGS_DEFAULT);
+		$fl = new \Bitrix\KitImportxml\FieldList($SETTINGS_DEFAULT);
 		$APPLICATION->RestartBuffer();
 		if(ob_get_contents()) ob_end_clean();
 		?><div><?
@@ -107,7 +107,7 @@ if ($REQUEST_METHOD == "POST" && $MODE=='AJAX')
 	
 	if($ACTION=='DELETE_PROFILE')
 	{
-		$fl = new \Bitrix\IxmlImportxml\Profile('highload');
+		$fl = new \Bitrix\KitImportxml\Profile('highload');
 		$fl->Delete($_REQUEST['ID']);
 		die();
 	}
@@ -116,7 +116,7 @@ if ($REQUEST_METHOD == "POST" && $MODE=='AJAX')
 	{
 		$APPLICATION->RestartBuffer();
 		if(ob_get_contents()) ob_end_clean();
-		$fl = new \Bitrix\IxmlImportxml\Profile('highload');
+		$fl = new \Bitrix\KitImportxml\Profile('highload');
 		$id = $fl->Copy($_REQUEST['ID']);
 		echo CUtil::PhpToJSObject(array('id'=>$id));
 		die();
@@ -126,7 +126,7 @@ if ($REQUEST_METHOD == "POST" && $MODE=='AJAX')
 	{
 		$newName = $_REQUEST['NAME'];
 		if((!defined('BX_UTF') || !BX_UTF)) $newName = $APPLICATION->ConvertCharset($newName, 'UTF-8', 'CP1251');
-		$fl = new \Bitrix\IxmlImportxml\Profile('highload');
+		$fl = new \Bitrix\KitImportxml\Profile('highload');
 		$fl->Rename($_REQUEST['ID'], $newName);
 		die();
 	}
@@ -152,7 +152,7 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 					elseif($SETTINGS_DEFAULT["EXT_DATA_FILE"]) $_POST['DATA_FILE'] = $SETTINGS_DEFAULT["EXT_DATA_FILE"];
 					elseif($SETTINGS_DEFAULT['EMAIL_DATA_FILE'])
 					{
-						$fileId = \Bitrix\IxmlImportxml\SMail::GetNewFile($SETTINGS_DEFAULT['EMAIL_DATA_FILE']);
+						$fileId = \Bitrix\KitImportxml\SMail::GetNewFile($SETTINGS_DEFAULT['EMAIL_DATA_FILE']);
 						if($fileId > 0)
 						{
 							if($_POST['OLD_DATA_FILE'])
@@ -176,9 +176,9 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 				$fid = 0;
 				if(isset($_FILES["DATA_FILE"]) && is_uploaded_file($_FILES["DATA_FILE"]["tmp_name"]))
 				{
-					//$fid = \Bitrix\IxmlImportxml\Utils::SaveFile($_FILES["DATA_FILE"], $moduleId);
-					$arFile = \Bitrix\IxmlImportxml\Utils::MakeFileArray($_FILES["DATA_FILE"]);
-					$fid = \Bitrix\IxmlImportxml\Utils::SaveFile($arFile, $moduleId);
+					//$fid = \Bitrix\KitImportxml\Utils::SaveFile($_FILES["DATA_FILE"], $moduleId);
+					$arFile = \Bitrix\KitImportxml\Utils::MakeFileArray($_FILES["DATA_FILE"]);
+					$fid = \Bitrix\KitImportxml\Utils::SaveFile($arFile, $moduleId);
 				}
 				elseif(isset($_POST['DATA_FILE']) && strlen($_POST['DATA_FILE']) > 0)
 				{
@@ -215,18 +215,18 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 					}
 					if(!$fid)
 					{
-						$arFile = \Bitrix\IxmlImportxml\Utils::MakeFileArray($filepath);
+						$arFile = \Bitrix\KitImportxml\Utils::MakeFileArray($filepath);
 						if($arFile['name'])
 						{
 							if(strpos($arFile['name'], '.')===false) $arFile['name'] .= '.xml';
-							$fid = \Bitrix\IxmlImportxml\Utils::SaveFile($arFile, $moduleId);
+							$fid = \Bitrix\KitImportxml\Utils::SaveFile($arFile, $moduleId);
 						}
 					}
 				}
 				
 				if(!$fid)
 				{
-					$strError.= GetMessage("IXML_IX_FILE_UPLOAD_ERROR")."<br>";
+					$strError.= GetMessage("KIT_IX_FILE_UPLOAD_ERROR")."<br>";
 					if($extFile)
 					{
 						$SETTINGS_DEFAULT["EXT_DATA_FILE"] = $_POST['DATA_FILE'];
@@ -262,7 +262,7 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 		
 		if(strlen($PROFILE_ID)==0)
 		{
-			$strError.= GetMessage("IXML_IX_PROFILE_NOT_CHOOSE")."<br>";
+			$strError.= GetMessage("KIT_IX_PROFILE_NOT_CHOOSE")."<br>";
 		}
 
 		if (strlen($strError) <= 0)
@@ -286,33 +286,33 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 			}
 
 			if (strlen($DATA_FILE_NAME) <= 0)
-				$strError.= GetMessage("IXML_IX_NO_DATA_FILE")."<br>";
+				$strError.= GetMessage("KIT_IX_NO_DATA_FILE")."<br>";
 			else
 				$SETTINGS_DEFAULT['URL_DATA_FILE'] = $DATA_FILE_NAME;
 			
 			if(!in_array(ToLower(GetFileExtension($DATA_FILE_NAME)), array('xml', 'yml')))
 			{
-				$strError.= GetMessage("IXML_IX_FILE_NOT_SUPPORT")."<br>";
+				$strError.= GetMessage("KIT_IX_FILE_NOT_SUPPORT")."<br>";
 			}
 
 			if(!$SETTINGS_DEFAULT['HIGHLOADBLOCK_ID'])
-				$strError.= GetMessage("IXML_IX_NO_IBLOCK")."<br>";
+				$strError.= GetMessage("KIT_IX_NO_IBLOCK")."<br>";
 			
-			if((!$DATA_FILE_NAME = \Bitrix\IxmlImportxml\Utils::GetFileName($DATA_FILE_NAME)))
+			if((!$DATA_FILE_NAME = \Bitrix\KitImportxml\Utils::GetFileName($DATA_FILE_NAME)))
 			{
-				$strError.= GetMessage("IXML_IX_FILE_NOT_FOUND")."<br>";
+				$strError.= GetMessage("KIT_IX_FILE_NOT_FOUND")."<br>";
 			}
 			
 			if(empty($SETTINGS_DEFAULT['ELEMENT_UID']))
 			{
-				$strError.= GetMessage("IXML_IX_NO_ELEMENT_UID")."<br>";
+				$strError.= GetMessage("KIT_IX_NO_ELEMENT_UID")."<br>";
 			}
 		}
 		
 		if (strlen($strError) <= 0)
 		{
 			/*Write profile*/
-			$oProfile = new \Bitrix\IxmlImportxml\Profile('highload');
+			$oProfile = new \Bitrix\KitImportxml\Profile('highload');
 			if($PROFILE_ID === 'new')
 			{
 				$PID = $oProfile->Add($NEW_PROFILE_NAME);
@@ -344,13 +344,13 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 		$_SESSION = $sess;
 
 		$error = '';
-		$fl = new \Bitrix\IxmlImportxml\FieldList($SETTINGS_DEFAULT);
-		$xmlViewer = new \Bitrix\IxmlImportxml\XMLViewer($DATA_FILE_NAME, $SETTINGS_DEFAULT);
+		$fl = new \Bitrix\KitImportxml\FieldList($SETTINGS_DEFAULT);
+		$xmlViewer = new \Bitrix\KitImportxml\XMLViewer($DATA_FILE_NAME, $SETTINGS_DEFAULT);
 		try{
 			$arStruct = $xmlViewer->GetFileStructure();
 			$arXPathsMulti = $xmlViewer->GetXPathsMulti();
 		}catch(Exception $ex){
-			$error = GetMessage("IXML_IX_ERROR").$ex->getMessage();
+			$error = GetMessage("KIT_IX_ERROR").$ex->getMessage();
 		}
 		$APPLICATION->RestartBuffer();
 		if(ob_get_contents()) ob_end_clean();
@@ -358,9 +358,9 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 		if(strlen($error) > 0) echo $error;
 		//print_r($arStruct);
 		
-		echo '<div class="ixml_ix_xml_wrap" id="ixml_ix_xml_wrap">';
+		echo '<div class="kit_ix_xml_wrap" id="kit_ix_xml_wrap">';
 		
-		echo '<div class="ixml_ix_xml_settings">';
+		echo '<div class="kit_ix_xml_settings">';
 		echo '<input type="hidden" name="SETTINGS[XPATHS_MULTI]" value="'.base64_encode(serialize($arXPathsMulti)).'">';
 		echo '<input type="hidden" name="defaultsettings_json" value="'.htmlspecialcharsex(CUtil::PhpToJSObject($SETTINGS_DEFAULT)).'">';
 		echo '<input type="hidden" name="settings_json" value="'.htmlspecialcharsex(CUtil::PhpToJSObject($SETTINGS)).'">';
@@ -370,7 +370,7 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 		$fl->ShowSelectFieldsHighload($SETTINGS_DEFAULT['HIGHLOADBLOCK_ID'], 'element_fields');
 		echo '</div>';
 		
-		echo '<div class="ixml_ix_xml_struct">';
+		echo '<div class="kit_ix_xml_struct">';
 		$xmlViewer->ShowXmlTag($arStruct);
 		echo '</div>';
 		
@@ -382,14 +382,14 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 	if($ACTION == 'DO_IMPORT')
 	{
 		unset($EXTRASETTINGS);
-		$oProfile = new \Bitrix\IxmlImportxml\Profile('highload');
+		$oProfile = new \Bitrix\KitImportxml\Profile('highload');
 		$oProfile->ApplyExtra($EXTRASETTINGS, $PROFILE_ID);
 		$params = array_merge($SETTINGS_DEFAULT, $SETTINGS);
 		$stepparams = $_POST['stepparams'];
 		$sess = $_SESSION;
 		session_write_close();
 		$_SESSION = $sess;
-		$arResult = \CIxmlImportXMLRunner::ImportHighloadblock($DATA_FILE_NAME, $params, $EXTRASETTINGS, $stepparams, $PROFILE_ID);
+		$arResult = \CKitImportXMLRunner::ImportHighloadblock($DATA_FILE_NAME, $params, $EXTRASETTINGS, $stepparams, $PROFILE_ID);
 		$APPLICATION->RestartBuffer();
 		if(ob_get_contents()) ob_end_clean();
 		echo CUtil::PhpToJSObject($arResult);
@@ -407,7 +407,7 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 	if ($STEP > 2)
 	{
 		/*$params = array_merge($SETTINGS_DEFAULT, $SETTINGS);
-		$ie = new CIxmlImportXml($DATA_FILE_NAME, $params);
+		$ie = new CKitImportXml($DATA_FILE_NAME, $params);
 		$ie->Import();
 		die();*/
 	}
@@ -416,7 +416,7 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 }
 
 /////////////////////////////////////////////////////////////////////
-$APPLICATION->SetTitle(GetMessage("IXML_IX_PAGE_TITLE").$STEP);
+$APPLICATION->SetTitle(GetMessage("KIT_IX_PAGE_TITLE").$STEP);
 require ($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_after.php");
 /*********************************************************************/
 /********************  BODY  *****************************************/
@@ -429,31 +429,31 @@ if (!$moduleDemoExpiredFunc()) {
 $arSubMenu = array();
 
 /*$arSubMenu[] = array(
-	"TEXT"=>GetMessage("IXML_IX_MENU_PROFILE_LIST"),
-	"TITLE"=>GetMessage("IXML_IX_MENU_PROFILE_LIST"),
+	"TEXT"=>GetMessage("KIT_IX_MENU_PROFILE_LIST"),
+	"TITLE"=>GetMessage("KIT_IX_MENU_PROFILE_LIST"),
 	"LINK" => "/bitrix/admin/".$moduleFilePrefix."_profile_list.php?lang=".LANG,
 );*/
 $arSubMenu[] = array(
-	"TEXT"=>GetMessage("IXML_IX_SHOW_CRONTAB"),
-	"TITLE"=>GetMessage("IXML_IX_SHOW_CRONTAB"),
+	"TEXT"=>GetMessage("KIT_IX_SHOW_CRONTAB"),
+	"TITLE"=>GetMessage("KIT_IX_SHOW_CRONTAB"),
 	"ONCLICK" => "EProfile.ShowCron();",
 );
 $aMenu = array(
 	array(
-		"TEXT"=>GetMessage("IXML_IX_MENU_HELP"),
-		"TITLE"=>GetMessage("IXML_IX_MENU_HELP"),
+		"TEXT"=>GetMessage("KIT_IX_MENU_HELP"),
+		"TITLE"=>GetMessage("KIT_IX_MENU_HELP"),
 		"ONCLICK" => "EHelper.ShowHelp();",
 		"ICON" => "",
 	),
 	array(
-		"TEXT"=>GetMessage("IXML_IX_MENU_FAQ"),
-		"TITLE"=>GetMessage("IXML_IX_MENU_FAQ"),
+		"TEXT"=>GetMessage("KIT_IX_MENU_FAQ"),
+		"TITLE"=>GetMessage("KIT_IX_MENU_FAQ"),
 		"ONCLICK" => "EHelper.ShowHelp(1);",
 		"ICON" => "",
 	),
 	array(
-		"TEXT"=>GetMessage("IXML_IX_TOOLS_LIST"),
-		"TITLE"=>GetMessage("IXML_IX_TOOLS_LIST"),
+		"TEXT"=>GetMessage("KIT_IX_TOOLS_LIST"),
+		"TITLE"=>GetMessage("KIT_IX_TOOLS_LIST"),
 		"MENU" => $arSubMenu,
 		"ICON" => "btn_green",
 	)
@@ -464,18 +464,18 @@ $context->Show();
 
 if ($STEP < 2)
 {
-	$oProfile = new \Bitrix\IxmlImportxml\Profile('highload');
+	$oProfile = new \Bitrix\KitImportxml\Profile('highload');
 	$arProfiles = $oProfile->GetProcessedProfiles();
 	if(!empty($arProfiles))
 	{
 		$message = '';
 		foreach($arProfiles as $k=>$v)
 		{
-			$message .= '<div class="kda-proccess-item">'.GetMessage("IXML_IX_PROCESSED_PROFILE").': '.$v['name'].' ('.GetMessage("IXML_IX_PROCESSED_PERCENT_LOADED").' '.$v['percent'].'%). &nbsp; &nbsp; &nbsp; &nbsp; <a href="javascript:void(0)" onclick="EProfile.ContinueProccess(this, '.$v['key'].')">'.GetMessage("IXML_IX_PROCESSED_CONTINUE").'</a> &nbsp; <a href="javascript:void(0)" onclick="EProfile.RemoveProccess(this, '.$v['key'].')">'.GetMessage("IXML_IX_PROCESSED_DELETE").'</a></div>';
+			$message .= '<div class="kda-proccess-item">'.GetMessage("KIT_IX_PROCESSED_PROFILE").': '.$v['name'].' ('.GetMessage("KIT_IX_PROCESSED_PERCENT_LOADED").' '.$v['percent'].'%). &nbsp; &nbsp; &nbsp; &nbsp; <a href="javascript:void(0)" onclick="EProfile.ContinueProccess(this, '.$v['key'].')">'.GetMessage("KIT_IX_PROCESSED_CONTINUE").'</a> &nbsp; <a href="javascript:void(0)" onclick="EProfile.RemoveProccess(this, '.$v['key'].')">'.GetMessage("KIT_IX_PROCESSED_DELETE").'</a></div>';
 		}
 		CAdminMessage::ShowMessage(array(
 			'TYPE' => 'error',
-			'MESSAGE' => GetMessage("IXML_IX_PROCESSED_TITLE"),
+			'MESSAGE' => GetMessage("KIT_IX_PROCESSED_TITLE"),
 			'DETAILS' => $message,
 			'HTML' => true
 		));
@@ -486,8 +486,8 @@ if ($STEP < 2)
 {
 	CAdminMessage::ShowMessage(array(
 		'TYPE' => 'ok',
-		'MESSAGE' => GetMessage("IXML_IX_DELETE_MODE_TITLE"),
-		'DETAILS' => GetMessage("IXML_IX_DELETE_MODE_MESSAGE"),
+		'MESSAGE' => GetMessage("KIT_IX_DELETE_MODE_TITLE"),
+		'DETAILS' => GetMessage("KIT_IX_DELETE_MODE_MESSAGE"),
 		'HTML' => true
 	));	
 }*/
@@ -502,21 +502,21 @@ $arProfile = (strlen($PROFILE_ID) > 0 ? $oProfile->GetFieldsByID($PROFILE_ID) : 
 $aTabs = array(
 	array(
 		"DIV" => "edit1",
-		"TAB" => GetMessage("IXML_IX_TAB1") ,
+		"TAB" => GetMessage("KIT_IX_TAB1") ,
 		"ICON" => "iblock",
-		"TITLE" => GetMessage("IXML_IX_TAB1_ALT"),
+		"TITLE" => GetMessage("KIT_IX_TAB1_ALT"),
 	) ,
 	array(
 		"DIV" => "edit2",
-		"TAB" => GetMessage("IXML_IX_TAB2") ,
+		"TAB" => GetMessage("KIT_IX_TAB2") ,
 		"ICON" => "iblock",
-		"TITLE" => sprintf(GetMessage("IXML_IX_TAB2_ALT"), (isset($arProfile['NAME']) ? $arProfile['NAME'] : '')),
+		"TITLE" => sprintf(GetMessage("KIT_IX_TAB2_ALT"), (isset($arProfile['NAME']) ? $arProfile['NAME'] : '')),
 	) ,
 	array(
 		"DIV" => "edit3",
-		"TAB" => GetMessage("IXML_IX_TAB3") ,
+		"TAB" => GetMessage("KIT_IX_TAB3") ,
 		"ICON" => "iblock",
-		"TITLE" => sprintf(GetMessage("IXML_IX_TAB3_ALT"), (isset($arProfile['NAME']) ? $arProfile['NAME'] : '')),
+		"TITLE" => sprintf(GetMessage("KIT_IX_TAB3_ALT"), (isset($arProfile['NAME']) ? $arProfile['NAME'] : '')),
 	) ,
 );
 
@@ -527,36 +527,36 @@ $tabControl->Begin();
 <?$tabControl->BeginNextTab();
 if ($STEP == 1)
 {
-	$fl = new \Bitrix\IxmlImportxml\FieldList($SETTINGS_DEFAULT);
-	$oProfile = new \Bitrix\IxmlImportxml\Profile('highload');
+	$fl = new \Bitrix\KitImportxml\FieldList($SETTINGS_DEFAULT);
+	$oProfile = new \Bitrix\KitImportxml\Profile('highload');
 ?>
 
 	<tr class="heading">
-		<td colspan="2" class="ixml-ix-profile-header">
+		<td colspan="2" class="kit-ix-profile-header">
 			<div>
-				<?echo GetMessage("IXML_IX_PROFILE_HEADER"); ?>
-				<?/*?><a href="javascript:void(0)" onclick="EHelper.ShowHelp();" title="<?echo GetMessage("IXML_IX_MENU_HELP"); ?>" class="ixml-ix-help-link"></a><?*/?>
+				<?echo GetMessage("KIT_IX_PROFILE_HEADER"); ?>
+				<?/*?><a href="javascript:void(0)" onclick="EHelper.ShowHelp();" title="<?echo GetMessage("KIT_IX_MENU_HELP"); ?>" class="kit-ix-help-link"></a><?*/?>
 			</div>
 		</td>
 	</tr>
 
 	<tr>
-		<td><?echo GetMessage("IXML_IX_PROFILE"); ?>:</td>
+		<td><?echo GetMessage("KIT_IX_PROFILE"); ?>:</td>
 		<td>		
 			<?$oProfile->ShowProfileList('PROFILE_ID');?>
 			
 			<?if(strlen($PROFILE_ID) > 0 && $PROFILE_ID!='new'){?>
-				<span class="ixml-ix-edit-btns">
-					<a href="javascript:void(0)" class="adm-table-btn-edit" onclick="EProfile.ShowRename();" title="<?echo GetMessage("IXML_IX_RENAME_PROFILE");?>" id="action_edit_button"></a>
-					<a href="javascript:void(0);" class="adm-table-btn-copy" onclick="EProfile.Copy();" title="<?echo GetMessage("IXML_IX_COPY_PROFILE");?>" id="action_copy_button"></a>
-					<a href="javascript:void(0);" class="adm-table-btn-delete" onclick="if(confirm('<?echo GetMessage("IXML_IX_DELETE_PROFILE_CONFIRM");?>')){EProfile.Delete();}" title="<?echo GetMessage("IXML_IX_DELETE_PROFILE");?>" id="action_delete_button"></a>
+				<span class="kit-ix-edit-btns">
+					<a href="javascript:void(0)" class="adm-table-btn-edit" onclick="EProfile.ShowRename();" title="<?echo GetMessage("KIT_IX_RENAME_PROFILE");?>" id="action_edit_button"></a>
+					<a href="javascript:void(0);" class="adm-table-btn-copy" onclick="EProfile.Copy();" title="<?echo GetMessage("KIT_IX_COPY_PROFILE");?>" id="action_copy_button"></a>
+					<a href="javascript:void(0);" class="adm-table-btn-delete" onclick="if(confirm('<?echo GetMessage("KIT_IX_DELETE_PROFILE_CONFIRM");?>')){EProfile.Delete();}" title="<?echo GetMessage("KIT_IX_DELETE_PROFILE");?>" id="action_delete_button"></a>
 				</span>
 			<?}?>
 		</td>
 	</tr>
 	
 	<tr id="new_profile_name">
-		<td><?echo GetMessage("IXML_IX_NEW_PROFILE_NAME"); ?>:</td>
+		<td><?echo GetMessage("KIT_IX_NEW_PROFILE_NAME"); ?>:</td>
 		<td>
 			<input type="text" name="NEW_PROFILE_NAME" value="<?echo htmlspecialcharsbx($NEW_PROFILE_NAME)?>">
 		</td>
@@ -567,13 +567,13 @@ if ($STEP == 1)
 	{
 	?>
 		<tr class="heading">
-			<td colspan="2"><?echo GetMessage("IXML_IX_DEFAULT_SETTINGS"); ?></td>
+			<td colspan="2"><?echo GetMessage("KIT_IX_DEFAULT_SETTINGS"); ?></td>
 		</tr>
 		
 		<tr>
-			<td width="40%"><?echo GetMessage("IXML_IX_URL_DATA_FILE"); ?></td>
-			<td width="60%" class="ixml-ix-file-choose">
-				<!--IXML_IX_CHOOSE_FILE-->
+			<td width="40%"><?echo GetMessage("KIT_IX_URL_DATA_FILE"); ?></td>
+			<td width="60%" class="kit-ix-file-choose">
+				<!--KIT_IX_CHOOSE_FILE-->
 				<?if($SETTINGS_DEFAULT['EMAIL_DATA_FILE']) echo '<input type="hidden" name="SETTINGS_DEFAULT[EMAIL_DATA_FILE]" value="'.htmlspecialcharsbx($SETTINGS_DEFAULT['EMAIL_DATA_FILE']).'">';?>
 				<?if($SETTINGS_DEFAULT['EXT_DATA_FILE']) echo '<input type="hidden" name="EXT_DATA_FILE" value="'.htmlspecialcharsbx($SETTINGS_DEFAULT['EXT_DATA_FILE']).'">';?>
 				<input type="hidden" name="OLD_DATA_FILE" value="<?echo htmlspecialcharsbx($SETTINGS_DEFAULT['DATA_FILE']); ?>">
@@ -601,7 +601,7 @@ if ($STEP == 1)
 					unset($SETTINGS_DEFAULT["DATA_FILE"]);
 				}
 				//Cmodule::IncludeModule('fileman');
-				echo \Bitrix\IxmlImportxml\CFileInput::Show("DATA_FILE", $SETTINGS_DEFAULT["DATA_FILE"], array(
+				echo \Bitrix\KitImportxml\CFileInput::Show("DATA_FILE", $SETTINGS_DEFAULT["DATA_FILE"], array(
 					"IMAGE" => "N",
 					"PATH" => "Y",
 					"FILE_SIZE" => "Y",
@@ -616,17 +616,17 @@ if ($STEP == 1)
 					'del' => false,
 					'description' => false,
 				));
-				\Bitrix\IxmlImportxml\Utils::AddFileInputActions();
+				\Bitrix\KitImportxml\Utils::AddFileInputActions();
 				?>
-				<!--/IXML_IX_CHOOSE_FILE-->
+				<!--/KIT_IX_CHOOSE_FILE-->
 			</td>
 		</tr>
 
 		<tr>
-			<td><?echo GetMessage("IXML_IX_HIGHLOADBLOCK"); ?></td>
+			<td><?echo GetMessage("KIT_IX_HIGHLOADBLOCK"); ?></td>
 			<td>
 				<select id="SETTINGS_DEFAULT[HIGHLOADBLOCK_ID]" name="SETTINGS_DEFAULT[HIGHLOADBLOCK_ID]" class="adm-detail-iblock-list">
-					<option value=""><?echo GetMessage("IXML_IX_CHOOSE_HIGHLOADBLOCK"); ?></option>
+					<option value=""><?echo GetMessage("KIT_IX_CHOOSE_HIGHLOADBLOCK"); ?></option>
 					<?
 					$arHighloadBlock = $fl->GetHighloadBlocks();
 					foreach($arHighloadBlock as $arBlock)
@@ -639,54 +639,54 @@ if ($STEP == 1)
 		</tr>
 		
 		<tr class="heading">
-			<td colspan="2"><?echo GetMessage("IXML_IX_SETTINGS_PROCESSING"); ?></td>
+			<td colspan="2"><?echo GetMessage("KIT_IX_SETTINGS_PROCESSING"); ?></td>
 		</tr>
 		
 		<tr>
-			<td><?echo GetMessage("IXML_IX_ELEMENT_UID"); ?>: <span id="hint_ELEMENT_UID"></span><script>BX.hint_replace(BX('hint_ELEMENT_UID'), '<?echo GetMessage("IXML_IX_ELEMENT_UID_HINT"); ?>');</script></td>
+			<td><?echo GetMessage("KIT_IX_ELEMENT_UID"); ?>: <span id="hint_ELEMENT_UID"></span><script>BX.hint_replace(BX('hint_ELEMENT_UID'), '<?echo GetMessage("KIT_IX_ELEMENT_UID_HINT"); ?>');</script></td>
 			<td>
 				<?$fl->ShowSelectUidFieldsHighload($SETTINGS_DEFAULT['HIGHLOADBLOCK_ID'], 'SETTINGS_DEFAULT[ELEMENT_UID][]', $SETTINGS_DEFAULT['ELEMENT_UID']);?>
 			</td>
 		</tr>
 
 		<tr>
-			<td><?echo GetMessage("IXML_IX_ONLY_UPDATE_MODE"); ?>: <span id="hint_ONLY_UPDATE_MODE"></span><script>BX.hint_replace(BX('hint_ONLY_UPDATE_MODE'), '<?echo GetMessage("IXML_IX_ONLY_UPDATE_MODE_HINT"); ?>');</script></td>
+			<td><?echo GetMessage("KIT_IX_ONLY_UPDATE_MODE"); ?>: <span id="hint_ONLY_UPDATE_MODE"></span><script>BX.hint_replace(BX('hint_ONLY_UPDATE_MODE'), '<?echo GetMessage("KIT_IX_ONLY_UPDATE_MODE_HINT"); ?>');</script></td>
 			<td>
 				<input type="checkbox" name="SETTINGS_DEFAULT[ONLY_UPDATE_MODE]" value="Y" <?if($SETTINGS_DEFAULT['ONLY_UPDATE_MODE']=='Y'){echo 'checked';}?> onchange="EProfile.RadioChb(this, ['SETTINGS_DEFAULT[ONLY_CREATE_MODE]', 'SETTINGS_DEFAULT[ONLY_DELETE_MODE]'])">
 			</td>
 		</tr>
 		
 		<tr>
-			<td><?echo GetMessage("IXML_IX_ONLY_CREATE_MODE"); ?>: <span id="hint_ONLY_CREATE_MODE"></span><script>BX.hint_replace(BX('hint_ONLY_CREATE_MODE'), '<?echo GetMessage("IXML_IX_ONLY_CREATE_MODE_HINT"); ?>');</script></td>
+			<td><?echo GetMessage("KIT_IX_ONLY_CREATE_MODE"); ?>: <span id="hint_ONLY_CREATE_MODE"></span><script>BX.hint_replace(BX('hint_ONLY_CREATE_MODE'), '<?echo GetMessage("KIT_IX_ONLY_CREATE_MODE_HINT"); ?>');</script></td>
 			<td>
 				<input type="checkbox" name="SETTINGS_DEFAULT[ONLY_CREATE_MODE]" value="Y" <?if($SETTINGS_DEFAULT['ONLY_CREATE_MODE']=='Y'){echo 'checked';}?> onchange="EProfile.RadioChb(this, ['SETTINGS_DEFAULT[ONLY_UPDATE_MODE]', 'SETTINGS_DEFAULT[ONLY_DELETE_MODE]'])">
 			</td>
 		</tr>
 		
 		<tr>
-			<td><?echo GetMessage("IXML_IX_ELEMENT_MULTIPLE_SEPARATOR"); ?>:</td>
+			<td><?echo GetMessage("KIT_IX_ELEMENT_MULTIPLE_SEPARATOR"); ?>:</td>
 			<td>
 				<input type="text" name="SETTINGS_DEFAULT[ELEMENT_MULTIPLE_SEPARATOR]" size="3" value="<?echo ($SETTINGS_DEFAULT['ELEMENT_MULTIPLE_SEPARATOR'] ? htmlspecialcharsbx($SETTINGS_DEFAULT['ELEMENT_MULTIPLE_SEPARATOR']) : ';'); ?>">
 			</td>
 		</tr>
 		
 		<tr class="heading">
-			<td colspan="2"><?echo GetMessage("IXML_IX_SETTINGS_PROCESSING_MISSING_ELEMENTS"); ?> <a href="javascript:void(0)" onclick="EProfile.ToggleAdditionalSettings(this)" class="ixml_ix_head_more show"><?echo GetMessage("IXML_IX_SETTINGS_ADDITONAL_SHOW_HIDE"); ?></a></td>
+			<td colspan="2"><?echo GetMessage("KIT_IX_SETTINGS_PROCESSING_MISSING_ELEMENTS"); ?> <a href="javascript:void(0)" onclick="EProfile.ToggleAdditionalSettings(this)" class="kit_ix_head_more show"><?echo GetMessage("KIT_IX_SETTINGS_ADDITONAL_SHOW_HIDE"); ?></a></td>
 		</tr>
 		<tr>
-			<td><?echo GetMessage("IXML_IX_ELEMENT_MISSING_REMOVE_ELEMENT"); ?>:</td>
+			<td><?echo GetMessage("KIT_IX_ELEMENT_MISSING_REMOVE_ELEMENT"); ?>:</td>
 			<td>
-				<input type="checkbox" name="SETTINGS_DEFAULT[CELEMENT_MISSING_REMOVE_ELEMENT]" value="Y" <?if($SETTINGS_DEFAULT['CELEMENT_MISSING_REMOVE_ELEMENT']=='Y'){echo 'checked';}?> data-confirm="<?echo GetMessage("IXML_IX_ELEMENT_MISSING_REMOVE_ELEMENT_CONFIRM"); ?>">
+				<input type="checkbox" name="SETTINGS_DEFAULT[CELEMENT_MISSING_REMOVE_ELEMENT]" value="Y" <?if($SETTINGS_DEFAULT['CELEMENT_MISSING_REMOVE_ELEMENT']=='Y'){echo 'checked';}?> data-confirm="<?echo GetMessage("KIT_IX_ELEMENT_MISSING_REMOVE_ELEMENT_CONFIRM"); ?>">
 			</td>
 		</tr>
 		
 		<tr class="heading">
-			<td colspan="2"><?echo GetMessage("IXML_IX_SETTINGS_ADDITONAL"); ?> <a href="javascript:void(0)" onclick="EProfile.ToggleAdditionalSettings(this)" class="ixml_ix_head_more show" id="kda-head-more-link"><?echo GetMessage("IXML_IX_SETTINGS_ADDITONAL_SHOW_HIDE"); ?></a></td>
+			<td colspan="2"><?echo GetMessage("KIT_IX_SETTINGS_ADDITONAL"); ?> <a href="javascript:void(0)" onclick="EProfile.ToggleAdditionalSettings(this)" class="kit_ix_head_more show" id="kda-head-more-link"><?echo GetMessage("KIT_IX_SETTINGS_ADDITONAL_SHOW_HIDE"); ?></a></td>
 		</tr>
 		
 		<?/*?>
 		<tr>
-			<td><?echo GetMessage("IXML_IX_STAT_SAVE"); ?>:</td>
+			<td><?echo GetMessage("KIT_IX_STAT_SAVE"); ?>:</td>
 			<td>
 				<input type="checkbox" name="SETTINGS_DEFAULT[STAT_SAVE]" value="Y" <?if($SETTINGS_DEFAULT['STAT_SAVE']=='Y'){echo 'checked';}?>>
 			</td>
@@ -694,7 +694,7 @@ if ($STEP == 1)
 		<?*/?>
 		
 		<tr>
-			<td><?echo GetMessage("IXML_IX_HTML_ENTITY_DECODE"); ?>:</td>
+			<td><?echo GetMessage("KIT_IX_HTML_ENTITY_DECODE"); ?>:</td>
 			<td>
 				<input type="hidden" name="SETTINGS_DEFAULT[HTML_ENTITY_DECODE]" value="N">
 				<input type="checkbox" name="SETTINGS_DEFAULT[HTML_ENTITY_DECODE]" value="Y" <?if($SETTINGS_DEFAULT['HTML_ENTITY_DECODE']=='Y' || $PROFILE_ID=='new'){echo 'checked';}?>>
@@ -702,24 +702,24 @@ if ($STEP == 1)
 		</tr>
 		
 		<tr>
-			<td><?echo GetMessage("IXML_IX_NOT_USE_XML_READER"); ?>: <span id="hint_NOT_USE_XML_READER"></span><script>BX.hint_replace(BX('hint_NOT_USE_XML_READER'), '<?echo GetMessage("IXML_IX_NOT_USE_XML_READER_HINT"); ?>');</script></td>
+			<td><?echo GetMessage("KIT_IX_NOT_USE_XML_READER"); ?>: <span id="hint_NOT_USE_XML_READER"></span><script>BX.hint_replace(BX('hint_NOT_USE_XML_READER'), '<?echo GetMessage("KIT_IX_NOT_USE_XML_READER_HINT"); ?>');</script></td>
 			<td>
 				<input type="checkbox" name="SETTINGS_DEFAULT[NOT_USE_XML_READER]" value="Y" <?if($SETTINGS_DEFAULT['NOT_USE_XML_READER']=='Y'){echo 'checked';}?>>
 			</td>
 		</tr>
 		
 		<tr>
-			<td><?echo GetMessage("IXML_IX_AUTO_FIX_XML_ERRORS"); ?>: <span id="hint_AUTO_FIX_XML_ERRORS"></span><script>BX.hint_replace(BX('hint_AUTO_FIX_XML_ERRORS'), '<?echo GetMessage("IXML_IX_AUTO_FIX_XML_ERRORS_HINT"); ?>');</script></td>
+			<td><?echo GetMessage("KIT_IX_AUTO_FIX_XML_ERRORS"); ?>: <span id="hint_AUTO_FIX_XML_ERRORS"></span><script>BX.hint_replace(BX('hint_AUTO_FIX_XML_ERRORS'), '<?echo GetMessage("KIT_IX_AUTO_FIX_XML_ERRORS_HINT"); ?>');</script></td>
 			<td>
 				<input type="checkbox" name="SETTINGS_DEFAULT[AUTO_FIX_XML_ERRORS]" value="Y" <?if($SETTINGS_DEFAULT['AUTO_FIX_XML_ERRORS']=='Y'){echo 'checked';}?>>
 			</td>
 		</tr>
 		
 		<tr>
-			<td class="ixml-ix-settings-margin-container" colspan="2" align="center">
-				<a href="javascript:void(0)" onclick="ESettings.ShowPHPExpression(this)"><?echo GetMessage("IXML_IX_ONAFTERSAVE_HANDLER");?></a>
-				<div class="ixml-ix-settings-phpexpression" style="display: none;">
-					<?echo GetMessage("IXML_IX_ONAFTERSAVE_HANDLER_HINT");?>
+			<td class="kit-ix-settings-margin-container" colspan="2" align="center">
+				<a href="javascript:void(0)" onclick="ESettings.ShowPHPExpression(this)"><?echo GetMessage("KIT_IX_ONAFTERSAVE_HANDLER");?></a>
+				<div class="kit-ix-settings-phpexpression" style="display: none;">
+					<?echo GetMessage("KIT_IX_ONAFTERSAVE_HANDLER_HINT");?>
 					<textarea name="SETTINGS_DEFAULT[ONAFTERSAVE_HANDLER]"><?echo $SETTINGS_DEFAULT['ONAFTERSAVE_HANDLER']?></textarea>
 				</div>
 			</td>
@@ -738,8 +738,8 @@ if ($STEP == 2)
 	
 	<tr>
 		<td colspan="2" id="preview_file">
-			<div class="ixml-ix-file-preloader">
-				<?echo GetMessage("IXML_IX_PRELOADING"); ?>
+			<div class="kit-ix-file-preloader">
+				<?echo GetMessage("KIT_IX_PRELOADING"); ?>
 			</div>
 		</td>
 	</tr>
@@ -755,21 +755,21 @@ if ($STEP == 3)
 {
 ?>
 	<tr>
-		<td id="resblock" class="ixml-ix-result">
+		<td id="resblock" class="kit-ix-result">
 		 <table width="100%"><tr><td width="50%">
 			<div id="progressbar"><span class="pline"></span><span class="presult load"><b>0%</b><span 
-				data-prefix="<?echo GetMessage("IXML_IX_READ_LINES"); ?>" 
-				data-import_sections="<?echo GetMessage("IXML_IX_STATUS_IMPORT_SECTIONS"); ?>" 
-				data-import="<?echo GetMessage("IXML_IX_STATUS_IMPORT"); ?>" 
-				data-deactivate_elements="<?echo GetMessage("IXML_IX_STATUS_DEACTIVATE_ELEMENTS"); ?>" 
-				data-deactivate_sections="<?echo GetMessage("IXML_IX_STATUS_DEACTIVATE_SECTIONS"); ?>" 
-			><?echo GetMessage("IXML_IX_IMPORT_INIT"); ?></span></span></div>
+				data-prefix="<?echo GetMessage("KIT_IX_READ_LINES"); ?>"
+				data-import_sections="<?echo GetMessage("KIT_IX_STATUS_IMPORT_SECTIONS"); ?>"
+				data-import="<?echo GetMessage("KIT_IX_STATUS_IMPORT"); ?>"
+				data-deactivate_elements="<?echo GetMessage("KIT_IX_STATUS_DEACTIVATE_ELEMENTS"); ?>"
+				data-deactivate_sections="<?echo GetMessage("KIT_IX_STATUS_DEACTIVATE_SECTIONS"); ?>"
+			><?echo GetMessage("KIT_IX_IMPORT_INIT"); ?></span></span></div>
 
 			<div id="block_error_import" style="display: none;">
 				<?echo CAdminMessage::ShowMessage(array(
 					"TYPE" => "ERROR",
-					"MESSAGE" => GetMessage("IXML_IX_IMPORT_ERROR_CONNECT"),
-					"DETAILS" => '<div>'.(COption::GetOptionString($moduleId, 'AUTO_CONTINUE_IMPORT', 'N')=='Y' ? sprintf(GetMessage("IXML_IX_IMPORT_AUTO_CONTINUE"), '<span id="ixml_ix_auto_continue_time"></span>').'<br>' : '').'<a href="javascript:void(0)" onclick="EProfile.ContinueProccess(this, '.$PROFILE_ID.');" id="kda_ie_continue_link">'.GetMessage("IXML_IX_PROCESSED_CONTINUE").'</a><br><br>'.sprintf(GetMessage("IXML_IX_IMPORT_ERROR_CONNECT_COMMENT"), '/bitrix/admin/settings.php?lang=ru&mid='.$moduleId.'&mid_menu=1').'</div>',
+					"MESSAGE" => GetMessage("KIT_IX_IMPORT_ERROR_CONNECT"),
+					"DETAILS" => '<div>'.(COption::GetOptionString($moduleId, 'AUTO_CONTINUE_IMPORT', 'N')=='Y' ? sprintf(GetMessage("KIT_IX_IMPORT_AUTO_CONTINUE"), '<span id="kit_ix_auto_continue_time"></span>').'<br>' : '').'<a href="javascript:void(0)" onclick="EProfile.ContinueProccess(this, '.$PROFILE_ID.');" id="kda_ie_continue_link">'.GetMessage("KIT_IX_PROCESSED_CONTINUE").'</a><br><br>'.sprintf(GetMessage("KIT_IX_IMPORT_ERROR_CONNECT_COMMENT"), '/bitrix/admin/settings.php?lang=ru&mid='.$moduleId.'&mid_menu=1').'</div>',
 					"HTML" => true,
 				))?>
 			</div>
@@ -777,7 +777,7 @@ if ($STEP == 3)
 			<div id="block_error" style="display: none;">
 				<?echo CAdminMessage::ShowMessage(array(
 					"TYPE" => "ERROR",
-					"MESSAGE" => GetMessage("IXML_IX_IMPORT_ERROR"),
+					"MESSAGE" => GetMessage("KIT_IX_IMPORT_ERROR"),
 					"DETAILS" => '<div id="res_error"></div>',
 					"HTML" => true,
 				))?>
@@ -786,26 +786,26 @@ if ($STEP == 3)
 			<div class="detail_status">
 				<?echo CAdminMessage::ShowMessage(array(
 					"TYPE" => "PROGRESS",
-					"MESSAGE" => '<!--<div id="res_continue">'.GetMessage("IXML_IX_AUTO_REFRESH_CONTINUE").'</div><div id="res_finish" style="display: none;">'.GetMessage("IXML_IX_SUCCESS").'</div>-->',
+					"MESSAGE" => '<!--<div id="res_continue">'.GetMessage("KIT_IX_AUTO_REFRESH_CONTINUE").'</div><div id="res_finish" style="display: none;">'.GetMessage("KIT_IX_SUCCESS").'</div>-->',
 					"DETAILS" =>
 
-					GetMessage("IXML_IX_SU_ALL").' <b id="total_line">0</b><br>'
-					.GetMessage("IXML_IX_SU_CORR").' <b id="correct_line">0</b><br>'
-					.GetMessage("IXML_IX_SU_ER").' <b id="error_line">0</b><br>'
-					.GetMessage("IXML_IX_SU_ELEMENT_ADDED").' <b id="element_added_line">0</b><br>'
-					.GetMessage("IXML_IX_SU_ELEMENT_UPDATED").' <b id="element_updated_line">0</b><br>'
-					.($SETTINGS_DEFAULT['ONLY_DELETE_MODE']=='Y' ? (GetMessage("IXML_IX_SU_ELEMENT_DELETED").' <b id="element_removed_line">0</b><br>') : '')
-					.(!empty($SETTINGS_DEFAULT['ELEMENT_UID_SKU']) ? (GetMessage("IXML_IX_SU_SKU_ADDED").' <b id="sku_added_line">0</b><br>') : '')
-					.(!empty($SETTINGS_DEFAULT['ELEMENT_UID_SKU']) ? (GetMessage("IXML_IX_SU_SKU_UPDATED").' <b id="sku_updated_line">0</b><br>') : '')
-					.GetMessage("IXML_IX_SU_SECTION_ADDED").' <b id="section_added_line">0</b><br>'
-					.GetMessage("IXML_IX_SU_SECTION_UPDATED").' <b id="section_updated_line">0</b><br>'
-					.($SETTINGS_DEFAULT['CELEMENT_MISSING_DEACTIVATE']=='Y' ? (GetMessage("IXML_IX_SU_HIDED").' <b id="killed_line">0</b><br>') : '')
-					.($SETTINGS_DEFAULT['OFFER_MISSING_DEACTIVATE']=='Y' ? (GetMessage("IXML_IX_SU_OFFER_HIDED").' <b id="offer_killed_line">0</b><br>') : '')
-					.($SETTINGS_DEFAULT['CELEMENT_MISSING_TO_ZERO']=='Y' ? (GetMessage("IXML_IX_SU_ZERO_STOCK").' <b id="zero_stock_line">0</b><br>') : '')
-					.($SETTINGS_DEFAULT['OFFER_MISSING_TO_ZERO']=='Y' ? (GetMessage("IXML_IX_SU_OFFER_ZERO_STOCK").' <b id="offer_zero_stock_line">0</b><br>') : '')
-					.($SETTINGS_DEFAULT['CELEMENT_MISSING_REMOVE_ELEMENT']=='Y' ? (GetMessage("IXML_IX_SU_REMOVE_ELEMENT").' <b id="old_removed_line">0</b><br>') : '')
-					.($SETTINGS_DEFAULT['OFFER_MISSING_REMOVE_ELEMENT']=='Y' ? (GetMessage("IXML_IX_SU_OFFER_REMOVE_ELEMENT").' <b id="offer_old_removed_line">0</b><br>') : '')
-					.($SETTINGS_DEFAULT['STAT_SAVE']=='Y' ? ('<b><a target="_blank" href="/bitrix/admin/'.$moduleFilePrefix.'_event_log.php?lang='.LANGUAGE_ID.'&find_audit_type_id=IXML_IX_PROFILE_'.$PROFILE_ID.'">'.GetMessage("IXML_IX_STATISTIC_LINK").'</a></b>') : ''),
+					GetMessage("KIT_IX_SU_ALL").' <b id="total_line">0</b><br>'
+					.GetMessage("KIT_IX_SU_CORR").' <b id="correct_line">0</b><br>'
+					.GetMessage("KIT_IX_SU_ER").' <b id="error_line">0</b><br>'
+					.GetMessage("KIT_IX_SU_ELEMENT_ADDED").' <b id="element_added_line">0</b><br>'
+					.GetMessage("KIT_IX_SU_ELEMENT_UPDATED").' <b id="element_updated_line">0</b><br>'
+					.($SETTINGS_DEFAULT['ONLY_DELETE_MODE']=='Y' ? (GetMessage("KIT_IX_SU_ELEMENT_DELETED").' <b id="element_removed_line">0</b><br>') : '')
+					.(!empty($SETTINGS_DEFAULT['ELEMENT_UID_SKU']) ? (GetMessage("KIT_IX_SU_SKU_ADDED").' <b id="sku_added_line">0</b><br>') : '')
+					.(!empty($SETTINGS_DEFAULT['ELEMENT_UID_SKU']) ? (GetMessage("KIT_IX_SU_SKU_UPDATED").' <b id="sku_updated_line">0</b><br>') : '')
+					.GetMessage("KIT_IX_SU_SECTION_ADDED").' <b id="section_added_line">0</b><br>'
+					.GetMessage("KIT_IX_SU_SECTION_UPDATED").' <b id="section_updated_line">0</b><br>'
+					.($SETTINGS_DEFAULT['CELEMENT_MISSING_DEACTIVATE']=='Y' ? (GetMessage("KIT_IX_SU_HIDED").' <b id="killed_line">0</b><br>') : '')
+					.($SETTINGS_DEFAULT['OFFER_MISSING_DEACTIVATE']=='Y' ? (GetMessage("KIT_IX_SU_OFFER_HIDED").' <b id="offer_killed_line">0</b><br>') : '')
+					.($SETTINGS_DEFAULT['CELEMENT_MISSING_TO_ZERO']=='Y' ? (GetMessage("KIT_IX_SU_ZERO_STOCK").' <b id="zero_stock_line">0</b><br>') : '')
+					.($SETTINGS_DEFAULT['OFFER_MISSING_TO_ZERO']=='Y' ? (GetMessage("KIT_IX_SU_OFFER_ZERO_STOCK").' <b id="offer_zero_stock_line">0</b><br>') : '')
+					.($SETTINGS_DEFAULT['CELEMENT_MISSING_REMOVE_ELEMENT']=='Y' ? (GetMessage("KIT_IX_SU_REMOVE_ELEMENT").' <b id="old_removed_line">0</b><br>') : '')
+					.($SETTINGS_DEFAULT['OFFER_MISSING_REMOVE_ELEMENT']=='Y' ? (GetMessage("KIT_IX_SU_OFFER_REMOVE_ELEMENT").' <b id="offer_old_removed_line">0</b><br>') : '')
+					.($SETTINGS_DEFAULT['STAT_SAVE']=='Y' ? ('<b><a target="_blank" href="/bitrix/admin/'.$moduleFilePrefix.'_event_log.php?lang='.LANGUAGE_ID.'&find_audit_type_id=KIT_IX_PROFILE_'.$PROFILE_ID.'">'.GetMessage("KIT_IX_STATISTIC_LINK").'</a></b>') : ''),
 					"HTML" => true,
 				))?>
 			</div>
@@ -842,8 +842,8 @@ if($STEP > 1)
 
 <?
 if($STEP == 2){ ?>
-<input type="submit" name="backButton" value="&lt;&lt; <?echo GetMessage("IXML_IX_BACK"); ?>">
-<input type="submit" name="saveConfigButton" value="<?echo GetMessage("IXML_IX_SAVE_CONFIGURATION"); ?>" style="float: right;">
+<input type="submit" name="backButton" value="&lt;&lt; <?echo GetMessage("KIT_IX_BACK"); ?>">
+<input type="submit" name="saveConfigButton" value="<?echo GetMessage("KIT_IX_SAVE_CONFIGURATION"); ?>" style="float: right;">
 <?
 }
 
@@ -851,14 +851,14 @@ if($STEP < 3)
 {
 ?>
 	<input type="hidden" name="STEP" value="<?echo $STEP + 1; ?>">
-	<input type="submit" value="<?echo ($STEP == 2) ? GetMessage("IXML_IX_NEXT_STEP_F") : GetMessage("IXML_IX_NEXT_STEP"); ?> &gt;&gt;" name="submit_btn" class="adm-btn-save">
+	<input type="submit" value="<?echo ($STEP == 2) ? GetMessage("KIT_IX_NEXT_STEP_F") : GetMessage("KIT_IX_NEXT_STEP"); ?> &gt;&gt;" name="submit_btn" class="adm-btn-save">
 <? 
 }
 else
 {
 ?>
 	<input type="hidden" name="STEP" value="1">
-	<input type="submit" name="backButton2" value="&lt;&lt; <?echo GetMessage("IXML_IX_2_1_STEP"); ?>" class="adm-btn-save">
+	<input type="submit" name="backButton2" value="&lt;&lt; <?echo GetMessage("KIT_IX_2_1_STEP"); ?>" class="adm-btn-save">
 <?
 }
 ?>
@@ -870,7 +870,7 @@ else
 
 <script language="JavaScript">
 <?if ($STEP < 2): 
-	$arFile = \Bitrix\IxmlImportxml\Utils::GetShowFileBySettings($SETTINGS_DEFAULT);
+	$arFile = \Bitrix\KitImportxml\Utils::GetShowFileBySettings($SETTINGS_DEFAULT);
 	if($arFile['link'])
 	{
 		?>
@@ -886,7 +886,7 @@ tabControl.SelectTab("edit1");
 tabControl.DisableTab("edit2");
 tabControl.DisableTab("edit3");
 <?elseif ($STEP == 2): 
-	/*$fl = new \Bitrix\IxmlImportxml\FieldList($SETTINGS_DEFAULT);
+	/*$fl = new \Bitrix\KitImportxml\FieldList($SETTINGS_DEFAULT);
 	$arMenu = $fl->GetLineActions();
 	foreach($arMenu as $k=>$v)
 	{
@@ -921,7 +921,7 @@ else
 }
 
 if($_POST['PROCESS_CONTINUE']=='Y'){
-	$oProfile = new \Bitrix\IxmlImportxml\Profile('highload');
+	$oProfile = new \Bitrix\KitImportxml\Profile('highload');
 ?>
 	EImport.Init(<?=CUtil::PhpToJSObject($arPost);?>, <?=CUtil::PhpToJSObject($oProfile->GetProccessParams($_POST['PROFILE_ID']));?>);
 <?}else{?>

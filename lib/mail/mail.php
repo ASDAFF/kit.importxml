@@ -3,7 +3,7 @@
  * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
  */
 
-namespace Bitrix\IxmlImportxml;
+namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Localization\Loc;
 
@@ -11,7 +11,7 @@ Loc::loadMessages(__FILE__);
 
 class SMail
 {
-	protected static $moduleId = 'ixml.importxml';
+	protected static $moduleId = 'kit.importxml';
 	protected $paramsChecked = false;
 	protected $paramsCheckRes = false;
 
@@ -38,7 +38,7 @@ class SMail
 			}
 			$charset = (defined('BX_UTF') && BX_UTF ? 'UTF-8' : 'CP1251');
 			
-			$this->imap = new \Bitrix\IxmlImportxml\Imap($this->params['SERVER'], $port, $tls, false, $this->params['EMAIL'], $this->params['PASSWORD'], $charset);
+			$this->imap = new \Bitrix\KitImportxml\Imap($this->params['SERVER'], $port, $tls, false, $this->params['EMAIL'], $this->params['PASSWORD'], $charset);
 			$this->paramsCheckRes = $this->imap->singin(($error = ''));
 			$this->paramsChecked = true;
 		}
@@ -70,11 +70,11 @@ class SMail
 		}
 		foreach($arFolders as $k=>$v)
 		{
-			$arFolders[$k] = str_replace('INBOX', Loc::getMessage('IXML_IX_INBOX_FOLDER'), $v);
+			$arFolders[$k] = str_replace('INBOX', Loc::getMessage('KIT_IX_INBOX_FOLDER'), $v);
 		}
 		if(!isset($arFolders['INBOX']))
 		{
-			$arFolders['INBOX'] = Loc::getMessage('IXML_IX_INBOX_FOLDER');
+			$arFolders['INBOX'] = Loc::getMessage('KIT_IX_INBOX_FOLDER');
 		}
 		return $arFolders;
 	}
@@ -136,8 +136,8 @@ class SMail
 								CheckDirPath($tmpdir);
 								
 								file_put_contents($tmpdir.$fn, $arMailFile['BODY']);
-								$arFile = \Bitrix\IxmlImportxml\Utils::MakeFileArray($tmpdir.$fn);
-								$fid = \Bitrix\IxmlImportxml\Utils::SaveFile($arFile, static::$moduleId);
+								$arFile = \Bitrix\KitImportxml\Utils::MakeFileArray($tmpdir.$fn);
+								$fid = \Bitrix\KitImportxml\Utils::SaveFile($arFile, static::$moduleId);
 								DeleteDirFilesEx(substr($tmpdir, strlen($_SERVER["DOCUMENT_ROOT"])));
 								$arParams['LAST_DATE'] = $arMailFile['DATE'];
 							}
@@ -158,7 +158,7 @@ class SMail
 	{
 		$arParams = \CUtil::JsObjectToPhp($json);
 		if(!is_array($arParams)) $arParams = array();
-		$mail = new \Bitrix\IxmlImportxml\SMail($arParams);
+		$mail = new \Bitrix\KitImportxml\SMail($arParams);
 		$fileId = $mail->GetFileId($arParams);
 		$json = \CUtil::PhpToJSObject($arParams);
 		return $fileId;

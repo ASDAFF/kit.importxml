@@ -3,7 +3,7 @@
  * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
  */
 
-namespace Bitrix\IxmlImportxml\DataManager;
+namespace Bitrix\KitImportxml\DataManager;
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -27,9 +27,9 @@ class Price
 		$basePriceId = $this->GetBasePriceId();
 		if(count($arPrices) > 1 && isset($arPrices[$basePriceId]))
 		{
-			$arPricIxmld = $arPrices;
-			$arPrices = array($basePriceId => $arPricIxmld[$basePriceId]);
-			foreach($arPricIxmld as $gid=>$arFieldsPrice)
+			$arPricKitd = $arPrices;
+			$arPrices = array($basePriceId => $arPricKitd[$basePriceId]);
+			foreach($arPricKitd as $gid=>$arFieldsPrice)
 			{
 				if($gid!=$basePriceId)
 				{

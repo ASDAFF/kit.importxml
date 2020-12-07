@@ -12,15 +12,15 @@ $_SERVER["DOCUMENT_ROOT"] = realpath(dirname(__FILE__).'/../../../..');
 if(!array_key_exists('REQUEST_URI', $_SERVER)) $_SERVER["REQUEST_URI"] = substr(__FILE__, strlen($_SERVER["DOCUMENT_ROOT"]));
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_before.php");
 @set_time_limit(0);
-$moduleId = 'ixml.importxml';
-$moduleRunnerClass = 'CIxmlImportXMLRunner';
+$moduleId = 'kit.importxml';
+$moduleRunnerClass = 'CKitImportXMLRunner';
 \Bitrix\Main\Loader::includeModule("iblock");
 \Bitrix\Main\Loader::includeModule('highloadblock');
 \Bitrix\Main\Loader::includeModule($moduleId);
 $PROFILE_ID = $argv[1];
 
-$oProfile = \Bitrix\IxmlImportxml\Profile::getInstance('highload');
-\Bitrix\IxmlImportxml\Utils::RemoveTmpFiles(0, 'highload'); //Remove old dirs
+$oProfile = \Bitrix\KitImportxml\Profile::getInstance('highload');
+\Bitrix\KitImportxml\Utils::RemoveTmpFiles(0, 'highload'); //Remove old dirs
 
 if(strlen($PROFILE_ID)==0)
 {
@@ -29,7 +29,7 @@ if(strlen($PROFILE_ID)==0)
 }
 
 $SETTINGS_DEFAULT = $SETTINGS = $EXTRASETTINGS = null;
-$oProfile = \Bitrix\IxmlImportxml\Profile::getInstance('highload');
+$oProfile = \Bitrix\KitImportxml\Profile::getInstance('highload');
 $oProfile->Apply($SETTINGS_DEFAULT, $SETTINGS, $PROFILE_ID);
 $oProfile->ApplyExtra($EXTRASETTINGS, $PROFILE_ID);
 $params = array_merge($SETTINGS_DEFAULT, $SETTINGS);
@@ -51,7 +51,7 @@ if($params['EXT_DATA_FILE'] || $params['EMAIL_DATA_FILE'])
 	$fileLink = '';
 	if($params['EMAIL_DATA_FILE'])
 	{
-		if($newFileId = \Bitrix\IxmlImportxml\SMail::GetNewFile($params['EMAIL_DATA_FILE']))
+		if($newFileId = \Bitrix\KitImportxml\SMail::GetNewFile($params['EMAIL_DATA_FILE']))
 		{
 			$arFile = CFile::GetFileArray($newFileId);
 			$fileLink = $_SERVER["DOCUMENT_ROOT"].$arFile['SRC'];
@@ -64,7 +64,7 @@ if($params['EXT_DATA_FILE'] || $params['EMAIL_DATA_FILE'])
 	}
 	else
 	{
-		$arFile = \Bitrix\IxmlImportxml\Utils::MakeFileArray($params['EXT_DATA_FILE'], 86400);
+		$arFile = \Bitrix\KitImportxml\Utils::MakeFileArray($params['EXT_DATA_FILE'], 86400);
 		$fileSum = (file_exists($arFile['tmp_name']) ? md5_file($arFile['tmp_name']) : '');
 	}
 	
@@ -76,7 +76,7 @@ if($params['EXT_DATA_FILE'] || $params['EMAIL_DATA_FILE'])
 	{
 		if(!$newFileId && $arFile)
 		{
-			$newFileId = \Bitrix\IxmlImportxml\Utils::SaveFile($arFile, $moduleId);
+			$newFileId = \Bitrix\KitImportxml\Utils::SaveFile($arFile, $moduleId);
 		}
 	}
 	
@@ -110,7 +110,7 @@ $pid = $PROFILE_ID;
 if(COption::GetOptionString($moduleId, 'CRON_CONTINUE_LOADING', 'N')=='Y')
 {
 	//$pid = $PROFILE_ID;
-	$oProfile = \Bitrix\IxmlImportxml\Profile::getInstance('highload');
+	$oProfile = \Bitrix\KitImportxml\Profile::getInstance('highload');
 	$arParams = $oProfile->GetProccessParamsFromPidFile($PROFILE_ID);
 	if($arParams===false)
 	{

@@ -3,7 +3,7 @@
  * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
  */
 
-namespace Bitrix\IxmlImportxml;
+namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Text\Encoding;
 use Bitrix\Main\Localization\Loc;
@@ -709,7 +709,7 @@ class Imap
 		
 		if($section=='HEADER')
 		{
-			list($header, $htmlBody, $textBody, $parts) = \Bitrix\IxmlImportxml\MailMessage::parseMessage($sbody, $this->options['encoding']);
+			list($header, $htmlBody, $textBody, $parts) = \Bitrix\KitImportxml\MailMessage::parseMessage($sbody, $this->options['encoding']);
 			return $header;
 		}
 
@@ -769,7 +769,7 @@ class Imap
 			}
 		}
 		
-		list($header, $htmlBody, $textBody, $parts) = \Bitrix\IxmlImportxml\MailMessage::parseMessage($sbody, $this->options['encoding']);
+		list($header, $htmlBody, $textBody, $parts) = \Bitrix\KitImportxml\MailMessage::parseMessage($sbody, $this->options['encoding']);
 		$this->messageFiles = array();
 		foreach($parts as $part)
 		{			
@@ -1067,40 +1067,40 @@ class Imap
 		switch ($code)
 		{
 			case self::ERR_CONNECT:
-				return Loc::getMessage('IXML_IX_IMAP_ERR_CONNECT');
+				return Loc::getMessage('KIT_IX_IMAP_ERR_CONNECT');
 			case self::ERR_REJECTED:
-				return Loc::getMessage('IXML_IX_IMAP_ERR_REJECTED');
+				return Loc::getMessage('KIT_IX_IMAP_ERR_REJECTED');
 			case self::ERR_COMMUNICATE:
-				return Loc::getMessage('IXML_IX_IMAP_ERR_COMMUNICATE');
+				return Loc::getMessage('KIT_IX_IMAP_ERR_COMMUNICATE');
 			case self::ERR_EMPTY_RESPONSE:
-				return Loc::getMessage('IXML_IX_IMAP_ERR_EMPTY_RESPONSE');
+				return Loc::getMessage('KIT_IX_IMAP_ERR_EMPTY_RESPONSE');
 			case self::ERR_BAD_SERVER:
-				return Loc::getMessage('IXML_IX_IMAP_ERR_BAD_SERVER');
+				return Loc::getMessage('KIT_IX_IMAP_ERR_BAD_SERVER');
 			case self::ERR_STARTTLS:
-				return Loc::getMessage('IXML_IX_IMAP_ERR_STARTTLS');
+				return Loc::getMessage('KIT_IX_IMAP_ERR_STARTTLS');
 			case self::ERR_COMMAND_REJECTED:
-				return Loc::getMessage('IXML_IX_IMAP_ERR_COMMAND_REJECTED');
+				return Loc::getMessage('KIT_IX_IMAP_ERR_COMMAND_REJECTED');
 			case self::ERR_CAPABILITY:
-				return Loc::getMessage('IXML_IX_IMAP_ERR_CAPABILITY');
+				return Loc::getMessage('KIT_IX_IMAP_ERR_CAPABILITY');
 			case self::ERR_AUTH:
-				return Loc::getMessage('IXML_IX_IMAP_ERR_AUTH');
+				return Loc::getMessage('KIT_IX_IMAP_ERR_AUTH');
 			case self::ERR_AUTH_MECH:
-				return Loc::getMessage('IXML_IX_IMAP_ERR_AUTH_MECH');
+				return Loc::getMessage('KIT_IX_IMAP_ERR_AUTH_MECH');
 			case self::ERR_LIST:
-				return Loc::getMessage('IXML_IX_IMAP_ERR_LIST');
+				return Loc::getMessage('KIT_IX_IMAP_ERR_LIST');
 			case self::ERR_SELECT:
-				return Loc::getMessage('IXML_IX_IMAP_ERR_SELECT');
+				return Loc::getMessage('KIT_IX_IMAP_ERR_SELECT');
 			case self::ERR_SEARCH:
-				return Loc::getMessage('IXML_IX_IMAP_ERR_SEARCH');
+				return Loc::getMessage('KIT_IX_IMAP_ERR_SEARCH');
 			case self::ERR_FETCH:
-				return Loc::getMessage('IXML_IX_IMAP_ERR_FETCH');
+				return Loc::getMessage('KIT_IX_IMAP_ERR_FETCH');
 			case self::ERR_APPEND:
-				return Loc::getMessage('IXML_IX_IMAP_ERR_APPEND');
+				return Loc::getMessage('KIT_IX_IMAP_ERR_APPEND');
 			case self::ERR_STORE:
-				return Loc::getMessage('IXML_IX_IMAP_ERR_STORE');
+				return Loc::getMessage('KIT_IX_IMAP_ERR_STORE');
 
 			default:
-				return Loc::getMessage('IXML_IX_IMAP_ERR_DEFAULT');
+				return Loc::getMessage('KIT_IX_IMAP_ERR_DEFAULT');
 		}
 	}
 }

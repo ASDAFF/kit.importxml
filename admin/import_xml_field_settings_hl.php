@@ -5,7 +5,7 @@
 
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_before.php");
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/iblock/prolog.php");
-$moduleId = 'ixml.importxml';
+$moduleId = 'kit.importxml';
 CModule::IncludeModule('iblock');
 CModule::IncludeModule($moduleId);
 $bCurrency = CModule::IncludeModule("currency");
@@ -14,13 +14,13 @@ IncludeModuleLangFile(__FILE__);
 $MODULE_RIGHT = $APPLICATION->GetGroupRight($moduleId);
 if($MODULE_RIGHT < "W") $APPLICATION->AuthForm(GetMessage("ACCESS_DENIED"));
 
-$oProfile = new \Bitrix\IxmlImportxml\Profile('highload');
+$oProfile = new \Bitrix\KitImportxml\Profile('highload');
 $oProfile->Apply($SETTINGS_DEFAULT, $SETTINGS, $_REQUEST['PROFILE_ID']);
 $oProfile->ApplyExtra($PEXTRASETTINGS, $_REQUEST['PROFILE_ID']);
 
 $HIGHLOADBLOCK_ID = $SETTINGS_DEFAULT['HIGHLOADBLOCK_ID'];
 
-$fl = new \Bitrix\IxmlImportxml\FieldList();
+$fl = new \Bitrix\KitImportxml\FieldList();
 $arFields = $fl->GetHigloadBlockFields($HIGHLOADBLOCK_ID);
 
 $addField = '';
@@ -48,7 +48,7 @@ if($_POST['action']=='save' && is_array($_POST['EXTRASETTINGS']))
 	$APPLICATION->RestartBuffer();
 	if(ob_get_contents()) ob_end_clean();
 
-	\Bitrix\IxmlImportxml\Extrasettings::HandleParams($PEXTRASETTINGS, $_POST['EXTRASETTINGS']);
+	\Bitrix\KitImportxml\Extrasettings::HandleParams($PEXTRASETTINGS, $_POST['EXTRASETTINGS']);
 	preg_match_all('/\[([_\d]+)\]/', $_GET['field_name'], $keys);
 	$oid = 'field_settings_'.$keys[1][0];
 	
@@ -58,7 +58,7 @@ if($_POST['action']=='save' && is_array($_POST['EXTRASETTINGS']))
 	die();
 }
 
-$oProfile = new \Bitrix\IxmlImportxml\Profile('highload');
+$oProfile = new \Bitrix\KitImportxml\Profile('highload');
 $arProfile = $oProfile->GetByID($_REQUEST['PROFILE_ID']);
 $SETTINGS_DEFAULT = $arProfile['SETTINGS_DEFAULT'];
 
@@ -118,20 +118,20 @@ foreach($arPath as $tagName)
 	$arStuct = $arStuct[$tagName];
 	if(!is_array($arStuct)) $arStuct = array();
 }
-$xmlViewer = new \Bitrix\IxmlImportxml\XMLViewer();
+$xmlViewer = new \Bitrix\KitImportxml\XMLViewer();
 $availableTags=array();
 $xmlViewer->GetAvailableTags($availableTags, $xpath, $arStuct);
 
 require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_admin.php");
 ?>
-<form action="" method="post" enctype="multipart/form-data" name="field_settings" class="ixml_ix_settings_form">
+<form action="" method="post" enctype="multipart/form-data" name="field_settings" class="kit_ix_settings_form">
 	<input type="hidden" name="action" value="save">
 	<table width="100%">
 		<col width="50%">
 		<col width="50%">
 		<?if($bVariable){?>
 			<tr>
-				<td class="adm-detail-content-cell-l"><?echo GetMessage("IXML_IX_SETTINGS_VARIABLE_NAME");?>:</td>
+				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_VARIABLE_NAME");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<b>{<?echo $_GET['index'];?>}</b>
 				</td>
@@ -140,7 +140,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 	
 		<?if($bIblockElement){?>
 			<tr>
-				<td class="adm-detail-content-cell-l"><?echo GetMessage("IXML_IX_SETTINGS_REL_ELEMENT_FIELD");?>:</td>
+				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_REL_ELEMENT_FIELD");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
 					$fName = htmlspecialcharsex($_GET['field_name']).'[REL_ELEMENT_FIELD]';
@@ -164,7 +164,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 		
 		<?if($bIblockSection){?>
 			<tr>
-				<td class="adm-detail-content-cell-l"><?echo GetMessage("IXML_IX_SETTINGS_REL_SECTION_FIELD");?>:</td>
+				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_REL_SECTION_FIELD");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
 					$fName = htmlspecialcharsex($_GET['field_name']).'[REL_SECTION_FIELD]';
@@ -176,10 +176,10 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 					}
 					?>
 					<select name="<?echo $fName;?>" class="chosen">
-						<option value="ID"<?if($val=='ID') echo ' selected';?>><?echo GetMessage("IXML_IX_SETTINGS_SECTION_ID"); ?></option>
-						<option value="NAME"<?if($val=='NAME') echo ' selected';?>><?echo GetMessage("IXML_IX_SETTINGS_SECTION_NAME"); ?></option>
-						<option value="CODE"<?if($val=='CODE') echo ' selected';?>><?echo GetMessage("IXML_IX_SETTINGS_SECTION_CODE"); ?></option>
-						<option value="XML_ID"<?if($val=='XML_ID') echo ' selected';?>><?echo GetMessage("IXML_IX_SETTINGS_SECTION_XML_ID"); ?></option>
+						<option value="ID"<?if($val=='ID') echo ' selected';?>><?echo GetMessage("KIT_IX_SETTINGS_SECTION_ID"); ?></option>
+						<option value="NAME"<?if($val=='NAME') echo ' selected';?>><?echo GetMessage("KIT_IX_SETTINGS_SECTION_NAME"); ?></option>
+						<option value="CODE"<?if($val=='CODE') echo ' selected';?>><?echo GetMessage("KIT_IX_SETTINGS_SECTION_CODE"); ?></option>
+						<option value="XML_ID"<?if($val=='XML_ID') echo ' selected';?>><?echo GetMessage("KIT_IX_SETTINGS_SECTION_XML_ID"); ?></option>
 					</select>
 				</td>
 			</tr>
@@ -187,7 +187,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 		
 		<?if($bHlblock && !empty($arHLFields)){?>
 			<tr>
-				<td class="adm-detail-content-cell-l"><?echo GetMessage("IXML_IX_SETTINGS_HLBL_FIELD");?>:</td>
+				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_HLBL_FIELD");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
 					$fName = htmlspecialcharsex($_GET['field_name']).'[HLBL_FIELD]';
@@ -212,7 +212,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 		
 		<?if($bUid){?>
 			<tr>
-				<td class="adm-detail-content-cell-l"><?echo GetMessage("IXML_IX_SETTINGS_ELEMENT_SEARCH_SUBSTRING");?>: <span id="hint_UID_SEARCH_SUBSTRING"></span><script>BX.hint_replace(BX('hint_UID_SEARCH_SUBSTRING'), '<?echo GetMessage("IXML_IX_SETTINGS_ELEMENT_SEARCH_SUBSTRING_HINT"); ?>');</script></td>
+				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_ELEMENT_SEARCH_SUBSTRING");?>: <span id="hint_UID_SEARCH_SUBSTRING"></span><script>BX.hint_replace(BX('hint_UID_SEARCH_SUBSTRING'), '<?echo GetMessage("KIT_IX_SETTINGS_ELEMENT_SEARCH_SUBSTRING_HINT"); ?>');</script></td>
 				<td class="adm-detail-content-cell-r">
 					<?
 					$fName = htmlspecialcharsex($_GET['field_name']).'[UID_SEARCH_SUBSTRING]';
@@ -226,7 +226,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 		
 		<?if($bMultipleProp){?>
 			<tr>
-				<td class="adm-detail-content-cell-l" valign="top"><?echo GetMessage("IXML_IX_SETTINGS_CHANGE_MULTIPLE_SEPARATOR");?>:</td>
+				<td class="adm-detail-content-cell-l" valign="top"><?echo GetMessage("KIT_IX_SETTINGS_CHANGE_MULTIPLE_SEPARATOR");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
 					$fName = htmlspecialcharsex($_GET['field_name']).'[CHANGE_MULTIPLE_SEPARATOR]';
@@ -237,16 +237,16 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 					eval('$val2 = $P'.$fNameEval2.';');
 					?>
 					<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?> onchange="$('#multiple_separator').css('display', (this.checked ? '' : 'none'));"><br>
-					<input type="text" id="multiple_separator" name="<?=$fName2?>" value="<?=htmlspecialcharsbx($val2)?>" placeholder="<?echo GetMessage("IXML_IX_SETTINGS_MULTIPLE_SEPARATOR_PLACEHOLDER");?>" <?=($val!='Y' ? 'style="display: none"' : '')?>>
+					<input type="text" id="multiple_separator" name="<?=$fName2?>" value="<?=htmlspecialcharsbx($val2)?>" placeholder="<?echo GetMessage("KIT_IX_SETTINGS_MULTIPLE_SEPARATOR_PLACEHOLDER");?>" <?=($val!='Y' ? 'style="display: none"' : '')?>>
 				</td>
 			</tr>
 		<?}?>
 		
 		<tr class="heading">
-			<td colspan="2"><?echo GetMessage("IXML_IX_SETTINGS_CONVERSION_TITLE");?></td>
+			<td colspan="2"><?echo GetMessage("KIT_IX_SETTINGS_CONVERSION_TITLE");?></td>
 		</tr>
 		<tr>
-			<td class="ixml-ix-settings-margin-container" colspan="2">
+			<td class="kit-ix-settings-margin-container" colspan="2">
 				<?
 				$fName = htmlspecialcharsex($_GET['field_name']).'[CONVERSION]';
 				$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
@@ -273,78 +273,78 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				$countCols = intval($_REQUEST['count_cols']);				
 				foreach($arVals as $k=>$v)
 				{
-					$cellsOptions = '<option value="">'.sprintf(GetMessage("IXML_IX_SETTINGS_CONVERSION_CELL_CURRENT"), $i).'</option>';
+					$cellsOptions = '<option value="">'.sprintf(GetMessage("KIT_IX_SETTINGS_CONVERSION_CELL_CURRENT"), $i).'</option>';
 					foreach($availableTags as $k2=>$v2)
 					{
 						$cellsOptions .= '<option value="{'.htmlspecialcharsbx($k2).'}"'.($v['CELL']=='{'.$k2.'}' ? ' selected' : '').'>'.$v2.'</option>';
 					}
-					$cellsOptions .= '<option value="ELSE"'.($v['CELL']=='ELSE' ? ' selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_CELL_ELSE").'</option>';
-					echo '<div class="ixml-ix-settings-conversion" '.(!$showCondition ? 'style="display: none;"' : '').'>'.
-							GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_TITLE").
+					$cellsOptions .= '<option value="ELSE"'.($v['CELL']=='ELSE' ? ' selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CELL_ELSE").'</option>';
+					echo '<div class="kit-ix-settings-conversion" '.(!$showCondition ? 'style="display: none;"' : '').'>'.
+							GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_TITLE").
 							' <select name="'.$fName.'[CELL][]" class="field_cell">'.
 								$cellsOptions.
 							'</select> '.
 							' <select name="'.$fName.'[WHEN][]" class="field_when">'.
-								'<option value="EQ" '.($v['WHEN']=='EQ' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_EQ").'</option>'.
-								'<option value="NEQ" '.($v['WHEN']=='NEQ' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_NEQ").'</option>'.
-								'<option value="GT" '.($v['WHEN']=='GT' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_GT").'</option>'.
-								'<option value="LT" '.($v['WHEN']=='LT' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_LT").'</option>'.
-								'<option value="GEQ" '.($v['WHEN']=='GEQ' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_GEQ").'</option>'.
-								'<option value="LEQ" '.($v['WHEN']=='LEQ' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_LEQ").'</option>'.
-								'<option value="CONTAIN" '.($v['WHEN']=='CONTAIN' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_CONTAIN").'</option>'.
-								'<option value="NOT_CONTAIN" '.($v['WHEN']=='NOT_CONTAIN' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_NOT_CONTAIN").'</option>'.
-								'<option value="EMPTY" '.($v['WHEN']=='EMPTY' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_EMPTY").'</option>'.
-								'<option value="NOT_EMPTY" '.($v['WHEN']=='NOT_EMPTY' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_NOT_EMPTY").'</option>'.
-								'<option value="REGEXP" '.($v['WHEN']=='REGEXP' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_REGEXP").'</option>'.
-								'<option value="NOT_REGEXP" '.($v['WHEN']=='NOT_REGEXP' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_NOT_REGEXP").'</option>'.
-								'<option value="ANY" '.($v['WHEN']=='ANY' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_ANY").'</option>'.
+								'<option value="EQ" '.($v['WHEN']=='EQ' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_EQ").'</option>'.
+								'<option value="NEQ" '.($v['WHEN']=='NEQ' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_NEQ").'</option>'.
+								'<option value="GT" '.($v['WHEN']=='GT' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_GT").'</option>'.
+								'<option value="LT" '.($v['WHEN']=='LT' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_LT").'</option>'.
+								'<option value="GEQ" '.($v['WHEN']=='GEQ' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_GEQ").'</option>'.
+								'<option value="LEQ" '.($v['WHEN']=='LEQ' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_LEQ").'</option>'.
+								'<option value="CONTAIN" '.($v['WHEN']=='CONTAIN' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_CONTAIN").'</option>'.
+								'<option value="NOT_CONTAIN" '.($v['WHEN']=='NOT_CONTAIN' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_NOT_CONTAIN").'</option>'.
+								'<option value="EMPTY" '.($v['WHEN']=='EMPTY' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_EMPTY").'</option>'.
+								'<option value="NOT_EMPTY" '.($v['WHEN']=='NOT_EMPTY' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_NOT_EMPTY").'</option>'.
+								'<option value="REGEXP" '.($v['WHEN']=='REGEXP' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_REGEXP").'</option>'.
+								'<option value="NOT_REGEXP" '.($v['WHEN']=='NOT_REGEXP' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_NOT_REGEXP").'</option>'.
+								'<option value="ANY" '.($v['WHEN']=='ANY' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_ANY").'</option>'.
 							'</select> '.
 							'<input type="text" name="'.$fName.'[FROM][]" class="field_from" value="'.htmlspecialcharsbx($v['FROM']).'"> '.
-							GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_THEN").
+							GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_THEN").
 							' <select name="'.$fName.'[THEN][]">'.
-								'<optgroup label="'.GetMessage("IXML_IX_SETTINGS_CONVERSION_THEN_GROUP_STRING").'">'.
-									'<option value="REPLACE_TO" '.($v['THEN']=='REPLACE_TO' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_THEN_REPLACE_TO").'</option>'.
-									'<option value="REMOVE_SUBSTRING" '.($v['THEN']=='REMOVE_SUBSTRING' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_THEN_REMOVE_SUBSTRING").'</option>'.
-									'<option value="REPLACE_SUBSTRING_TO" '.($v['THEN']=='REPLACE_SUBSTRING_TO' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_THEN_REPLACE_SUBSTRING_TO").'</option>'.
-									'<option value="ADD_TO_BEGIN" '.($v['THEN']=='ADD_TO_BEGIN' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_THEN_ADD_TO_BEGIN").'</option>'.
-									'<option value="ADD_TO_END" '.($v['THEN']=='ADD_TO_END' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_THEN_ADD_TO_END").'</option>'.
-									'<option value="LCASE" '.($v['THEN']=='LCASE' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_THEN_LCASE").'</option>'.
-									'<option value="UCASE" '.($v['THEN']=='UCASE' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_THEN_UCASE").'</option>'.
-									'<option value="UFIRST" '.($v['THEN']=='UFIRST' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_THEN_UFIRST").'</option>'.
-									'<option value="UWORD" '.($v['THEN']=='UWORD' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_THEN_UWORD").'</option>'.
-									'<option value="TRANSLIT" '.($v['THEN']=='TRANSLIT' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_THEN_TRANSLIT").'</option>'.
-									'<option value="STRIP_TAGS" '.($v['THEN']=='STRIP_TAGS' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_THEN_STRIP_TAGS").'</option>'.
-									'<option value="CLEAR_TAGS" '.($v['THEN']=='CLEAR_TAGS' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_THEN_CLEAR_TAGS").'</option>'.
+								'<optgroup label="'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_GROUP_STRING").'">'.
+									'<option value="REPLACE_TO" '.($v['THEN']=='REPLACE_TO' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_REPLACE_TO").'</option>'.
+									'<option value="REMOVE_SUBSTRING" '.($v['THEN']=='REMOVE_SUBSTRING' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_REMOVE_SUBSTRING").'</option>'.
+									'<option value="REPLACE_SUBSTRING_TO" '.($v['THEN']=='REPLACE_SUBSTRING_TO' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_REPLACE_SUBSTRING_TO").'</option>'.
+									'<option value="ADD_TO_BEGIN" '.($v['THEN']=='ADD_TO_BEGIN' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_ADD_TO_BEGIN").'</option>'.
+									'<option value="ADD_TO_END" '.($v['THEN']=='ADD_TO_END' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_ADD_TO_END").'</option>'.
+									'<option value="LCASE" '.($v['THEN']=='LCASE' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_LCASE").'</option>'.
+									'<option value="UCASE" '.($v['THEN']=='UCASE' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_UCASE").'</option>'.
+									'<option value="UFIRST" '.($v['THEN']=='UFIRST' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_UFIRST").'</option>'.
+									'<option value="UWORD" '.($v['THEN']=='UWORD' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_UWORD").'</option>'.
+									'<option value="TRANSLIT" '.($v['THEN']=='TRANSLIT' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_TRANSLIT").'</option>'.
+									'<option value="STRIP_TAGS" '.($v['THEN']=='STRIP_TAGS' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_STRIP_TAGS").'</option>'.
+									'<option value="CLEAR_TAGS" '.($v['THEN']=='CLEAR_TAGS' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_CLEAR_TAGS").'</option>'.
 								'</optgroup>'.
-								'<optgroup label="'.GetMessage("IXML_IX_SETTINGS_CONVERSION_THEN_GROUP_MATH").'">'.
-									'<option value="MATH_ROUND" '.($v['THEN']=='MATH_ROUND' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_THEN_MATH_ROUND").'</option>'.
-									'<option value="MATH_MULTIPLY" '.($v['THEN']=='MATH_MULTIPLY' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_THEN_MATH_MULTIPLY").'</option>'.
-									'<option value="MATH_DIVIDE" '.($v['THEN']=='MATH_DIVIDE' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_THEN_MATH_DIVIDE").'</option>'.
-									'<option value="MATH_ADD" '.($v['THEN']=='MATH_ADD' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_THEN_MATH_ADD").'</option>'.
-									'<option value="MATH_SUBTRACT" '.($v['THEN']=='MATH_SUBTRACT' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_THEN_MATH_SUBTRACT").'</option>'.
+								'<optgroup label="'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_GROUP_MATH").'">'.
+									'<option value="MATH_ROUND" '.($v['THEN']=='MATH_ROUND' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_MATH_ROUND").'</option>'.
+									'<option value="MATH_MULTIPLY" '.($v['THEN']=='MATH_MULTIPLY' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_MATH_MULTIPLY").'</option>'.
+									'<option value="MATH_DIVIDE" '.($v['THEN']=='MATH_DIVIDE' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_MATH_DIVIDE").'</option>'.
+									'<option value="MATH_ADD" '.($v['THEN']=='MATH_ADD' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_MATH_ADD").'</option>'.
+									'<option value="MATH_SUBTRACT" '.($v['THEN']=='MATH_SUBTRACT' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_MATH_SUBTRACT").'</option>'.
 								'</optgroup>'.
-								'<optgroup label="'.GetMessage("IXML_IX_SETTINGS_CONVERSION_THEN_GROUP_OTHER").'">'.
-									'<option value="NOT_LOAD" '.($v['THEN']=='NOT_LOAD' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_THEN_NOT_LOAD").'</option>'.
-									'<option value="EXPRESSION" '.($v['THEN']=='EXPRESSION' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_THEN_EXPRESSION").'</option>'.
+								'<optgroup label="'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_GROUP_OTHER").'">'.
+									'<option value="NOT_LOAD" '.($v['THEN']=='NOT_LOAD' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_NOT_LOAD").'</option>'.
+									'<option value="EXPRESSION" '.($v['THEN']=='EXPRESSION' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_EXPRESSION").'</option>'.
 								'</optgroup>'.
 							'</select> '.
 							'<input type="text" name="'.$fName.'[TO][]" value="'.htmlspecialcharsbx($v['TO']).'">'.
 							'<input class="choose_val" value="..." type="button" onclick="ESettings.ShowChooseVal(this)">'.
-							'<a href="javascript:void(0)" onclick="ESettings.RemoveConversion(this)" title="'.GetMessage("IXML_IX_SETTINGS_DELETE").'" class="delete"></a>'.
+							'<a href="javascript:void(0)" onclick="ESettings.RemoveConversion(this)" title="'.GetMessage("KIT_IX_SETTINGS_DELETE").'" class="delete"></a>'.
 						 '</div>';
 				}
 				?>
-				<a href="javascript:void(0)" onclick="ESettings.AddConversion(this)"><?echo GetMessage("IXML_IX_SETTINGS_CONVERSION_ADD_VALUE");?></a>
+				<a href="javascript:void(0)" onclick="ESettings.AddConversion(this)"><?echo GetMessage("KIT_IX_SETTINGS_CONVERSION_ADD_VALUE");?></a>
 			</td>
 		</tr>
 		
 		
 		<?if(true /*!$bVariable*/){?>
 			<tr class="heading">
-				<td colspan="2"><?echo GetMessage("IXML_IX_SETTINGS_CONDITIONS_TITLE");?></td>
+				<td colspan="2"><?echo GetMessage("KIT_IX_SETTINGS_CONDITIONS_TITLE");?></td>
 			</tr>
 			<tr>
-				<td class="ixml-ix-settings-margin-container" colspan="2">
+				<td class="kit-ix-settings-margin-container" colspan="2">
 					<?
 					$fName = htmlspecialcharsex($_GET['field_name']).'[CONDITIONS]';
 					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
@@ -374,31 +374,31 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 						{
 							$cellsOptions .= '<option value="{'.htmlspecialcharsbx($k2).'}"'.($v['CELL']=='{'.$k2.'}' ? ' selected' : '').'>'.$v2.'</option>';
 						}
-						echo '<div class="ixml-ix-settings-conversion" '.(!$showCondition ? 'style="display: none;"' : '').'>'.
-								GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_TITLE").
+						echo '<div class="kit-ix-settings-conversion" '.(!$showCondition ? 'style="display: none;"' : '').'>'.
+								GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_TITLE").
 								' <select name="'.$fName.'[CELL][]" class="field_cell_wide">'.
 									$cellsOptions.
 								'</select> '.
 								' <select name="'.$fName.'[WHEN][]" class="field_when">'.
-									'<option value="EQ" '.($v['WHEN']=='EQ' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_EQ").'</option>'.
-									'<option value="NEQ" '.($v['WHEN']=='NEQ' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_NEQ").'</option>'.
-									'<option value="GT" '.($v['WHEN']=='GT' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_GT").'</option>'.
-									'<option value="LT" '.($v['WHEN']=='LT' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_LT").'</option>'.
-									'<option value="GEQ" '.($v['WHEN']=='GEQ' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_GEQ").'</option>'.
-									'<option value="LEQ" '.($v['WHEN']=='LEQ' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_LEQ").'</option>'.
-									'<option value="CONTAIN" '.($v['WHEN']=='CONTAIN' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_CONTAIN").'</option>'.
-									'<option value="NOT_CONTAIN" '.($v['WHEN']=='NOT_CONTAIN' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_NOT_CONTAIN").'</option>'.
-									'<option value="EMPTY" '.($v['WHEN']=='EMPTY' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_EMPTY").'</option>'.
-									'<option value="NOT_EMPTY" '.($v['WHEN']=='NOT_EMPTY' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_NOT_EMPTY").'</option>'.
-									'<option value="REGEXP" '.($v['WHEN']=='REGEXP' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_CONVERSION_CONDITION_REGEXP").'</option>'.
+									'<option value="EQ" '.($v['WHEN']=='EQ' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_EQ").'</option>'.
+									'<option value="NEQ" '.($v['WHEN']=='NEQ' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_NEQ").'</option>'.
+									'<option value="GT" '.($v['WHEN']=='GT' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_GT").'</option>'.
+									'<option value="LT" '.($v['WHEN']=='LT' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_LT").'</option>'.
+									'<option value="GEQ" '.($v['WHEN']=='GEQ' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_GEQ").'</option>'.
+									'<option value="LEQ" '.($v['WHEN']=='LEQ' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_LEQ").'</option>'.
+									'<option value="CONTAIN" '.($v['WHEN']=='CONTAIN' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_CONTAIN").'</option>'.
+									'<option value="NOT_CONTAIN" '.($v['WHEN']=='NOT_CONTAIN' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_NOT_CONTAIN").'</option>'.
+									'<option value="EMPTY" '.($v['WHEN']=='EMPTY' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_EMPTY").'</option>'.
+									'<option value="NOT_EMPTY" '.($v['WHEN']=='NOT_EMPTY' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_NOT_EMPTY").'</option>'.
+									'<option value="REGEXP" '.($v['WHEN']=='REGEXP' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_REGEXP").'</option>'.
 								'</select> '.
 								'<input type="text" name="'.$fName.'[FROM][]" class="field_from" value="'.htmlspecialcharsbx($v['FROM']).'">'.
 								'<input class="choose_val" value="..." type="button" onclick="ESettings.ShowChooseVal(this)">'.
-								'<a href="javascript:void(0)" onclick="ESettings.RemoveConversion(this)" title="'.GetMessage("IXML_IX_SETTINGS_DELETE").'" class="delete"></a>'.
+								'<a href="javascript:void(0)" onclick="ESettings.RemoveConversion(this)" title="'.GetMessage("KIT_IX_SETTINGS_DELETE").'" class="delete"></a>'.
 							 '</div>';
 					}
 					?>
-					<a href="javascript:void(0)" onclick="ESettings.AddConversion(this)"><?echo GetMessage("IXML_IX_SETTINGS_CONDITION_ADD_VALUE");?></a>
+					<a href="javascript:void(0)" onclick="ESettings.AddConversion(this)"><?echo GetMessage("KIT_IX_SETTINGS_CONDITION_ADD_VALUE");?></a>
 				</td>
 			</tr>
 		<?}?>
@@ -440,7 +440,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 			}
 			?>
 			<tr class="heading">
-				<td colspan="2"><?echo GetMessage("IXML_IX_SETTINGS_PICTURE_PROCESSING"); ?></td>
+				<td colspan="2"><?echo GetMessage("KIT_IX_SETTINGS_PICTURE_PROCESSING"); ?></td>
 			</tr>
 			<tr>
 				<td class="adm-detail-content-cell-l"></td>
@@ -469,7 +469,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 					<div class="adm-list-label">
 						<label
 							for="<?echo $arFields['SCALE']['NAME']?>"
-						><?echo GetMessage("IXML_IX_PICTURE_SCALE")?></label>
+						><?echo GetMessage("KIT_IX_PICTURE_SCALE")?></label>
 					</div>
 				</div>
 				<div class="adm-list-item"
@@ -478,7 +478,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 						echo ($arFields['SCALE']['VALUE']==="Y")? 'block': 'none';
 					?>"
 				>
-					<?echo GetMessage("IXML_IX_PICTURE_WIDTH")?>:&nbsp;<input name="<?echo $arFields['WIDTH']['NAME']?>" type="text" value="<?echo htmlspecialcharsbx($arFields['WIDTH']['VALUE'])?>" size="7">
+					<?echo GetMessage("KIT_IX_PICTURE_WIDTH")?>:&nbsp;<input name="<?echo $arFields['WIDTH']['NAME']?>" type="text" value="<?echo htmlspecialcharsbx($arFields['WIDTH']['VALUE'])?>" size="7">
 				</div>
 				<div class="adm-list-item"
 					id="DIV_<?echo $arFields['HEIGHT']['NAME']?>"
@@ -486,7 +486,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 						echo ($arFields['SCALE']['VALUE']==="Y")? 'block': 'none';
 					?>"
 				>
-					<?echo GetMessage("IXML_IX_PICTURE_HEIGHT")?>:&nbsp;<input name="<?echo $arFields['HEIGHT']['NAME']?>" type="text" value="<?echo htmlspecialcharsbx($arFields['HEIGHT']['VALUE'])?>" size="7">
+					<?echo GetMessage("KIT_IX_PICTURE_HEIGHT")?>:&nbsp;<input name="<?echo $arFields['HEIGHT']['NAME']?>" type="text" value="<?echo htmlspecialcharsbx($arFields['HEIGHT']['VALUE'])?>" size="7">
 				</div>
 				<div class="adm-list-item"
 					id="DIV_<?echo $arFields['IGNORE_ERRORS_DIV']['NAME']?>"
@@ -510,7 +510,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 					<div class="adm-list-label">
 						<label
 							for="<?echo $arFields['IGNORE_ERRORS']['NAME']?>"
-						><?echo GetMessage("IXML_IX_PICTURE_IGNORE_ERRORS")?></label>
+						><?echo GetMessage("KIT_IX_PICTURE_IGNORE_ERRORS")?></label>
 					</div>
 				</div>
 				<div class="adm-list-item"
@@ -534,7 +534,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 					<div class="adm-list-label">
 						<label
 							for="<?echo $arFields['METHOD']['NAME']?>"
-						><?echo GetMessage("IXML_IX_PICTURE_METHOD")?></label>
+						><?echo GetMessage("KIT_IX_PICTURE_METHOD")?></label>
 					</div>
 				</div>
 				<div class="adm-list-item"
@@ -543,7 +543,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 						echo ($arFields['SCALE']['VALUE']==="Y")? 'block': 'none';
 					?>"
 				>
-					<?echo GetMessage("IXML_IX_PICTURE_COMPRESSION")?>:&nbsp;<input
+					<?echo GetMessage("KIT_IX_PICTURE_COMPRESSION")?>:&nbsp;<input
 						name="<?echo $arFields['COMPRESSION']['NAME']?>"
 						type="text"
 						value="<?echo htmlspecialcharsbx($arFields['COMPRESSION']['VALUE'])?>"
@@ -572,7 +572,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 					<div class="adm-list-label">
 						<label
 							for="<?echo $arFields['USE_WATERMARK_FILE']['NAME']?>"
-						><?echo GetMessage("IXML_IX_PICTURE_USE_WATERMARK_FILE")?></label>
+						><?echo GetMessage("KIT_IX_PICTURE_USE_WATERMARK_FILE")?></label>
 					</div>
 				</div>
 				<div class="adm-list-item"
@@ -593,7 +593,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 						"allowAllFiles" => false,
 						"SaveConfig" => true,
 					));?>
-					<?echo GetMessage("IXML_IX_PICTURE_WATERMARK_FILE")?>:&nbsp;<input
+					<?echo GetMessage("KIT_IX_PICTURE_WATERMARK_FILE")?>:&nbsp;<input
 						name="<?echo $arFields['WATERMARK_FILE']['NAME']?>"
 						id="<?echo strtr($arFields['WATERMARK_FILE']['NAME'], array('['=>'_', ']'=>'_'))?>"
 						type="text"
@@ -607,7 +607,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 						if($arFields['USE_WATERMARK_FILE']['VALUE']==="Y") echo 'block'; else echo 'none';
 					?>"
 				>
-					<?echo GetMessage("IXML_IX_PICTURE_WATERMARK_FILE_ALPHA")?>:&nbsp;<input
+					<?echo GetMessage("KIT_IX_PICTURE_WATERMARK_FILE_ALPHA")?>:&nbsp;<input
 						name="<?echo $arFields['WATERMARK_FILE_ALPHA']['NAME']?>"
 						type="text"
 						value="<?echo htmlspecialcharsbx($arFields['WATERMARK_FILE_ALPHA']['VALUE'])?>"
@@ -620,7 +620,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 						if($arFields['USE_WATERMARK_FILE']['VALUE']==="Y") echo 'block'; else echo 'none';
 					?>"
 				>
-					<?echo GetMessage("IXML_IX_PICTURE_WATERMARK_POSITION")?>:&nbsp;<?echo SelectBox(
+					<?echo GetMessage("KIT_IX_PICTURE_WATERMARK_POSITION")?>:&nbsp;<?echo SelectBox(
 						$arFields['WATERMARK_FILE_POSITION']['NAME'],
 						IBlockGetWatermarkPositions(),
 						"",
@@ -651,7 +651,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 					<div class="adm-list-label">
 						<label
 							for="<?echo $arFields['USE_WATERMARK_TEXT']['NAME']?>"
-						><?echo GetMessage("IXML_IX_PICTURE_USE_WATERMARK_TEXT")?></label>
+						><?echo GetMessage("KIT_IX_PICTURE_USE_WATERMARK_TEXT")?></label>
 					</div>
 				</div>
 				<div class="adm-list-item"
@@ -660,7 +660,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 						if($arFields['USE_WATERMARK_TEXT']['VALUE']==="Y") echo 'block'; else echo 'none';
 					?>"
 				>
-					<?echo GetMessage("IXML_IX_PICTURE_WATERMARK_TEXT")?>:&nbsp;<input
+					<?echo GetMessage("KIT_IX_PICTURE_WATERMARK_TEXT")?>:&nbsp;<input
 						name="<?echo $arFields['WATERMARK_TEXT']['NAME']?>"
 						type="text"
 						value="<?echo htmlspecialcharsbx($arFields['WATERMARK_TEXT']['VALUE'])?>"
@@ -685,7 +685,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 						if($arFields['USE_WATERMARK_TEXT']['VALUE']==="Y") echo 'block'; else echo 'none';
 					?>"
 				>
-					<?echo GetMessage("IXML_IX_PICTURE_WATERMARK_TEXT_FONT")?>:&nbsp;<input
+					<?echo GetMessage("KIT_IX_PICTURE_WATERMARK_TEXT_FONT")?>:&nbsp;<input
 						name="<?echo $arFields['WATERMARK_TEXT_FONT']['NAME']?>"
 						id="<?echo strtr($arFields['WATERMARK_TEXT_FONT']['NAME'], array('['=>'_', ']'=>'_'))?>"
 						type="text"
@@ -702,7 +702,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 						if($arFields['USE_WATERMARK_TEXT']['VALUE']==="Y") echo 'block'; else echo 'none';
 					?>"
 				>
-					<?echo GetMessage("IXML_IX_PICTURE_WATERMARK_TEXT_COLOR")?>:&nbsp;<input
+					<?echo GetMessage("KIT_IX_PICTURE_WATERMARK_TEXT_COLOR")?>:&nbsp;<input
 						name="<?echo $arFields['WATERMARK_TEXT_COLOR']['NAME']?>"
 						id="<?echo $arFields['WATERMARK_TEXT_COLOR']['NAME']?>"
 						type="text"
@@ -734,7 +734,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 						if($arFields['USE_WATERMARK_TEXT']['VALUE']==="Y") echo 'block'; else echo 'none';
 					?>"
 				>
-					<?echo GetMessage("IXML_IX_PICTURE_WATERMARK_SIZE")?>:&nbsp;<input
+					<?echo GetMessage("KIT_IX_PICTURE_WATERMARK_SIZE")?>:&nbsp;<input
 						name="<?echo $arFields['WATERMARK_TEXT_SIZE']['NAME']?>"
 						type="text"
 						value="<?echo htmlspecialcharsbx($arFields['WATERMARK_TEXT_SIZE']['VALUE'])?>"
@@ -747,7 +747,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 						if($arFields['WATERMARK_TEXT_POSITION']['VALUE']==="Y") echo 'block'; else echo 'none';
 					?>"
 				>
-					<?echo GetMessage("IXML_IX_PICTURE_WATERMARK_POSITION")?>:&nbsp;<?echo SelectBox(
+					<?echo GetMessage("KIT_IX_PICTURE_WATERMARK_POSITION")?>:&nbsp;<?echo SelectBox(
 						$arFields['WATERMARK_TEXT_POSITION']['NAME'],
 						IBlockGetWatermarkPositions(),
 						"",
@@ -760,10 +760,10 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 
 	
 		<tr class="heading">
-			<td colspan="2"><?echo GetMessage("IXML_IX_SETTINGS_FILTER"); ?></td>
+			<td colspan="2"><?echo GetMessage("KIT_IX_SETTINGS_FILTER"); ?></td>
 		</tr>
 		<tr>
-			<td class="adm-detail-content-cell-l"><?echo GetMessage("IXML_IX_SETTINGS_FILTER_UPLOAD");?>:</td>
+			<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_FILTER_UPLOAD");?>:</td>
 			<td class="adm-detail-content-cell-r">
 				<?
 				$fName = htmlspecialcharsex($_GET['field_name']).'[UPLOAD_VALUES]';
@@ -782,18 +782,18 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				{
 					$hide = (bool)in_array($v, array('{empty}', '{not_empty}'));
 					$select = '<select name="filter_vals" onchange="ESettings.OnValChange(this)">'.
-							'<option value="">'.GetMessage("IXML_IX_SETTINGS_FILTER_VAL").'</option>'.
-							'<option value="{empty}" '.($v=='{empty}' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_FILTER_EMPTY").'</option>'.
-							'<option value="{not_empty}" '.($v=='{not_empty}' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_FILTER_NOT_EMPTY").'</option>'.
+							'<option value="">'.GetMessage("KIT_IX_SETTINGS_FILTER_VAL").'</option>'.
+							'<option value="{empty}" '.($v=='{empty}' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_FILTER_EMPTY").'</option>'.
+							'<option value="{not_empty}" '.($v=='{not_empty}' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_FILTER_NOT_EMPTY").'</option>'.
 						'</select>';
 					echo '<div>'.$select.' <input type="text" name="'.$fName.'" value="'.htmlspecialcharsbx($v).'" '.($hide ? 'style="display: none;"' : '').'></div>';
 				}
 				?>
-				<a href="javascript:void(0)" onclick="ESettings.AddValue(this)"><?echo GetMessage("IXML_IX_ADD_VALUE");?></a>
+				<a href="javascript:void(0)" onclick="ESettings.AddValue(this)"><?echo GetMessage("KIT_IX_ADD_VALUE");?></a>
 			</td>
 		</tr>
 		<tr>
-			<td class="adm-detail-content-cell-l"><?echo GetMessage("IXML_IX_SETTINGS_FILTER_NOT_UPLOAD");?>:</td>
+			<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_FILTER_NOT_UPLOAD");?>:</td>
 			<td class="adm-detail-content-cell-r">
 				<?
 				$fName = htmlspecialcharsex($_GET['field_name']).'[NOT_UPLOAD_VALUES]';
@@ -812,18 +812,18 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				{
 					$hide = (bool)in_array($v, array('{empty}', '{not_empty}'));
 					$select = '<select name="filter_vals" onchange="ESettings.OnValChange(this)">'.
-							'<option value="">'.GetMessage("IXML_IX_SETTINGS_FILTER_VAL").'</option>'.
-							'<option value="{empty}" '.($v=='{empty}' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_FILTER_EMPTY").'</option>'.
-							'<option value="{not_empty}" '.($v=='{not_empty}' ? 'selected' : '').'>'.GetMessage("IXML_IX_SETTINGS_FILTER_NOT_EMPTY").'</option>'.
+							'<option value="">'.GetMessage("KIT_IX_SETTINGS_FILTER_VAL").'</option>'.
+							'<option value="{empty}" '.($v=='{empty}' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_FILTER_EMPTY").'</option>'.
+							'<option value="{not_empty}" '.($v=='{not_empty}' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_FILTER_NOT_EMPTY").'</option>'.
 						'</select>';
 					echo '<div>'.$select.' <input type="text" name="'.$fName.'" value="'.htmlspecialcharsbx($v).'" '.($hide ? 'style="display: none;"' : '').'></div>';
 				}
 				?>
-				<a href="javascript:void(0)" onclick="ESettings.AddValue(this)"><?echo GetMessage("IXML_IX_ADD_VALUE");?></a>
+				<a href="javascript:void(0)" onclick="ESettings.AddValue(this)"><?echo GetMessage("KIT_IX_ADD_VALUE");?></a>
 			</td>
 		</tr>
 		<tr>
-			<td class="adm-detail-content-cell-l"><?echo GetMessage("IXML_IX_USE_FILTER_FOR_DEACTIVATE");?>:</td>
+			<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_USE_FILTER_FOR_DEACTIVATE");?>:</td>
 			<td class="adm-detail-content-cell-r">
 				<?
 				$fName = htmlspecialcharsex($_GET['field_name']).'[USE_FILTER_FOR_DEACTIVATE]';
@@ -834,15 +834,15 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 			</td>
 		</tr>
 		<tr>
-			<td class="ixml-ix-settings-margin-container" colspan="2">
-				<a href="javascript:void(0)" onclick="ESettings.ShowPHPExpression(this)"><?echo GetMessage("IXML_IX_SETTINGS_FILTER_EXPRESSION");?></a>
+			<td class="kit-ix-settings-margin-container" colspan="2">
+				<a href="javascript:void(0)" onclick="ESettings.ShowPHPExpression(this)"><?echo GetMessage("KIT_IX_SETTINGS_FILTER_EXPRESSION");?></a>
 				<?
 				$fName = htmlspecialcharsex($_GET['field_name']).'[FILTER_EXPRESSION]';
 				$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
 				eval('$val = $P'.$fNameEval.';');
 				?>
-				<div class="ixml-ix-settings-phpexpression" style="display: none;">
-					<?echo GetMessage("IXML_IX_SETTINGS_FILTER_EXPRESSION_HINT");?>
+				<div class="kit-ix-settings-phpexpression" style="display: none;">
+					<?echo GetMessage("KIT_IX_SETTINGS_FILTER_EXPRESSION_HINT");?>
 					<textarea name="<?echo $fName?>"><?echo $val?></textarea>
 				</div>
 			</td>
@@ -851,10 +851,10 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 		
 		<?if(!$bVariable){?>
 			<tr class="heading">
-				<td colspan="2"><?echo GetMessage("IXML_IX_SETTINGS_ADDITIONAL"); ?></td>
+				<td colspan="2"><?echo GetMessage("KIT_IX_SETTINGS_ADDITIONAL"); ?></td>
 			</tr>
 			<tr>
-				<td class="adm-detail-content-cell-l"><?echo GetMessage("IXML_IX_SETTINGS_ONLY_FOR_NEW");?>:</td>
+				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_ONLY_FOR_NEW");?>:</td>
 				<td class="adm-detail-content-cell-r" style="min-width: 30%;">
 					<?
 					$fName = htmlspecialcharsex($_GET['field_name']).'[SET_NEW_ONLY]';
@@ -865,7 +865,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				</td>
 			</tr>
 			<tr>
-				<td class="adm-detail-content-cell-l"><?echo GetMessage("IXML_IX_SETTINGS_NOT_TRIM");?>:</td>
+				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_NOT_TRIM");?>:</td>
 				<td class="adm-detail-content-cell-r" style="min-width: 30%;">
 					<?
 					$fName = htmlspecialcharsex($_GET['field_name']).'[NOT_TRIM]';
@@ -878,7 +878,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 
 			<?if(!$bMultipleProp){?>
 				<tr>
-					<td class="adm-detail-content-cell-l"><?echo GetMessage("IXML_IX_SETTINGS_INDEX_LOAD_VALUE");?>:</td>
+					<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_INDEX_LOAD_VALUE");?>:</td>
 					<td class="adm-detail-content-cell-r" style="min-width: 30%;">
 						<?
 						$fName = htmlspecialcharsex($_GET['field_name']).'[INDEX_LOAD_VALUE]';
@@ -897,9 +897,9 @@ if(!is_array($arSFields)) $arSFields = array();
 ?>
 <script>
 var admKDASettingMessages = {
-	'CELL_VALUE': '<?echo htmlspecialcharsex(GetMessage("IXML_IX_SETTINGS_LANG_CELL_VALUE"));?>',
-	'RATE_USD': '<?echo htmlspecialcharsex(GetMessage("IXML_IX_SETTINGS_LANG_RATE_USD"));?>',
-	'RATE_EUR': '<?echo htmlspecialcharsex(GetMessage("IXML_IX_SETTINGS_LANG_RATE_EUR"));?>',
+	'CELL_VALUE': '<?echo htmlspecialcharsex(GetMessage("KIT_IX_SETTINGS_LANG_CELL_VALUE"));?>',
+	'RATE_USD': '<?echo htmlspecialcharsex(GetMessage("KIT_IX_SETTINGS_LANG_RATE_USD"));?>',
+	'RATE_EUR': '<?echo htmlspecialcharsex(GetMessage("KIT_IX_SETTINGS_LANG_RATE_EUR"));?>',
 	'EXTRAFIELDS': <?echo CUtil::PhpToJSObject($arSFields)?>,
 	'AVAILABLE_TAGS': <?echo CUtil::PhpToJSObject($availableTags)?>
 };

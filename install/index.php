@@ -9,11 +9,11 @@ $PathInstall = substr($PathInstall, 0, strlen($PathInstall)-strlen('/index.php')
 IncludeModuleLangFile($PathInstall.'/install.php');
 include($PathInstall.'/version.php');
 
-if (class_exists('ixml_importxml')) return;
+if (class_exists('kit_importxml')) return;
 
-class ixml_importxml extends CModule {
+class kit_importxml extends CModule {
 
-	var $MODULE_ID = 'ixml.importxml';
+	var $MODULE_ID = 'kit.importxml';
 	public $MODULE_VERSION;
 	public $MODULE_VERSION_DATE;
 	public $MODULE_NAME;
@@ -35,11 +35,11 @@ class ixml_importxml extends CModule {
 			$this->MODULE_VERSION_DATE = $arModuleVersion['VERSION_DATE'];
 		}
 
-		$this->PARTNER_NAME = GetMessage("IXML_PARTNER_NAME");
+		$this->PARTNER_NAME = GetMessage("KIT_PARTNER_NAME");
 		$this->PARTNER_URI = 'https://asdaff.github.io/';
 
-		$this->MODULE_NAME = GetMessage('IXML_IMPORTXML_MODULE_NAME');
-		$this->MODULE_DESCRIPTION = GetMessage('IXML_IMPORTXML_MODULE_DESCRIPTION');
+		$this->MODULE_NAME = GetMessage('KIT_IMPORTXML_MODULE_NAME');
+		$this->MODULE_DESCRIPTION = GetMessage('KIT_IMPORTXML_MODULE_DESCRIPTION');
 	}
 
 	public function DoInstall() {

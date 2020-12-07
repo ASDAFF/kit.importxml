@@ -3,11 +3,11 @@
  * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
  */
 
-namespace Bitrix\IxmlImportxml\Cloud;
+namespace Bitrix\KitImportxml\Cloud;
 
 class MailRu
 {
-	protected static $moduleId = 'ixml.importxml';
+	protected static $moduleId = 'kit.importxml';
 	protected static $instance = null;
 	protected $lastLocation = '';
 	
