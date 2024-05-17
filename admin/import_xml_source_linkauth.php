@@ -1,8 +1,5 @@
 <?
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
+if(!defined('NO_AGENT_CHECK')) define('NO_AGENT_CHECK', true);
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_before.php");
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/iblock/prolog.php");
 $moduleId = 'kit.importxml';
@@ -12,6 +9,11 @@ IncludeModuleLangFile(__FILE__);
 
 $MODULE_RIGHT = $APPLICATION->GetGroupRight($moduleId);
 if($MODULE_RIGHT < "W") $APPLICATION->AuthForm(GetMessage("ACCESS_DENIED"));
+
+if(isset($_POST['AUTH_SETTINGS']) && !is_array($_POST['AUTH_SETTINGS']))
+{
+	$_POST['AUTH_SETTINGS'] = $AUTH_SETTINGS = CUtil::JsObjectToPhp($_POST['AUTH_SETTINGS']);
+}
 
 if(is_array($_POST['vars']) && is_array($_POST['values']))
 {
@@ -42,6 +44,7 @@ if(is_array($_POST['headers']) && is_array($_POST['hvalues']))
 if(strlen($_POST['AUTH_SETTINGS']['HANDLER_FOR_LINK']) > 0)
 {
 	$_POST['AUTH_SETTINGS']['HANDLER_FOR_LINK_BASE64'] = base64_encode($_POST['AUTH_SETTINGS']['HANDLER_FOR_LINK']);
+	unset($_POST['AUTH_SETTINGS']['HANDLER_FOR_LINK']);
 }
 
 if(is_array($_POST['AUTH_SETTINGS']) && (!defined('BX_UTF') || !BX_UTF)) 
@@ -51,19 +54,23 @@ if(is_array($_POST['AUTH_SETTINGS']) && (!defined('BX_UTF') || !BX_UTF))
 
 if($_POST['action']=='checkconnect')
 {
+	define('PUBLIC_AJAX_MODE', 'Y');
 	$sess = $_SESSION;
 	session_write_close();
 	$_SESSION = $sess;
 	$APPLICATION->RestartBuffer();
 	if(ob_get_contents()) ob_end_clean();
 		
+	unset($_POST['AUTH_SETTINGS']['HANDLER_FOR_LINK']);
 	$arFile = \Bitrix\KitImportxml\Utils::MakeFileArray(CUtil::PhpToJSObject($_POST['AUTH_SETTINGS']));
 	$res = ($arFile['size'] > 0 && $arFile['type']!='text/html');
 	$arResult = array('result'=>($res ? 'success' : 'fail'), 'file'=>$arFile);
 	echo \CUtil::PhpToJSObject($arResult);
 	die();
-}elseif($_POST['action']=='loadparams')
+}
+elseif($_POST['action']=='loadparams')
 {
+	define('PUBLIC_AJAX_MODE', 'Y');
 	$sess = $_SESSION;
 	session_write_close();
 	$_SESSION = $sess;
@@ -78,9 +85,10 @@ if($_POST['action']=='checkconnect')
 		$arCookies = array();
 		$arHeaders = array('User-Agent' => 'BitrixSM HttpClient class');
 		$redirectCount = 0;
-		$location = $authLink;
+		$lastLocation = $location = $authLink;
 		while(strlen($location)>0 && $redirectCount<=5)
 		{
+			$lastLocation = $location;
 			$client = new \Bitrix\Main\Web\HttpClient(array('disableSslVerification'=>true, 'redirect'=>false));
 			$client->setCookies($arCookies);
 			foreach($arHeaders as $hk=>$hv) $client->setHeader($hk, $hv);
@@ -89,15 +97,45 @@ if($_POST['action']=='checkconnect')
 			\Bitrix\KitImportxml\Utils::MergeCookie($arCookies, $client->getCookies()->toArray());
 			\Bitrix\KitImportxml\Utils::GetNewLocation($location, $client->getHeaders()->get("Location"));
 			$status = $client->getStatus();
-			if($status != 302 && $status != 303) $location = '';
+			if(!in_array($status, array(301, 302, 303))) $location = '';
 			$redirectCount++;
+		}
+		
+		$arUrl = parse_url($authLink);
+		$className = \Bitrix\KitImportxml\Utils::GetVendorClassName($arUrl['host']);
+		if(is_callable(array($className, 'GetAuthParams')))
+		{
+			$arVars = call_user_func(array($className, 'GetAuthParams'));
+			$htmlPage = '';
+		}
+		elseif(in_array($status, array(400, 405)))
+		{
+			$client = new \Bitrix\Main\Web\HttpClient(array('disableSslVerification'=>true, 'redirect'=>false));
+			$res = trim($client->post($lastLocation, array('grant_type'=>'password')));
+			if(strpos($res, '{')===0 && ($arAnswer = \CUtil::JsObjectToPhp($res)) && is_array($arAnswer) && 
+				((array_key_exists('error', $arAnswer) && !empty($arAnswer['error']))
+				|| (array_key_exists('message', $arAnswer) && !empty($arAnswer['message']))))
+			{
+				$arVars = array(
+					'grant_type',
+					'client_id',
+					'client_secret',
+					'username',
+					'password'
+				);
+				$htmlPage = '';
+			}
 		}
 
 		if(strlen($htmlPage) > 0)
 		{
-			$findPass = false;
-			while(!$findPass && ($htmlPageLower = ToLower($htmlPage)) && ($formPos = strpos($htmlPageLower, '<form '))!==false && ($formPosEnd = strpos($htmlPageLower, '</form>'))!==false)
+			/*$findPass = false;*/
+			$arForms = array();
+			$ind = 2;
+			while(/*!$findPass &&*/ ($htmlPageLower = ToLower($htmlPage)) && ($formPos = strpos($htmlPageLower, '<form '))!==false && ($formPosEnd = strpos($htmlPageLower, '</form>'))!==false)
 			{
+				$formAction = '';
+				$findPass = false;
 				$arVars = array();
 				$htmlForm = substr($htmlPage, $formPos, $formPosEnd - $formPos + 7);
 				$htmlPage = substr($htmlPage, $formPosEnd + 7);
@@ -106,12 +144,17 @@ if($_POST['action']=='checkconnect')
 					foreach($m[0] as $input)
 					{
 						$type = 'text';
-						if(preg_match('/\stype\s*=\s*[\'"]?([^\'"]*)[\'"]?(\s|>)/Uis', $input, $m2)) $type = ToLower($m2[1]);
-						if(in_array($type, array('hidden', 'text', 'password', 'submit')))
+						if(preg_match('/[\s"\']type\s*=\s*[\'"]([^\'"]*)[\'"]/Uis', $input, $m2)
+							|| preg_match('/[\s"\']type\s*=\s*([\S]*)(\s|>)/Uis', $input, $m2)) $type = ToLower($m2[1]);
+						if(in_array($type, array('hidden', 'text', 'email', 'password', 'submit')))
 						{
-							if(preg_match('/\sname\s*=\s*[\'"]?([^\'"]*)[\'"]?(\s|>)/Uis', $input, $m2))
+							if(preg_match('/[\s"\']name\s*=\s*[\'"]([^\'"]*)[\'"]/Uis', $input, $m2)
+								|| preg_match('/[\s"\']name\s*=\s*([\S]*)(\s|>)/Uis', $input, $m2))
 							{
-								$arVars[] = $m2[1];
+								if(!in_array($m2[1], $arVars))
+								{
+									$arVars[] = $m2[1];
+								}
 							}
 						}
 						if($type=='password')
@@ -125,7 +168,17 @@ if($_POST['action']=='checkconnect')
 						}
 					}
 				}
+				$formIndex = $ind++;
+				if($findPass)
+				{
+					$formIndex = (strpos(ToLower(serialize($arVars)), 'register')===false) ? 0 : 1;
+				}
+				$arForms[$formIndex] = array('VARS'=>$arVars, 'LOC'=>$formAction);
 			}
+			ksort($arForms, SORT_NUMERIC);
+			$form = current($arForms);
+			$arVars = $form['VARS'];
+			$formAction = $form['LOC'];
 		}
 	}
 	
@@ -135,6 +188,7 @@ if($_POST['action']=='checkconnect')
 
 if($_POST['action']=='save' && $_POST['AUTH_SETTINGS'])
 {
+	define('PUBLIC_AJAX_MODE', 'Y');
 	$APPLICATION->RestartBuffer();
 	if(ob_get_contents()) ob_end_clean();
 	
@@ -149,6 +203,11 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 <form action="<?echo $APPLICATION->GetCurUri();?>" method="post" enctype="multipart/form-data" name="field_settings">
 	<input type="hidden" name="action" value="save">
 	<?//ShowPostData($_POST);?>
+	<?
+	echo BeginNote();
+	echo GetMessage("KIT_IX_AUTH_LINK_VIDEO").' <a target="_blank" href="https://www.youtube.com/watch?v=GIH8VboVSNA">https://www.youtube.com/watch?v=GIH8VboVSNA</a>';
+	echo EndNote();
+	?>
 	<table width="100%" class="kit-ix-list-settings">
 		<col width="50%">
 		<col width="50%">
@@ -246,6 +305,12 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 		<tr>
 			<td colspan="2" class="kit-ix-linkauth-handler">
 				<p><?echo GetMessage("KIT_IX_LAUTH_HANDLER_FOR_LINK"); ?>:</p>
+				<?
+				if(!$AUTH_SETTINGS['HANDLER_FOR_LINK'] && $AUTH_SETTINGS['HANDLER_FOR_LINK_BASE64'])
+				{
+					$AUTH_SETTINGS['HANDLER_FOR_LINK'] = base64_decode($AUTH_SETTINGS['HANDLER_FOR_LINK_BASE64']);
+				}
+				?>
 				<textarea name="AUTH_SETTINGS[HANDLER_FOR_LINK]"><?echo $AUTH_SETTINGS['HANDLER_FOR_LINK']?></textarea>
 			</td>
 		</tr>

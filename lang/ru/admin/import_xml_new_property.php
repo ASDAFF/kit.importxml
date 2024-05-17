@@ -1,8 +1,4 @@
 <?
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 $MESS["KIT_IX_NP_TITLE"] = "Новое свойство";
 $MESS["KIT_IX_NP_ACTIVE"] = "Свойство активно";
 $MESS["KIT_IX_NP_SORT"] = "Порядок сортировки";

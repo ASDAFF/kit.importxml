@@ -1,8 +1,5 @@
 <?
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
+if(!defined('NO_AGENT_CHECK')) define('NO_AGENT_CHECK', true);
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_before.php");
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/iblock/prolog.php");
 $moduleId = 'kit.importxml';
@@ -12,8 +9,22 @@ IncludeModuleLangFile(__FILE__);
 $MODULE_RIGHT = $APPLICATION->GetGroupRight($moduleId);
 if($MODULE_RIGHT < "W") $APPLICATION->AuthForm(GetMessage("ACCESS_DENIED"));
 
+if($_GET['action']=='getprofilesfromfile')
+{
+	define('PUBLIC_AJAX_MODE', 'Y');
+	$APPLICATION->RestartBuffer();
+	ob_end_clean();
+	
+	$oProfile = new \Bitrix\KitImportxml\Profile();
+	$arResult = $oProfile->GetProfilesFromBackup($_FILES['RESTORE_FILE']);
+	echo \CUtil::PhpToJSObject($arResult);
+	
+	die();
+}
+
 if($_POST['action']=='save')
 {
+	define('PUBLIC_AJAX_MODE', 'Y');
 	$APPLICATION->RestartBuffer();
 	if(ob_get_contents()) ob_end_clean();
 	
@@ -71,6 +82,13 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 			<td class="adm-detail-content-cell-r">
 				<label><input type="radio" name="PARAMS[RESTORE_TYPE]" value="ADD" checked> <?echo GetMessage("EXOL_IX_RESTORE_TYPE_ADD");?></label><br>
 				<label><input type="radio" name="PARAMS[RESTORE_TYPE]" value="REPLACE"> <?echo GetMessage("EXOL_IX_RESTORE_TYPE_REPLACE");?></label>
+			</td>
+		</tr>
+		
+		<tr id="kit_restore_profile_list_row" style="display: none;">
+			<td class="adm-detail-content-cell-l" valign="top"><?echo GetMessage("KIT_IX_RESTORE_PROFILE_CHOOSE");?>:</td>
+			<td class="adm-detail-content-cell-r" valign="top">
+				<div id="kit_restore_profile_list"></div>
 			</td>
 		</tr>
 	</table>

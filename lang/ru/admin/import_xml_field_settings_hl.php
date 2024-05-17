@@ -1,8 +1,4 @@
 <?
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 $MESS["KIT_IX_SETTING_UPLOAD_FIELD"] = "Настройки загрузки поля";
 $MESS["KIT_IX_SF_DO_UID"] = "Использовать в качестве поля для идентификации элемента";
 $MESS["KIT_IX_FIELD_CURRENCY"] = "Цена указана в валюте";

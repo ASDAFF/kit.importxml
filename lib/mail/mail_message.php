@@ -1,8 +1,4 @@
 <?php
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Localization\Loc;
@@ -11,7 +7,7 @@ Loc::loadMessages(__FILE__);
 
 class MailMessage
 {
-	function ParseHeader($message_header, $charset)
+	public static function ParseHeader($message_header, $charset)
 	{
 		$h = new \Bitrix\KitImportxml\MailHeader();
 		$h->Parse($message_header, $charset);
@@ -36,7 +32,7 @@ class MailMessage
 			&& strpos($content_type, 'csv') === false
 		)
 		{
-			$body = \Bitrix\KitImportxml\MailUtil::convertCharset($body, $header->charset, $charset);
+			if($header->charset) $body = \Bitrix\KitImportxml\MailUtil::convertCharset($body, $header->charset, $charset);
 		}
 
 		return array(

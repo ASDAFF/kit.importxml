@@ -1,8 +1,5 @@
 <?
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
+if(!defined('NO_AGENT_CHECK')) define('NO_AGENT_CHECK', true);
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_before.php");
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/iblock/prolog.php");
 $moduleId = 'kit.importxml';
@@ -16,6 +13,7 @@ $IBLOCK_ID = (int)$_REQUEST['IBLOCK_ID'];
 $error = '';
 if($_POST['action']=='save' && $_POST['FIELD'])
 {
+	define('PUBLIC_AJAX_MODE', 'Y');
 	$arFields = $_POST['FIELD'];
 	if(!defined('BX_UTF') || !BX_UTF)
 	{

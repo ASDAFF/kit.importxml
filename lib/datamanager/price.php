@@ -1,8 +1,4 @@
 <?php
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 namespace Bitrix\KitImportxml\DataManager;
 
 use Bitrix\Main\Loader;
@@ -22,14 +18,19 @@ class Price
 		$this->params = $this->ie->params;
 	}
 	
-	public function SavePrice($ID, $arPrices, $isOffer = false)
+	public function GetFloatVal($val, $precision=0)
+	{
+		return $this->ie->GetFloatVal($val, $precision);
+	}
+	
+	public function SavePrice($ID, $arPrices, $isOffer = false, $arOldPrices=false)
 	{
 		$basePriceId = $this->GetBasePriceId();
 		if(count($arPrices) > 1 && isset($arPrices[$basePriceId]))
 		{
-			$arPricKitd = $arPrices;
-			$arPrices = array($basePriceId => $arPricKitd[$basePriceId]);
-			foreach($arPricKitd as $gid=>$arFieldsPrice)
+			$arPricesOld = $arPrices;
+			$arPrices = array($basePriceId => $arPricesOld[$basePriceId]);
+			foreach($arPricesOld as $gid=>$arFieldsPrice)
 			{
 				if($gid!=$basePriceId)
 				{
@@ -38,9 +39,16 @@ class Price
 			}
 		}
 		
+		$isPriceChanges = false;
 		foreach($arPrices as $gid=>$arFieldsPrice)
 		{
 			$pKey = ($isOffer ? 'OFFER_' : '').'ICAT_PRICE'.$gid.'_PRICE';
+			$saveOldQnt = false;
+			if(isset($arFieldsPrice['SAVE_QUANTITY']) && $arFieldsPrice['SAVE_QUANTITY']=='Y')
+			{
+				$saveOldQnt = true;
+				unset($arFieldsPrice['SAVE_QUANTITY']);
+			}
 			$noCurrency = false;
 			$arFieldsPriceExtra = array();
 			foreach($arFieldsPrice as $k=>$v)
@@ -57,34 +65,67 @@ class Price
 				if($arFieldsPriceExtra['ID']) $arFilter = array('ID' => $arFieldsPriceExtra['ID']);
 				else
 				{
-					if(!$arFieldsPriceExtra['NAME'] && $arFieldsPriceExtra['PERCENTAGE']) $arFieldsPriceExtra['NAME'] = $arFieldsPriceExtra['PERCENTAGE'].'%';
+					if(!$arFieldsPriceExtra['NAME'] && strlen($arFieldsPriceExtra['PERCENTAGE']) > 0) $arFieldsPriceExtra['NAME'] = $arFieldsPriceExtra['PERCENTAGE'].'%';
 					if($arFieldsPriceExtra['NAME']) $arFilter = array('NAME' => $arFieldsPriceExtra['NAME']);
 				}	
 				if(!empty($arFilter))
 				{
 					if(!isset($this->arPriceExtras)) $this->arPriceExtras = array();
-					$dbRes = \CExtra::GetList(array(), $arFilter, false, array('nTopCount'=>1), array('ID'));
+					if(class_exists('\Bitrix\Catalog\ExtraTable'))
+					{
+						$arNewFilter = array();
+						foreach($arFilter as $k=>$v)
+						{
+							$arNewFilter['='.$k] = $v;
+						}
+						$dbRes = \Bitrix\Catalog\ExtraTable::GetList(array('filter'=>$arNewFilter, 'select'=>array('ID'), 'limit'=>1));
+					}
+					else
+					{
+						$dbRes = \CExtra::GetList(array(), $arFilter, false, array('nTopCount'=>1), array('ID'));
+					}
 					if($arExtra = $dbRes->Fetch())
 					{
 						if(count($arFieldsPriceExtra) > 0)
 						{
-							\CExtra::Update($arExtra['ID'], $arFieldsPriceExtra);
+							if(class_exists('\Bitrix\Catalog\ExtraTable'))
+							{
+								\Bitrix\Catalog\ExtraTable::Update($arExtra['ID'], $arFieldsPriceExtra);						
+							}
+							else
+							{
+								\CExtra::Update($arExtra['ID'], $arFieldsPriceExtra);
+							}
 						}
 						$arFieldsPrice['EXTRA_ID'] = $this->arPriceExtras[$arFieldsPrice['EXTRA']] = $arExtra['ID'];
 					}
 					else
 					{
-						$pid = \CExtra::Add($arFieldsPriceExtra);
+						if(class_exists('\Bitrix\Catalog\ExtraTable'))
+						{
+							$result = \Bitrix\Catalog\ExtraTable::Add($arFieldsPriceExtra);
+							$pid = (int)$result->getId();							
+						}
+						else
+						{
+							$pid = \CExtra::Add($arFieldsPriceExtra);
+						}
 						if($pid > 0)
 						{
 							$arFieldsPrice['EXTRA_ID'] = $this->arPriceExtras[$arFieldsPrice['EXTRA']] = $pid;
 						}
 					}
 				}
+				else
+				{
+					$arFieldsPrice['EXTRA_ID'] = false;
+					if(!isset($arFieldsPrice['PRICE'])) $arFieldsPrice['PRICE'] = '-';
+				}
 			}
 			
 			$extKeys = preg_grep('/^PRICE\|.*QUANTITY_/', array_keys($arFieldsPrice));
-			if((!isset($arFieldsPrice['PRICE']) || $arFieldsPrice['PRICE']==='')
+			if((!isset($arFieldsPrice['PRICE'])/* || $arFieldsPrice['PRICE']===''*/)
+				&& (!isset($arFieldsPrice['CURRENCY']) || !$arFieldsPrice['CURRENCY'])
 				&& (!isset($arFieldsPrice['PRICE_EXT']) || $arFieldsPrice['PRICE_EXT']==='')
 				&& (!isset($arFieldsPrice['EXTRA_ID'])) && empty($extKeys)) continue;
 
@@ -154,38 +195,70 @@ class Price
 						$arVal = explode('=', $v);
 						$arSubPrice[$arVal[0]] = $arVal[1];
 					}
+					if(!array_key_exists('CURRENCY', $arSubPrice)) $arSubPrice['CURRENCY'] = $arFieldsPrice['CURRENCY'];
+					$arSubPrice['CURRENCY'] = $this->GetCurrencyVal($arSubPrice['CURRENCY']);
 					$arSubPrices[] = $arSubPrice;
 					unset($arFieldsPrice[$extKey]);
 				}
+				if(array_key_exists('CURRENCY', $arFieldsPrice)) unset($arFieldsPrice['CURRENCY']);
 			}
-			if(isset($arFieldsPrice['PRICE']) && is_array($arFieldsPrice['PRICE'])) $arFieldsPrice['PRICE'] = current($arFieldsPrice['PRICE']);
-			if(isset($arFieldsPrice['PRICE'])) $arSubPrices[] = array('PRICE' => $arFieldsPrice['PRICE']);
-			elseif(isset($arFieldsPrice['EXTRA_ID']))
+			if(empty($arSubPrices))
 			{
-				//$arSubPrices[] = array('EXTRA_ID' => $arFieldsPrice['EXTRA_ID']);
-				$arSubPrices = array();
-				$dbRes = $this->GetList(array('ID'=>'ASC'), array('PRODUCT_ID'=>$ID, 'CATALOG_GROUP_ID'=>$basePriceId), false, false, array('ID', 'QUANTITY_FROM', 'QUANTITY_TO'));
-				while($arr = $dbRes->Fetch())
+				if(isset($arFieldsPrice['PRICE']) && is_array($arFieldsPrice['PRICE'])) $arFieldsPrice['PRICE'] = current($arFieldsPrice['PRICE']);
+				if(isset($arFieldsPrice['PRICE']) || (isset($arFieldsPrice['CURRENCY']) && !isset($arFieldsPrice['EXTRA_ID'])))
 				{
-					$arSubPrices[] = array('EXTRA_ID'=>$arFieldsPrice['EXTRA_ID'], 'QUANTITY_FROM'=>$arr['QUANTITY_FROM'], 'QUANTITY_TO'=>$arr['QUANTITY_TO']);
+					$arSubPrices[] = array_intersect_key($arFieldsPrice, array('PRICE'=>'', 'CURRENCY'=>''));
+				}
+				elseif(isset($arFieldsPrice['EXTRA_ID']))
+				{
+					//$arSubPrices[] = array('EXTRA_ID' => $arFieldsPrice['EXTRA_ID']);
+					$arSubPrices = array();
+					$dbRes = $this->GetList(array('ID'=>'ASC'), array('PRODUCT_ID'=>$ID, 'CATALOG_GROUP_ID'=>$basePriceId), false, false, array('ID', 'QUANTITY_FROM', 'QUANTITY_TO'));
+					while($arr = $dbRes->Fetch())
+					{
+						$arSubPrices[] = array('EXTRA_ID'=>$arFieldsPrice['EXTRA_ID'], 'QUANTITY_FROM'=>$arr['QUANTITY_FROM'], 'QUANTITY_TO'=>$arr['QUANTITY_TO']);
+					}
 				}
 			}
 
 			$arFieldsPriceOrig = $arFieldsPrice;
 			$arUpdatedIds = array();
-			$bDeleteOld = true;
+			$bDeleteOld = ($saveOldQnt ? false : true);
 			foreach($arSubPrices as $arSubPrice)
 			{
 				$arFieldsPrice = array_merge($arFieldsPriceOrig, $arSubPrice);
-				if(!isset($arFieldsPrice['QUANTITY_FROM'])) $arFieldsPrice['QUANTITY_FROM'] = false;
-				if(!isset($arFieldsPrice['QUANTITY_TO'])) $arFieldsPrice['QUANTITY_TO'] = false;
-				
-				$arKeys = array_unique(array_merge(array('ID', 'PRODUCT_ID', 'CATALOG_GROUP_ID', 'QUANTITY_FROM', 'QUANTITY_TO', 'CURRENCY', 'PRICE'), array_keys($arFieldsPrice)));
-				$arFilter = array('PRODUCT_ID'=>$ID, 'CATALOG_GROUP_ID'=>$gid);
-				if(!empty($arUpdatedIds)) $arFilter['!ID'] = $arUpdatedIds;
-				$dbRes = $this->GetList(array('ID'=>'ASC'), $arFilter, false, false, $arKeys);
-				if($arPrice = $dbRes->Fetch())
+				if(!$saveOldQnt)
 				{
+					if(!isset($arFieldsPrice['QUANTITY_FROM'])) $arFieldsPrice['QUANTITY_FROM'] = false;
+					if(!isset($arFieldsPrice['QUANTITY_TO'])) $arFieldsPrice['QUANTITY_TO'] = false;
+				}
+				if(isset($arFieldsPrice['PRICE']))
+				{
+					if(strlen(trim($arFieldsPrice['PRICE']))==0) $arFieldsPrice['PRICE'] = '-';
+					if($arFieldsPrice['PRICE']!=='-') $arFieldsPrice['PRICE'] = $this->GetFloatVal($arFieldsPrice['PRICE'], 2);
+				}
+				
+				if(is_array($arOldPrices) && isset($arOldPrices[$gid]) && count($arOldPrices[$gid]) > 0)
+				{
+					$arPrice = array_shift($arOldPrices[$gid]);
+					if(count($arOldPrices[$gid])==0)
+					{
+						unset($arOldPrices[$gid]);
+						if(empty($arOldPrices)) $bDeleteOld = false;
+					}
+				}
+				else
+				{
+					$arKeys = array_unique(array_merge(array('ID', 'PRODUCT_ID', 'CATALOG_GROUP_ID', 'QUANTITY_FROM', 'QUANTITY_TO', 'CURRENCY', 'PRICE', 'EXTRA_ID'), array_keys($arFieldsPrice)));
+					$arFilter = array('PRODUCT_ID'=>$ID, 'CATALOG_GROUP_ID'=>$gid);
+					if(!empty($arUpdatedIds)) $arFilter['!ID'] = $arUpdatedIds;
+					$dbRes = $this->GetList(array('QUANTITY_FROM'=>'ASC', 'ID'=>'ASC'), $arFilter, false, false, $arKeys);
+					$arPrice = $dbRes->Fetch();
+				}
+				
+				if($arPrice)
+				{
+					if($arPrice['EXTRA_ID'] > 0 && !isset($arFieldsPrice['EXTRA_ID'])) $arFieldsPrice['EXTRA_ID'] = 0;
 					if($arFieldsPrice['PRICE']!=='-')
 					{
 						if($recalcPrice)
@@ -223,12 +296,14 @@ class Price
 							}
 							$arFieldsPrice['PRODUCT_ID'] = $ID;
 							$this->Update($arPrice["ID"], $arFieldsPrice, ($recalcPrice || $recalcPrice2));
+							$isPriceChanges = true;
 						}
 					}
 					else
 					{
 						$this->Delete($arPrice["ID"]);
 						$this->logger->AddElementChanges("ICAT_PRICE".$gid.'_', $arFieldsPrice, $arPrice);
+						$isPriceChanges = true;
 					}
 					$arUpdatedIds[] = $arPrice["ID"];
 				}
@@ -241,6 +316,7 @@ class Price
 						$arFieldsPrice['CATALOG_GROUP_ID'] = $gid;
 						$priceId = $this->Add($arFieldsPrice, ($recalcPrice || $recalcPrice2));
 						$this->logger->AddElementChanges("ICAT_PRICE".$gid.'_', $arFieldsPrice);
+						$isPriceChanges = true;
 						if($priceId) $arUpdatedIds[] = $priceId;
 					}
 				}
@@ -252,9 +328,11 @@ class Price
 				while($arPrice = $dbRes->Fetch())
 				{
 					$this->Delete($arPrice["ID"]);
+					$isPriceChanges = true;
 				}
 			}
 		}
+		if($isPriceChanges) $this->ie->IsFacetChanges(true);
 	}
 	
 	public function GetBasePriceId()
@@ -269,6 +347,7 @@ class Price
 	
 	public function GetCurrencyVal($val)
 	{
+		while(is_array($val)) $val = reset($val);
 		if(!isset($this->arCurrencies))
 		{
 			$this->arCurrencies = array();

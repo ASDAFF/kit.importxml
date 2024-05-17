@@ -1,8 +1,5 @@
 <?
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
+if(!defined('NO_AGENT_CHECK')) define('NO_AGENT_CHECK', true);
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_before.php");
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/iblock/prolog.php");
 $moduleId = 'kit.importxml';
@@ -42,7 +39,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 		</div>
 		<div>
 			<div>&nbsp;</div>
-
+			<p class="kit-ix-help-faq-prolog"><i><?echo sprintf(GetMessage("KIT_IX_FAQ_PROLOG"), 'app@kitutions.su', 'app@kitutions.su');?></i></p>
 			<ol id="kit-ix-help-faq">
 				<li>
 					<a href="#"><?echo GetMessage("KIT_IX_FAQ_QUEST_SLOW_IMPORT");?></a>

@@ -1,8 +1,4 @@
 <?php
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Entity;
@@ -95,7 +91,25 @@ class ProfileTable extends Entity\DataManager
 			'FILE_HASH' => array(
 				'data_type' => 'string',
 				'title' => Loc::getMessage('KIT_IX_PROFILE_ENTITY_FILE_HASH_FIELD'),
-			)
+			),
+			'NEED_RUN' => array(
+				'data_type' => 'boolean',
+				'values' => array('N', 'Y'),
+				'default_value' => 'N',
+				'title' => '',
+			),
+			'PROFILE_EXEC' => new Entity\ReferenceField(
+				'PROFILE_EXEC',
+				'\Bitrix\KitImportxml\ProfileExecTable',
+				array('=this.ID' => 'ref.PROFILE_ID'),
+				array('join_type' => 'LEFT')
+			),
+			'PROFILE_EXEC_STAT' => new Entity\ReferenceField(
+				'PROFILE_EXEC_STAT',
+				'\Bitrix\KitImportxml\ProfileExecStatTable',
+				array('=this.ID' => 'ref.PROFILE_ID'),
+				array('join_type' => 'LEFT')
+			),
 		);
 	}
 

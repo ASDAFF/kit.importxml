@@ -1,0 +1,35 @@
+<?
+$MESS["KIT_IX_PROPERTY_NOT_CREATE"] = "Не создавать новые свойства";
+$MESS["KIT_IX_PROPERTY_NOT_LOAD_WO_MAPPED"] = "Не загружать свойства, для которых не указано сопоставление";
+$MESS["KIT_IX_PROPERTY_MAPPING_TITLE"] = "Сопоставление свойств";
+$MESS["KIT_IX_PROPERTY_NOT_CHOOSE_FIELDS"] = "Для построения списка свойств необходимо выбрать поле &laquo;Название свойства&raquo;";
+$MESS["KIT_IX_PROPERTY_NO_STRUCT"] = "Не удалось построить список свойств";
+$MESS["KIT_IX_PROPERTY_IN_FILE"] = "Свойство в файле импорта";
+$MESS["KIT_IX_PROPERTY_ON_SITE"] = "Поле на сайте";
+$MESS["KIT_IX_NOT_CHOOSE"] = "- не выбрано -";
+$MESS["KIT_IX_NOT_LOAD_PROPERTY"] = "не загружать свойство";
+$MESS["KIT_IX_ADD_FIELD"] = "Добавить поле";
+$MESS["KIT_IX_PROPERTY_CREATE_TITLE"] = "Параметры новых (создаваемых) свойств";
+$MESS["KIT_IX_NP_SORT"] = "Порядок сортировки";
+$MESS["KIT_IX_NP_CODE"] = "Символьный код";
+$MESS["KIT_IX_NP_CODE_PREFIX"] = "Префикс для символьного кода";
+$MESS["KIT_IX_NP_MULTIPLE"] = "Создавать свойства множественными";
+$MESS["KIT_IX_NP_TYPE"] = "Тип";
+$MESS["KIT_IX_NP_PROPERTY_BASE_TYPE_GROUP"] = "Базовые типы";
+$MESS["KIT_IX_NP_PROPERTY_USER_TYPE_GROUP"] = "Пользовательские типы";
+$MESS["KIT_IX_NP_IBLOCK_PROP_S"] = "Строка";
+$MESS["KIT_IX_NP_IBLOCK_PROP_N"] = "Число";
+$MESS["KIT_IX_NP_IBLOCK_PROP_L"] = "Список";
+$MESS["KIT_IX_NP_IBLOCK_PROP_F"] = "Файл";
+$MESS["KIT_IX_NP_IBLOCK_PROP_G"] = "Привязка к разделам";
+$MESS["KIT_IX_NP_IBLOCK_PROP_E"] = "Привязка к элементам";
+$MESS["KIT_IX_NP_ALAILABLE_COLUMNS"] = "Доступные колонки";
+$MESS["KIT_IX_NP_SMART_FILTER"] = "Показывать в умном фильтре";
+$MESS["KIT_IX_NP_DISPLAY_EXPANDED"] = "Показывать развернутым";
+$MESS["KIT_IX_NP_SHOW_IN_FORM"] = "Показывать на странице редактирования элемента";
+$MESS["KIT_IX_SETTINGS_BTN"] = "Настройки поля";
+$MESS["KIT_IX_AUTO_INSERT_PROPS"] = "Подставить все найденные свойства";
+$MESS["KIT_IX_SHOW_SECTION_PROPS"] = "Показать свойства только для загружаемых разделов";
+$MESS["KIT_IX_SHOW_ALL_PROPS"] = "Показать все свойства";
+$MESS["KIT_IX_AUTO_MAPPING_NOTE"] = "Сопоставлять свойства не обязательно. В этом случае при импорте модуль будет находить существующие свойства по названию и загружать в них значения из файла.";
+?>

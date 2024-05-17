@@ -1,12 +1,10 @@
 <?
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
+if(!defined('NO_AGENT_CHECK')) define('NO_AGENT_CHECK', true);
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_before.php");
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/iblock/prolog.php");
 $moduleId = 'kit.importxml';
 CModule::IncludeModule('iblock');
+CModule::IncludeModule('catalog');
 CModule::IncludeModule($moduleId);
 $bCurrency = CModule::IncludeModule("currency");
 IncludeModuleLangFile(__FILE__);
@@ -14,13 +12,29 @@ IncludeModuleLangFile(__FILE__);
 $MODULE_RIGHT = $APPLICATION->GetGroupRight($moduleId);
 if($MODULE_RIGHT < "W") $APPLICATION->AuthForm(GetMessage("ACCESS_DENIED"));
 
-if($_POST['action']!='save') CUtil::JSPostUnescape();
+if($_POST['action']!='save' && $_POST['action']!='export_conv_csv') CUtil::JSPostUnescape();
+$fNameFromGet = $_GET['field_name'];
 
+function GetFieldEextraVal($arSettings, $name)
+{
+	if(!is_array($arSettings)) return '';
+	$fName = htmlspecialcharsbx($_GET['field_name']).'['.$name.']';
+	if(preg_match_all('/\[([^\]]*)\]/Us', $_GET['field_name'], $m))
+	{
+		foreach($m[1] as $key) $arSettings = (isset($arSettings[$key]) ? $arSettings[$key] : array());
+	}
+	$val = (isset($arSettings[$name]) ? $arSettings[$name] : '');
+	return array($fName, $val);
+}
+
+$profileId = htmlspecialcharsbx($_REQUEST['PROFILE_ID']);
 $oProfile = new \Bitrix\KitImportxml\Profile();
-$oProfile->Apply($SETTINGS_DEFAULT, $SETTINGS, $_REQUEST['PROFILE_ID']);
-$oProfile->ApplyExtra($PEXTRASETTINGS, $_REQUEST['PROFILE_ID']);
+$oProfile->Apply($SETTINGS_DEFAULT, $SETTINGS, $profileId);
+$oProfile->ApplyExtra($PEXTRASETTINGS, $profileId);
 
 $IBLOCK_ID = $SETTINGS_DEFAULT['IBLOCK_ID'];
+$fieldName = htmlspecialcharsbx($_GET['field_name']);
+$fieldXpath = htmlspecialcharsbx($_GET['xpath']);
 
 $fl = new \Bitrix\KitImportxml\FieldList();
 
@@ -35,7 +49,7 @@ if(strpos($field, 'OFFER_')===0)
 }
 
 $addField = '';
-if(strpos($field, '|') !== false)
+if(strpos($field, '|')!==false)
 {
 	list($field, $addField) = explode('|', $field);
 }
@@ -48,13 +62,80 @@ if(isset($_POST['POSTEXTRA']))
 	{
 		$arFieldParams = $APPLICATION->ConvertCharsetArray($arFieldParams, 'UTF-8', 'CP1251');
 	}*/
-	$fName = htmlspecialcharsex($_GET['field_name']);
-	$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-	eval('$arFieldsParamsInArray = &$P'.$fNameEval.';');
+	$fName = htmlspecialcharsbx($fNameFromGet);
+	//$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
+	//eval('$arFieldsParamsInArray = &$P'.$fNameEval.';');
+	$arFieldsParamsInArray = &$PEXTRASETTINGS;
+	if(preg_match_all('/\[([^\]]*)\]/Us', $fName, $m))
+	{
+		foreach($m[1] as $key)
+		{
+			if(!is_array($arFieldsParamsInArray) || !array_key_exists($key, $arFieldsParamsInArray)) $arFieldsParamsInArray[$key] = array();
+			$arFieldsParamsInArray = &$arFieldsParamsInArray[$key];
+		}
+	}
 	$arFieldsParamsInArray = $arFieldParams;
 }
 
-if($_POST['action']=='save_margin_template')
+if($_POST['action']) define('PUBLIC_AJAX_MODE', 'Y');
+
+if($_POST['action']=='export_conv_csv')
+{
+	$arExtra = array();
+	\Bitrix\KitImportxml\Extrasettings::HandleParams($arExtra, array(array('CONVERSION'=>$_POST['CONVERSION'], 'EXTRA_CONVERSION'=>$_POST['EXTRA_CONVERSION'])), false);
+	while(is_array($arExtra) && isset($arExtra[0])) $arExtra = $arExtra[0];
+	$arConv = $arExtraConv = array();
+	if(is_array($arExtra))
+	{
+		if(isset($arExtra['CONVERSION']) && is_array($arExtra['CONVERSION'])) $arConv = $arExtra['CONVERSION']; 
+		if(isset($arExtra['EXTRA_CONVERSION']) && is_array($arExtra['EXTRA_CONVERSION'])) $arExtraConv = $arExtra['EXTRA_CONVERSION']; 
+	}
+	$arConv = array_map(array('\Bitrix\KitImportxml\Utils', 'SetConvType0'), $arConv);
+	$arExtraConv = array_map(array('\Bitrix\KitImportxml\Utils', 'SetConvType1'), $arExtraConv);
+	\Bitrix\KitImportxml\Utils::ExportCsv(array_merge($arConv, $arExtraConv));
+	die();
+}
+elseif($_POST['action']=='import_conv_csv')
+{
+	$arImportConv = array();
+	if(isset($_FILES["import_file"]) && $_FILES["import_file"]["tmp_name"] && is_uploaded_file($_FILES["import_file"]["tmp_name"]))
+	{
+		$arFile = $_FILES["import_file"];
+		$fn = 'conv.csv';
+		if(preg_match('/\.[\w]{2,5}$/', $arFile["name"], $m)) $fn .= $m[0];
+		$tempPath = \CFile::GetTempName('', \Bitrix\Main\IO\Path::convertLogicalToPhysical($fn));
+		CheckDirPath($tempPath);
+		if(copy($arFile["tmp_name"], $tempPath)
+			|| move_uploaded_file($arFile["tmp_name"], $tempPath))
+		{
+			$arFile = \CFile::MakeFileArray($tempPath);
+		}
+		$arImportConv = \Bitrix\KitImportxml\Utils::ImportCsv($arFile['tmp_name']);
+	}
+	$arConv = $arExtraConv = array();
+	foreach($arImportConv as $conv)
+	{
+		$ctype = array_pop($conv);
+		$conv = array_combine(array('CELL', 'WHEN', 'FROM', 'THEN', 'TO'), $conv);
+		if($ctype==0) $arConv[] = $conv;
+		elseif($ctype==1) $arExtraConv[] = $conv;
+	}
+	
+	$key1 = $key2 = 0;
+	if(preg_match('/EXTRASETTINGS\[([^\]]*)\]/', $fieldName, $m))
+	{
+		$key1 = $m[1];
+	}
+	$PEXTRASETTINGS[$key1] = array(
+		'CONVERSION' => $arConv,
+		'EXTRA_CONVERSION' => $arExtraConv
+	);
+	/*$APPLICATION->RestartBuffer();
+	ob_end_clean();
+	echo \CUtil::PhpToJSObject(array('CONV'=>$arConv, 'EXTRA_CONV'=>$arExtraConv));
+	die();*/
+}
+elseif($_POST['action']=='save_margin_template')
 {
 	$arPost = $_POST;
 	/*if(!defined('BX_UTF') || !BX_UTF)
@@ -83,7 +164,7 @@ elseif($_POST['action']=='save' && is_array($_POST['EXTRASETTINGS']))
 }
 
 $oProfile = new \Bitrix\KitImportxml\Profile();
-$arProfile = $oProfile->GetByID($_REQUEST['PROFILE_ID']);
+$arProfile = $oProfile->GetByID($profileId);
 $SETTINGS_DEFAULT = $arProfile['SETTINGS_DEFAULT'];
 
 $bPrice = false;
@@ -104,37 +185,103 @@ if((strncmp($field, "ICAT_PRICE", 10) == 0 && substr($field, -6)=='_PRICE') || $
 	}
 }
 
-$bPicture = false;
+$bPicture = $bElemPicture = (bool)in_array($field, array('IE_PREVIEW_PICTURE', 'IE_DETAIL_PICTURE'));
 $bIblockElement = false;
+$iblockElementIblock = $IBLOCK_ID;
+$iblockElementRelIblock = false;
+$propertyName = '';
 $bIblockSection = false;
 $bIblockElementSet = false;
 $bCanUseForSKUGenerate = false;
 $bTextHtml = false;
 $bMultipleProp = $bMultipleField = false;
+$bUser = false;
+$bDirectory = false;
+$arPropVals = array();
+$maxPropVals = 1000;
 if(strncmp($field, "IP_PROP", 7) == 0 && is_numeric(substr($field, 7)))
 {
 	$propId = intval(substr($field, 7));
 	$dbRes = CIBlockProperty::GetList(array(), array('ID'=>$propId));
 	if($arProp = $dbRes->Fetch())
 	{
+		$propertyName = $arProp['NAME'];
+		if($arProp['USER_TYPE'])
+		{
+			if($arProp['PROPERTY_TYPE']=='S' && $arProp['USER_TYPE']=='HTML')
+			{
+				$bTextHtml = true;
+			}
+			elseif($arProp['PROPERTY_TYPE']=='S' && $arProp['USER_TYPE']=='UserID')
+			{
+				$bUser = true;
+			}
+			elseif($arProp['USER_TYPE']=='SCPHXSection')
+			{
+				$arProp['PROPERTY_TYPE'] = 'G';
+			}
+			elseif($tmpIblockId = \Bitrix\KitImportxml\Utils::GetELinkedIblock($arProp))
+			{
+				$arProp['PROPERTY_TYPE'] = 'E';
+				$arProp['LINK_IBLOCK_ID'] = $tmpIblockId;
+			}
+		}
+		
 		if($arProp['PROPERTY_TYPE']=='F')
 		{
 			$bPicture = true;
 		}
+		elseif($arProp['PROPERTY_TYPE']=='L')
+		{
+			$bPropTypeList = true;
+			$dbRes = \CIBlockPropertyEnum::GetList(array("SORT"=>"ASC", "VALUE"=>"ASC"), array('PROPERTY_ID'=>$propId));
+			while(($arr = $dbRes->Fetch()) && count($arPropVals)<=$maxPropVals)
+			{
+				$arPropVals[] = $arr['VALUE'];
+			}
+		}
 		elseif($arProp['PROPERTY_TYPE']=='E')
 		{
 			$bIblockElement = true;
-			$iblockElementIblock = ($arProp['LINK_IBLOCK_ID'] ? $arProp['LINK_IBLOCK_ID'] : $IBLOCK_ID);
+			if($arProp['LINK_IBLOCK_ID'] > 0)
+			{
+				$iblockElementIblock = $arProp['LINK_IBLOCK_ID'];
+				$iblockElementRelIblock = $arProp['LINK_IBLOCK_ID'];
+			}
+			$dbRes = \CIblockElement::GetList(array("SORT"=>"ASC", "NAME"=>"ASC"), array('IBLOCK_ID'=>$iblockElementIblock), false, array('nTopCount'=>$maxPropVals), array('ID', 'NAME'));
+			while($arr = $dbRes->Fetch())
+			{
+				$arPropVals[] = $arr['NAME'];
+			}
 		}
 		elseif($arProp['PROPERTY_TYPE']=='G')
 		{
 			$bIblockSection = true;
 			$iblockSectionIblock = ($arProp['LINK_IBLOCK_ID'] ? $arProp['LINK_IBLOCK_ID'] : $IBLOCK_ID);
 		}
-		elseif($arProp['PROPERTY_TYPE']=='S' && $arProp['USER_TYPE']=='HTML')
+		elseif($arProp['USER_TYPE']=='directory' && $arProp['USER_TYPE_SETTINGS']['TABLE_NAME'] && CModule::IncludeModule('highloadblock'))
 		{
-			$bTextHtml = true;
+			$hlblock = \Bitrix\Highloadblock\HighloadBlockTable::getList(array('filter'=>array('TABLE_NAME'=>$arProp['USER_TYPE_SETTINGS']['TABLE_NAME'])))->fetch();
+			$dbRes = CUserTypeEntity::GetList(array('SORT'=>'ASC', 'ID'=>'ASC'), array('ENTITY_ID'=>'HLBLOCK_'.$hlblock['ID'], 'LANG'=>LANGUAGE_ID));
+			$arHLFields = array();
+			while($arHLField = $dbRes->Fetch())
+			{
+				$arHLFields[$arHLField['FIELD_NAME']] = ($arHLField['EDIT_FORM_LABEL'] ? $arHLField['EDIT_FORM_LABEL'] : $arHLField['FIELD_NAME']);
+			}
+			$bDirectory = true;
+			
+			if(isset($arHLFields['UF_NAME']) && isset($arHLFields['UF_XML_ID']))
+			{
+				$entity = \Bitrix\Highloadblock\HighloadBlockTable::compileEntity($hlblock);
+				$entityDataClass = $entity->getDataClass();
+				$dbRes = $entityDataClass::getList(array('order'=>array('UF_NAME'=>'ASC'), 'select'=>array('UF_NAME'), 'limit'=>$maxPropVals));
+				while($arr = $dbRes->Fetch())
+				{
+					$arPropVals[] = $arr['UF_NAME'];
+				}
+			}
 		}
+
 		if($isOffer && in_array($arProp['PROPERTY_TYPE'], array('S', 'N', 'L', 'E', 'G')))
 		{
 			$bCanUseForSKUGenerate = true;
@@ -161,6 +308,12 @@ if(preg_match('/^ISECT\d*_(UF_.*)$/', $field, $m)
 		if($arUserField['USER_TYPE_ID']=='iblock_element')
 		{
 			$bIblockElement = true;
+			$iblockElementRelIblock = $arUserField['SETTINGS']['IBLOCK_ID'];
+		}
+		elseif($arUserField['USER_TYPE_ID']=='iblock_section')
+		{
+			$bIblockSection = true;
+			$iblockSectionIblock = $arUserField['SETTINGS']['IBLOCK_ID'];
 		}
 	}
 }
@@ -196,19 +349,6 @@ if(in_array($field, array('IE_PREVIEW_TEXT', 'IE_DETAIL_TEXT')))
 	$bExtLink = true;
 }
 
-$bDirectory = false;
-if($arProp['USER_TYPE']=='directory' && $arProp['USER_TYPE_SETTINGS']['TABLE_NAME'] && CModule::IncludeModule('highloadblock'))
-{
-	$hlblock = \Bitrix\Highloadblock\HighloadBlockTable::getList(array('filter'=>array('TABLE_NAME'=>$arProp['USER_TYPE_SETTINGS']['TABLE_NAME'])))->fetch();
-	$dbRes = CUserTypeEntity::GetList(array('SORT'=>'ASC', 'ID'=>'ASC'), array('ENTITY_ID'=>'HLBLOCK_'.$hlblock['ID'], 'LANG'=>LANGUAGE_ID));
-	$arHLFields = array();
-	while($arHLField = $dbRes->Fetch())
-	{
-		$arHLFields[$arHLField['FIELD_NAME']] = ($arHLField['EDIT_FORM_LABEL'] ? $arHLField['EDIT_FORM_LABEL'] : $arHLField['FIELD_NAME']);
-	}
-	$bDirectory = true;
-}
-
 $bVideo = (bool)($arProp['PROPERTY_TYPE']=='S' && $arProp['USER_TYPE']=='video');
 $bPropList = (bool)($field=='IP_LIST_PROPS');
 
@@ -224,7 +364,13 @@ if($bIblockElementSet)
 	$arIblocks = $fl->GetIblocks();
 }
 
+$useSaleDiscount = (bool)(CModule::IncludeModule('sale') && (string)COption::GetOptionString('sale', 'use_sale_discount_only') == 'Y');
+$bDiscountValue = (bool)(strpos($field, 'ICAT_DISCOUNT_VALUE')===0 && !$useSaleDiscount);
+$bSaleDiscountValue = (bool)(strpos($field, 'ICAT_DISCOUNT_VALUE')===0 && $useSaleDiscount);
+
 $bVariable = (bool)($field=='VARIABLE');
+$bProfileUrl = (bool)(substr($field, -11)=='PROFILE_URL');
+$bOtherField = (bool)($bVariable || $bProfileUrl);
 
 //$arStuct = CUtil::JsObjectToPhp($_POST['POSTSTRUCT']);
 $arStuct = unserialize(base64_decode($_POST['POSTSTRUCT']));
@@ -233,6 +379,11 @@ if($_POST['GROUP']=='OFFER' && isset($_POST['XPATH_LIST']['ELEMENT']) && strpos(
 {
 	$xpath = $_POST['XPATH_LIST']['ELEMENT'];
 }
+elseif($_POST['GROUP']=='PROPERTY' && isset($_POST['XPATH_LIST']['ELEMENT']) && strpos($_POST['XPATH_LIST']['PROPERTY'], $_POST['XPATH_LIST']['ELEMENT'])===0)
+{
+	$xpath = $_POST['XPATH_LIST']['ELEMENT'];
+}
+if(!$xpath && $_POST['POSTXPATH']) $xpath = $_POST['POSTXPATH'];
 $arPath = explode('/', trim($xpath, '/'));
 foreach($arPath as $tagName)
 {
@@ -243,10 +394,27 @@ $xmlViewer = new \Bitrix\KitImportxml\XMLViewer();
 $availableTags=array();
 $xmlViewer->GetAvailableTags($availableTags, $xpath, $arStuct);
 
+/*Add tags from conversions*/
+list($fName, $arVals) = GetFieldEextraVal($PEXTRASETTINGS, 'CONVERSION');
+if(is_array($arVals))
+{
+	foreach($arVals as $k=>$v)
+	{
+		if(mb_substr($v['CELL'], 0, 1)=='{' && mb_substr($v['CELL'], -1)=='}')
+		{
+			$tagName = trim(mb_substr($v['CELL'], 1, -1));
+			if(strlen($tagName) > 0 && !array_key_exists($tagName, $availableTags)) $availableTags[$tagName] = $tagName;
+		}
+	}
+}
+/*/Add tags from conversions*/
+
 require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_admin.php");
 ?>
 <form action="" method="post" enctype="multipart/form-data" name="field_settings" class="kit_ix_settings_form">
 	<input type="hidden" name="action" value="save">
+	<input type="hidden" name="POSTSTRUCT" value="<?echo htmlspecialcharsbx($_POST['POSTSTRUCT'])?>">
+	<input type="hidden" name="POSTXPATH" value="<?echo htmlspecialcharsbx($xpath)?>">
 	<table width="100%">
 		<col width="50%">
 		<col width="50%">
@@ -259,14 +427,33 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 			</tr>
 		<?}?>
 		
+		<?if($bProfileUrl){?>
+			<tr>
+				<td colspan="2">
+					<?
+					echo BeginNote();
+					echo GetMessage("KIT_IX_SETTINGS_PROFILE_URL_NOTE");
+					echo EndNote();
+					?>
+				</td>
+			</tr>
+			<tr>
+				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_REL_PROFILE_ID");?>:</td>
+				<td class="adm-detail-content-cell-r">
+					<?
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'REL_PROFILE_ID');
+					?>
+					<?$oProfile->ShowProfileListAlt($fName, $val);?>
+				</td>
+			</tr>
+		<?}?>
+		
 		<?if($bPropList){?>
 			<tr>
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_PROPLIST_PROPS_SEP");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[PROPLIST_PROPS_SEP]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'PROPLIST_PROPS_SEP');
 					?>
 					<input type="text" name="<?=$fName?>" value="<?=htmlspecialcharsbx($val)?>" size="3">
 				</td>
@@ -276,9 +463,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_PROPLIST_PROPVALS_SEP");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[PROPLIST_PROPVALS_SEP]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'PROPLIST_PROPVALS_SEP');
 					?>
 					<input type="text" name="<?=$fName?>" value="<?=htmlspecialcharsbx($val)?>" size="3">
 				</td>
@@ -288,32 +473,72 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_PROPLIST_CREATE_NEW");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[PROPLIST_CREATE_NEW]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'PROPLIST_CREATE_NEW');
+					?>
+					<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?>>
+				</td>
+			</tr>
+			
+			<tr>
+				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_PROPLIST_NOT_CHANGE_OLD_VALUES");?>:</td>
+				<td class="adm-detail-content-cell-r">
+					<?
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'NOT_CHANGE_OLD_VALUES');
 					?>
 					<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?>>
 				</td>
 			</tr>
 		<?}?>	
 	
+		<?if($bIblockElement && $iblockElementRelIblock===false && strlen($propertyName) > 0){?>
+			<tr>
+				<td colspan="2">
+					<?
+					echo BeginNote();
+					echo sprintf(GetMessage("KIT_IX_SETTINGS_IBLOCKELEMENT_WO_IBLOCK"), $propertyName);
+					echo EndNote();
+					?>
+				</td>
+			</tr>
+		<?}?>
 		<?if($bIblockElement || $bProductGift){?>
 			<tr>
-				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_REL_ELEMENT_FIELD");?>:</td>
+				<td class="adm-detail-content-cell-l">
+				<?
+				if(!$bMultipleProp && strlen($propertyName) > 0)
+				{
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'REL_ELEMENT_EXTRA_FIELD');
+					echo '<select name="'.$fName.'" class="kit-ix-select2text"><option value="PRIMARY"'.($val=='PRIMARY' ? ' selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_REL_ELEMENT_FIELD").'</option><option value="EXTRA"'.($val=='EXTRA' ? ' selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_REL_ELEMENT_EXTRA_FIELD").'</option></select>';
+				}
+				else
+				{
+					echo GetMessage("KIT_IX_SETTINGS_REL_ELEMENT_FIELD");
+				}
+				?>:
+				</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[REL_ELEMENT_FIELD]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					$val = '';
-					if(is_array($PEXTRASETTINGS))
-					{
-						eval('$val = $P'.$fNameEval.';');
-					}
-					
-					$strOptions = $fl->GetSelectUidFields($iblockElementIblock, $val, '');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'REL_ELEMENT_FIELD');
+					if(!$bMultipleProp && strlen($propertyName) > 0) $strOptions = $fl->GetSelectGeneralFields($iblockElementIblock, $val, '');
+					else $strOptions = $fl->GetSelectUidFields($iblockElementIblock, $val, '');
 					if(preg_match('/<option[^>]+value="IE_ID".*<\/option>/Uis', $strOptions, $m))
 					{
 						$strOptions = $m[0].str_replace($m[0], '', $strOptions);
+					}
+					if(in_array($val, array('IE_PREVIEW_PICTURE', 'IE_DETAIL_PICTURE')))
+					{
+						$bPicture = $bElemPicture = true;
+					}
+					elseif(preg_match('/^IP_PROP(\d+)$/', $val, $m))
+					{
+						$dbRes = \CIBlockProperty::GetList(array(), array('ID'=>$m[1]));
+						if($arProp = $dbRes->Fetch())
+						{
+							if($arProp['PROPERTY_TYPE']=='F')
+							{
+								$bPicture = true;
+							}
+						}
 					}
 					?>
 					<select name="<?echo $fName;?>" class="chosen" style="max-width: 450px;"><?echo $strOptions;?></select>
@@ -326,13 +551,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_REL_SECTION_FIELD");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[REL_SECTION_FIELD]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					$val = '';
-					if(is_array($PEXTRASETTINGS))
-					{
-						eval('$val = $P'.$fNameEval.';');
-					}
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'REL_SECTION_FIELD');
 					?>
 					<select name="<?echo $fName;?>" class="chosen">
 						<option value="ID"<?if($val=='ID') echo ' selected';?>><?echo GetMessage("KIT_IX_SETTINGS_SECTION_ID"); ?></option>
@@ -349,13 +568,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_HLBL_FIELD");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[HLBL_FIELD]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					$val = '';
-					if(is_array($PEXTRASETTINGS))
-					{
-						eval('$val = $P'.$fNameEval.';');
-					}
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'HLBL_FIELD');
 					?>
 					<select name="<?echo $fName;?>" class="chosen">
 						<?
@@ -374,9 +587,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_VIDEO_WIDTH");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[VIDEO_WIDTH]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'VIDEO_WIDTH');
 					?>
 					<input type="text" name="<?echo $fName;?>" value="<?echo htmlspecialcharsbx($val)?>" placeholder="400">
 				</td>
@@ -385,9 +596,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_VIDEO_HEIGHT");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[VIDEO_HEIGHT]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'VIDEO_HEIGHT');
 					?>
 					<input type="text" name="<?echo $fName;?>" value="<?echo htmlspecialcharsbx($val)?>" placeholder="300">
 				</td>
@@ -399,9 +608,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_ELEMENT_SEARCH_SUBSTRING");?>: <span id="hint_UID_SEARCH_SUBSTRING"></span><script>BX.hint_replace(BX('hint_UID_SEARCH_SUBSTRING'), '<?echo GetMessage("KIT_IX_SETTINGS_ELEMENT_SEARCH_SUBSTRING_HINT"); ?>');</script></td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[UID_SEARCH_SUBSTRING]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'UID_SEARCH_SUBSTRING');
 					?>
 					<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?>>
 				</td>
@@ -413,9 +620,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_SECTION_NAME_SEPARATED");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[SECTION_UID_SEPARATED]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'SECTION_UID_SEPARATED');
 					?>
 					<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?>>
 				</td>
@@ -424,9 +629,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_SECTION_SEARCH_IN_SUBSECTIONS");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[SECTION_SEARCH_IN_SUBSECTIONS]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'SECTION_SEARCH_IN_SUBSECTIONS');
 					?>
 					<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?>>
 				</td>
@@ -435,9 +638,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_SECTION_SEARCH_WITHOUT_PARENT");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[SECTION_SEARCH_WITHOUT_PARENT]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'SECTION_SEARCH_WITHOUT_PARENT');
 					?>
 					<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?>>
 				</td>
@@ -449,9 +650,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l" valign="top"><?echo GetMessage("KIT_IX_SETTINGS_SECTION_PATH_SEPARATOR");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[SECTION_PATH_SEPARATOR]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'SECTION_PATH_SEPARATOR');
 					?>
 					<input type="text" name="<?=$fName?>" value="<?=htmlspecialcharsbx($val)?>" placeholder="<?echo GetMessage("KIT_IX_SETTINGS_SECTION_PATH_SEPARATOR_PLACEHOLDER");?>">
 				</td>
@@ -460,9 +659,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_SECTION_PATH_SEPARATED");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[SECTION_PATH_SEPARATED]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'SECTION_PATH_SEPARATED');
 					?>
 					<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?>>
 				</td>
@@ -471,9 +668,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_SECTION_PATH_NAME_SEPARATED");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[SECTION_UID_SEPARATED]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'SECTION_UID_SEPARATED');
 					?>
 					<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?>>
 				</td>
@@ -482,12 +677,10 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 		
 		<?if($bCanUseForSKUGenerate){?>
 			<tr>
-				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_USE_FOR_SKU_GENERATE");?>:</td>
+				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_USE_FOR_SKU_GENERATE");?>: <span id="hint_USE_FOR_SKU_GENERATE"></span><script>BX.hint_replace(BX('hint_USE_FOR_SKU_GENERATE'), '<?echo GetMessage("KIT_IX_SETTINGS_USE_FOR_SKU_GENERATE_HINT"); ?>');</script></td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[USE_FOR_SKU_GENERATE]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'USE_FOR_SKU_GENERATE');
 					?>
 					<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?>>
 				</td>
@@ -499,9 +692,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 					<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_SEARCH_SINGLE_OFFERS");?>:</td>
 					<td class="adm-detail-content-cell-r">
 						<?
-						$fName = htmlspecialcharsex($_GET['field_name']).'[SEARCH_SINGLE_OFFERS]';
-						$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-						eval('$val = $P'.$fNameEval.';');
+						list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'SEARCH_SINGLE_OFFERS');
 						?>
 						<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?>>
 					</td>
@@ -514,15 +705,11 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l" valign="top"><?echo GetMessage("KIT_IX_SETTINGS_CHANGE_MULTIPLE_SEPARATOR");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[CHANGE_MULTIPLE_SEPARATOR]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
-					$fName2 = htmlspecialcharsex($_GET['field_name']).'[MULTIPLE_SEPARATOR]';
-					$fNameEval2 = strtr($fName2, array("["=>"['", "]"=>"']"));
-					eval('$val2 = $P'.$fNameEval2.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'CHANGE_MULTIPLE_SEPARATOR');
+					list($fName2, $v2) = GetFieldEextraVal($PEXTRASETTINGS, 'MULTIPLE_SEPARATOR');
 					?>
 					<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?> onchange="$('#multiple_separator').css('display', (this.checked ? '' : 'none'));"><br>
-					<input type="text" id="multiple_separator" name="<?=$fName2?>" value="<?=htmlspecialcharsbx($val2)?>" placeholder="<?echo GetMessage("KIT_IX_SETTINGS_MULTIPLE_SEPARATOR_PLACEHOLDER");?>" <?=($val!='Y' ? 'style="display: none"' : '')?>>
+					<input type="text" id="multiple_separator" name="<?=$fName2?>" value="<?=htmlspecialcharsbx($v2)?>" placeholder="<?echo GetMessage("KIT_IX_SETTINGS_MULTIPLE_SEPARATOR_PLACEHOLDER");?>" <?=($val!='Y' ? 'style="display: none"' : '')?>>
 				</td>
 			</tr>
 		<?}?>
@@ -531,9 +718,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l" valign="top"><?echo GetMessage("KIT_IX_SETTINGS_MULTIPLE_SAVE_OLD_VALUES");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[MULTIPLE_SAVE_OLD_VALUES]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'MULTIPLE_SAVE_OLD_VALUES');
 					?>
 					<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?>>
 				</td>
@@ -542,17 +727,12 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l" valign="top"><?echo GetMessage("KIT_IX_SETTINGS_MULTIPLE_FROM_VALUE");?>:<br><small><?echo GetMessage("KIT_IX_SETTINGS_MULTIPLE_FROM_VALUE_COMMENT");?></small></td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName1 = htmlspecialcharsex($_GET['field_name']).'[MULTIPLE_FROM_VALUE]';
-					$fNameEval1 = strtr($fName1, array("["=>"['", "]"=>"']"));
-					eval('$val1 = $P'.$fNameEval1.';');
-					
-					$fName2 = htmlspecialcharsex($_GET['field_name']).'[MULTIPLE_TO_VALUE]';
-					$fNameEval2 = strtr($fName2, array("["=>"['", "]"=>"']"));
-					eval('$val2 = $P'.$fNameEval2.';');
+					list($fName1, $v1) = GetFieldEextraVal($PEXTRASETTINGS, 'MULTIPLE_FROM_VALUE');
+					list($fName2, $v2) = GetFieldEextraVal($PEXTRASETTINGS, 'MULTIPLE_TO_VALUE');
 					?>
-					<input type="text" size="5" name="<?=$fName1?>" value="<?echo htmlspecialcharsbx($val1);?>" placeholder="1">
+					<input type="text" size="5" name="<?=$fName1?>" value="<?echo htmlspecialcharsbx($v1);?>" placeholder="1">
 					<?echo GetMessage("KIT_IX_SETTINGS_MULTIPLE_TO_VALUE");?>
-					<input type="text" size="5" name="<?=$fName2?>" value="<?echo htmlspecialcharsbx($val2);?>">
+					<input type="text" size="5" name="<?=$fName2?>" value="<?echo htmlspecialcharsbx($v2);?>">
 				</td>
 			</tr>
 		<?}?>
@@ -562,13 +742,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_HTML_TITLE");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[TEXT_HTML]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					$val = '';
-					if(is_array($PEXTRASETTINGS))
-					{
-						eval('$val = $P'.$fNameEval.';');
-					}
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'TEXT_HTML');
 					?>
 					<select name="<?echo $fName;?>">
 						<option value=""><?echo GetMessage("KIT_IX_SETTINGS_HTML_NOT_VALUE");?></option>
@@ -579,18 +753,109 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 			</tr>
 		<?}?>
 		
+		<?
+		if($bUser && is_callable(array('\Bitrix\Main\UserTable', 'getMap'))){
+			$arUserFields = array();
+			$arUserMap = \Bitrix\Main\UserTable::getMap();
+			foreach($arUserMap as $k=>$v)
+			{
+				if(!($v instanceOf \Bitrix\Main\Entity\IntegerField || $v instanceOf \Bitrix\Main\Entity\StringField || $v instanceOf \Bitrix\Main\Entity\TextField || (is_array($v) && in_array($v['data_type'], array('integer', 'string', 'text')) && !isset($v['expression'])))) continue;
+				$columnName = '';
+				if(is_callable(array($v, 'getColumnName'))) $columnName = $v->getColumnName();
+				elseif(is_array($v) && !is_numeric($k)) $columnName = $k;
+				if(!$columnName) continue;
+				if(GetMessage("KIT_IX_SETTINGS_USER_REL_FIELD_".$columnName)) $fieldTitle = GetMessage("KIT_IX_SETTINGS_USER_REL_FIELD_".$columnName);
+				elseif(is_callable(array($v, 'getTitle'))) $fieldTitle = $v->getTitle();
+				else $fieldTitle = $columnName;
+				$arUserFields[$columnName] = $fieldTitle;
+				
+			}
+			if(!empty($arUserFields))
+			{
+		?>
+		
+			<tr>
+				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_USER_REL_FIELD");?>:</td>
+				<td class="adm-detail-content-cell-r">
+					<?
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'USER_REL_FIELD');
+					?>
+					<select name="<?echo $fName;?>">
+						<?
+						foreach($arUserFields as $k=>$v)
+						{
+							echo '<option value="'.($k=='ID' ? '' : htmlspecialcharsbx($k)).'"'.($val==$k ? ' selected' : '').'>'.htmlspecialcharsbx($v).'</option>';
+						}
+						?>
+					</select>
+				</td>
+			</tr>
+		<?	
+			}
+		}
+		?>
+		
+		<?if($bDiscountValue || $bSaleDiscountValue){?>
+			<?
+			$dbPriceType = CCatalogGroup::GetList(array("SORT" => "ASC"));
+			$arPriceTypes = array();
+			while($arPriceType = $dbPriceType->Fetch())
+			{
+				$arPriceTypes[] = $arPriceType;
+			}
+			if(count($arPriceTypes) > 1){
+			?>
+			<tr>
+				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_PRICE_TYPE");?>:</td>
+				<td class="adm-detail-content-cell-r">
+					<?
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'CATALOG_GROUP_IDS');
+					if(!is_array($val)) $val = array();
+					?>
+					<select name="<?echo $fName;?>[]" multiple>
+						<?foreach($arPriceTypes as $arPriceType){?>
+							<option value="<?echo $arPriceType["ID"]?>" <?if(in_array($arPriceType["ID"], $val)){echo 'selected';}?>><?echo ($arPriceType["NAME_LANG"] ? $arPriceType["NAME_LANG"] : $arPriceType["NAME"]);?></option>
+						<?}?>
+					</select>
+				</td>
+			</tr>
+			<?}?>
+		<?}
+		if($bDiscountValue || $bSaleDiscountValue){?>
+			<?
+			$dbSite = \CIBlock::GetSite($IBLOCK_ID);
+			$arSites = array();
+			while($arSite = $dbSite->Fetch())
+			{
+				$arSites[] = $arSite;
+			}
+			if(count($arSites) > 1){
+			?>
+			<tr>
+				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_SITE_ID");?>:</td>
+				<td class="adm-detail-content-cell-r">
+					<?
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'SITE_IDS');
+					if(!is_array($val)) $val = array();
+					?>
+					<select name="<?echo $fName;?>[]" multiple size="3">
+						<?foreach($arSites as $arSite){?>
+							<option value="<?echo $arSite["SITE_ID"]?>" <?if(in_array($arSite["SITE_ID"], $val)){echo 'selected';}?>><?echo '['.$arSite["SITE_ID"].'] '.$arSite["NAME"];?></option>
+						<?}?>
+					</select>
+				</td>
+			</tr>
+			<?}?>
+		<?}?>
+		
 		<?if($bIblockElementSet){?>
 			<tr>
 				<td class="adm-detail-content-cell-l" valign="top"><?echo GetMessage("KIT_IX_SETTINGS_CHANGE_LINKED_IBLOCK");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[CHANGE_LINKED_IBLOCK]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
-					$fName2 = htmlspecialcharsex($_GET['field_name']).'[LINKED_IBLOCK]';
-					$fNameEval2 = strtr($fName2, array("["=>"['", "]"=>"']"));
-					eval('$val2 = $P'.$fNameEval2.';');
-					if(!is_array($val2)) $val2 = array();
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'CHANGE_LINKED_IBLOCK');
+					list($fName2, $v2) = GetFieldEextraVal($PEXTRASETTINGS, 'LINKED_IBLOCK');
+					if(!is_array($v2)) $v2 = array();
 					?>
 					<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?> onchange="$('#linked_iblock').css('display', (this.checked ? '' : 'none'));"><br>
 					<select type="text" id="linked_iblock" name="<?=$fName2?>[]" multiple <?=($val!='Y' ? 'style="display: none"' : '')?>>
@@ -600,7 +865,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 							?><optgroup label="<?echo $type['NAME']?>"><?
 							foreach($type['IBLOCKS'] as $iblock)
 							{
-								?><option value="<?echo $iblock["ID"];?>" <?if(in_array($iblock["ID"], $val2)){echo 'selected';}?>><?echo htmlspecialcharsbx($iblock["NAME"].' ['.$iblock["ID"].']'); ?></option><?
+								?><option value="<?echo $iblock["ID"];?>" <?if(in_array($iblock["ID"], $v2)){echo 'selected';}?>><?echo htmlspecialcharsbx($iblock["NAME"].' ['.$iblock["ID"].']'); ?></option><?
 							}
 							?></optgroup><?
 						}
@@ -615,13 +880,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_USER_UID");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[USER_UID]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					$val = '';
-					if(is_array($PEXTRASETTINGS))
-					{
-						eval('$val = $P'.$fNameEval.';');
-					}
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'USER_UID');
 					?>
 					<select name="<?echo $fName;?>">
 						<option value=""><?echo GetMessage("KIT_IX_SETTINGS_USER_UID_ID");?></option>
@@ -634,18 +893,20 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 		<?}?>
 		
 		<tr class="heading">
-			<td colspan="2"><?echo GetMessage("KIT_IX_SETTINGS_CONVERSION_TITLE");?></td>
+			<td colspan="2">
+					<div class="kit-ix-settings-header-links">
+						<div class="kit-ix-settings-header-links-inner">
+							<a href="javascript:void(0)" onclick="ESettings.ExportConvCSV(this)"><?echo GetMessage("KIT_IX_SETTINGS_EXPORT_CSV"); ?></a> /
+							<a href="javascript:void(0)" onclick="ESettings.ImportConvCSV(this)"><?echo GetMessage("KIT_IX_SETTINGS_IMPORT_CSV"); ?></a>
+						</div>
+					</div>
+				<?echo GetMessage("KIT_IX_SETTINGS_CONVERSION_TITLE");?>
+			</td>
 		</tr>
 		<tr>
-			<td class="kit-ix-settings-margin-container" colspan="2">
+			<td class="kit-ix-settings-margin-container" colspan="2" id="kit-ix-conv-wrap0">
 				<?
-				$fName = htmlspecialcharsex($_GET['field_name']).'[CONVERSION]';
-				$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-				$arVals = array();
-				if(is_array($PEXTRASETTINGS))
-				{
-					eval('$arVals = $P'.$fNameEval.';');
-				}
+				list($fName, $arVals) = GetFieldEextraVal($PEXTRASETTINGS, 'CONVERSION');
 				$showCondition = true;
 				if(!is_array($arVals) || count($arVals)==0)
 				{
@@ -667,7 +928,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 					$cellsOptions = '<option value="">'.sprintf(GetMessage("KIT_IX_SETTINGS_CONVERSION_CELL_CURRENT"), $i).'</option>';
 					foreach($availableTags as $k2=>$v2)
 					{
-						$cellsOptions .= '<option value="{'.htmlspecialcharsbx($k2).'}"'.($v['CELL']=='{'.$k2.'}' ? ' selected' : '').'>'.$v2.'</option>';
+						$cellsOptions .= '<option value="{'.htmlspecialcharsbx($k2).'}"'.($v['CELL']=='{'.$k2.'}' ? ' selected' : '').'>'.htmlspecialcharsbx($v2).'</option>';
 					}
 					$cellsOptions .= '<option value="ELSE"'.($v['CELL']=='ELSE' ? ' selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CELL_ELSE").'</option>';
 					echo '<div class="kit-ix-settings-conversion" '.(!$showCondition ? 'style="display: none;"' : '').'>'.
@@ -682,8 +943,11 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 								'<option value="LT" '.($v['WHEN']=='LT' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_LT").'</option>'.
 								'<option value="GEQ" '.($v['WHEN']=='GEQ' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_GEQ").'</option>'.
 								'<option value="LEQ" '.($v['WHEN']=='LEQ' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_LEQ").'</option>'.
+								'<option value="BETWEEN" '.($v['WHEN']=='BETWEEN' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_BETWEEN").'</option>'.
 								'<option value="CONTAIN" '.($v['WHEN']=='CONTAIN' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_CONTAIN").'</option>'.
 								'<option value="NOT_CONTAIN" '.($v['WHEN']=='NOT_CONTAIN' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_NOT_CONTAIN").'</option>'.
+								'<option value="BEGIN_WITH" '.($v['WHEN']=='BEGIN_WITH' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_BEGIN_WITH").'</option>'.
+								'<option value="ENDS_IN" '.($v['WHEN']=='ENDS_IN' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_ENDS_IN").'</option>'.
 								'<option value="EMPTY" '.($v['WHEN']=='EMPTY' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_EMPTY").'</option>'.
 								'<option value="NOT_EMPTY" '.($v['WHEN']=='NOT_EMPTY' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_NOT_EMPTY").'</option>'.
 								'<option value="REGEXP" '.($v['WHEN']=='REGEXP' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_REGEXP").'</option>'.
@@ -704,8 +968,12 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 									'<option value="UFIRST" '.($v['THEN']=='UFIRST' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_UFIRST").'</option>'.
 									'<option value="UWORD" '.($v['THEN']=='UWORD' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_UWORD").'</option>'.
 									'<option value="TRANSLIT" '.($v['THEN']=='TRANSLIT' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_TRANSLIT").'</option>'.
+								'</optgroup>'.
+								'<optgroup label="'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_GROUP_HTML").'">'.
 									'<option value="STRIP_TAGS" '.($v['THEN']=='STRIP_TAGS' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_STRIP_TAGS").'</option>'.
 									'<option value="CLEAR_TAGS" '.($v['THEN']=='CLEAR_TAGS' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_CLEAR_TAGS").'</option>'.
+									'<option value="DOWNLOAD_BY_LINK" '.($v['THEN']=='DOWNLOAD_BY_LINK' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_DOWNLOAD_BY_LINK").'</option>'.
+									'<option value="DOWNLOAD_IMAGES" '.($v['THEN']=='DOWNLOAD_IMAGES' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_DOWNLOAD_IMAGES").'</option>'.
 								'</optgroup>'.
 								'<optgroup label="'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_GROUP_MATH").'">'.
 									'<option value="MATH_ROUND" '.($v['THEN']=='MATH_ROUND' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_MATH_ROUND").'</option>'.
@@ -713,6 +981,9 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 									'<option value="MATH_DIVIDE" '.($v['THEN']=='MATH_DIVIDE' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_MATH_DIVIDE").'</option>'.
 									'<option value="MATH_ADD" '.($v['THEN']=='MATH_ADD' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_MATH_ADD").'</option>'.
 									'<option value="MATH_SUBTRACT" '.($v['THEN']=='MATH_SUBTRACT' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_MATH_SUBTRACT").'</option>'.
+									'<option value="MATH_ADD_PERCENT" '.($v['THEN']=='MATH_ADD_PERCENT' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_MATH_ADD_PERCENT").'</option>'.
+									'<option value="MATH_SUBTRACT_PERCENT" '.($v['THEN']=='MATH_SUBTRACT_PERCENT' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_MATH_SUBTRACT_PERCENT").'</option>'.
+									'<option value="MATH_FORMULA" '.($v['THEN']=='MATH_FORMULA' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_MATH_FORMULA").'</option>'.
 								'</optgroup>'.
 								'<optgroup label="'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_GROUP_OTHER").'">'.
 									'<option value="NOT_LOAD" '.($v['THEN']=='NOT_LOAD' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_NOT_LOAD").'</option>'.
@@ -721,6 +992,8 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 							'</select> '.
 							'<input type="text" name="'.$fName.'[TO][]" value="'.htmlspecialcharsbx($v['TO']).'">'.
 							'<input class="choose_val" value="..." type="button" onclick="ESettings.ShowChooseVal(this)">'.
+							'<a href="javascript:void(0)" onclick="ESettings.ConversionUp(this)" title="'.GetMessage("KIT_IX_SETTINGS_UP").'" class="up"></a>'.
+							'<a href="javascript:void(0)" onclick="ESettings.ConversionDown(this)" title="'.GetMessage("KIT_IX_SETTINGS_DOWN").'" class="down"></a>'.
 							'<a href="javascript:void(0)" onclick="ESettings.RemoveConversion(this)" title="'.GetMessage("KIT_IX_SETTINGS_DELETE").'" class="delete"></a>'.
 						 '</div>';
 				}
@@ -728,22 +1001,28 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<a href="javascript:void(0)" onclick="return ESettings.AddConversion(this, event)" title="<?echo GetMessage("KIT_IX_SETTINGS_CONVERSION_ADD_HINT");?>"><?echo GetMessage("KIT_IX_SETTINGS_CONVERSION_ADD_VALUE");?></a>
 			</td>
 		</tr>
+		<?if($fieldXpath!=='none'){?>
+		<tr>
+			<td colspan="2" class="kit_ix_tag_value_list">
+				<a href="javascript:void(0)" onclick="return ESettings.ShowValuesFromFile(this, '<?=$profileId?>', '<?echo $fieldXpath;?>', '')" title="<?echo GetMessage("KIT_IX_SHOW_VALUES_FROM_FILE");?>"><?echo GetMessage("KIT_IX_SHOW_VALUES_FROM_FILE");?></a>
+				<div style="display: none;">
+				<a href="javascript:void(0)" onclick="return ESettings.ShowValuesFromFile(this, '<?=$profileId?>', '<?echo $fieldXpath;?>', '')" title="<?echo GetMessage("KIT_IX_SHOW_VALUES_FROM_FILE_SOURCE");?>"><?echo GetMessage("KIT_IX_SHOW_VALUES_FROM_FILE_SOURCE");?></a>
+				/
+				<a href="javascript:void(0)" onclick="return ESettings.ShowValuesFromFile(this, '<?=$profileId?>', '<?echo $fieldXpath;?>', '<?echo $xpath;?>')" title="<?echo GetMessage("KIT_IX_SHOW_VALUES_FROM_FILE_CONV");?>"><?echo GetMessage("KIT_IX_SHOW_VALUES_FROM_FILE_CONV");?></a>
+				</div>
+			</td>
+		</tr>
+		<?}?>
 		
 		
-		<?if(true /*!$bVariable*/){?>
+		<?if($fieldXpath!=='none' /*!$bOtherField*/){?>
 			<tr class="heading">
 				<td colspan="2"><?echo GetMessage("KIT_IX_SETTINGS_CONDITIONS_TITLE");?></td>
 			</tr>
 			<tr>
 				<td class="kit-ix-settings-margin-container" colspan="2">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[CONDITIONS]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					$arVals = array();
-					if(is_array($PEXTRASETTINGS))
-					{
-						eval('$arVals = $P'.$fNameEval.';');
-					}
+					list($fName, $arVals) = GetFieldEextraVal($PEXTRASETTINGS, 'CONDITIONS');
 					$showCondition = true;
 					if(!is_array($arVals) || count($arVals)==0)
 					{
@@ -782,6 +1061,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 									'<option value="EMPTY" '.($v['WHEN']=='EMPTY' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_EMPTY").'</option>'.
 									'<option value="NOT_EMPTY" '.($v['WHEN']=='NOT_EMPTY' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_NOT_EMPTY").'</option>'.
 									'<option value="REGEXP" '.($v['WHEN']=='REGEXP' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_REGEXP").'</option>'.
+									'<option value="NOT_REGEXP" '.($v['WHEN']=='NOT_REGEXP' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_NOT_REGEXP").'</option>'.
 								'</select> '.
 								'<input type="text" name="'.$fName.'[FROM][]" class="field_from" value="'.htmlspecialcharsbx($v['FROM']).'">'.
 								'<input class="choose_val" value="..." type="button" onclick="ESettings.ShowChooseVal(this)">'.
@@ -795,14 +1075,14 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 		<?}?>
 		
 		<?if($bPrice){
-			$fName = htmlspecialcharsex($_GET['field_name']).'[MARGINS]';
-			$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-			eval('$val = $P'.$fNameEval.';');
-			$arMarginTemplates = \Bitrix\KitImportxml\Extrasettings::GetMarginTemplates(($pfile=''));
+			list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'MARGINS');
+			$pfile = '';
+			$arMarginTemplates = \Bitrix\KitImportxml\Extrasettings::GetMarginTemplates($pfile);
 			$showMargin = true;
-			if($_POST['action']=='load_margin_template' && is_array($arMarginTemplates[$_POST['template_id']]))
+			$templateId = htmlspecialcharsbx($_POST['template_id']);
+			if($_POST['action']=='load_margin_template' && is_array($arMarginTemplates[$templateId]))
 			{
-				$val = $arMarginTemplates[$_POST['template_id']]['MARGINS'];
+				$val = $arMarginTemplates[$templateId]['MARGINS'];
 			}
 			if(!is_array($val) || count($val)==0)
 			{
@@ -891,9 +1171,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_PRICE_ROUND");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[PRICE_ROUND_RULE]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'PRICE_ROUND_RULE');
 					?>
 					<select name="<?=$fName?>">
 						<option value=""><?echo GetMessage("KIT_IX_SETTINGS_PRICE_ROUND_NOT");?></option>
@@ -907,9 +1185,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_PRICE_ROUND_COEFFICIENT");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[PRICE_ROUND_COEFFICIENT]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'PRICE_ROUND_COEFFICIENT');
 					?>
 					<input type="text" name="<?=$fName?>" value="<?echo htmlspecialcharsbx($val)?>">
 					<span id="hint_PRICE_ROUND_COEFFICIENT"></span><script>BX.hint_replace(BX('hint_PRICE_ROUND_COEFFICIENT'), '<?echo GetMessage("KIT_IX_SETTINGS_PRICE_ROUND_COEFFICIENT_HINT"); ?>');</script>
@@ -921,9 +1197,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 					<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_PRICE_USE_EXT");?>:</td>
 					<td class="adm-detail-content-cell-r">
 						<?
-						$fName = htmlspecialcharsex($_GET['field_name']).'[PRICE_USE_EXT]';
-						$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-						eval('$val = $P'.$fNameEval.';');
+						list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'PRICE_USE_EXT');
 						$priceExt = $val;
 						?>
 						<input type="checkbox" name="<?=$fName?>" value="Y" <?echo ($val=='Y' ? 'checked' : '')?> onchange="$('#price_ext').css('display', (this.checked ? '' : 'none'));">
@@ -933,20 +1207,25 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 					<td class="adm-detail-content-cell-l"></td>
 					<td class="adm-detail-content-cell-r">
 						<?
-						$fName = htmlspecialcharsex($_GET['field_name']).'[PRICE_QUANTITY_FROM]';
-						$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-						eval('$val = $P'.$fNameEval.';');
+						list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'PRICE_QUANTITY_FROM');
 						?>
 						<?echo GetMessage("KIT_IX_SETTINGS_PRICE_QUANTITY_FROM");?>
 						<input type="text" name="<?=$fName?>" value="<?echo htmlspecialcharsbx($val)?>" size="5">
 						&nbsp; &nbsp;
 						<?
-						$fName = htmlspecialcharsex($_GET['field_name']).'[PRICE_QUANTITY_TO]';
-						$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-						eval('$val = $P'.$fNameEval.';');
+						list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'PRICE_QUANTITY_TO');
 						?>
 						<?echo GetMessage("KIT_IX_SETTINGS_PRICE_QUANTITY_TO");?>
 						<input type="text" name="<?=$fName?>" value="<?echo htmlspecialcharsbx($val)?>" size="5">
+					</td>
+				</tr>
+				<tr>
+					<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_PRICE_EXT_UPDATE_FIRST");?>:</td>
+					<td class="adm-detail-content-cell-r">
+						<?
+						list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'EXT_UPDATE_FIRST');
+						?>
+						<input type="checkbox" name="<?=$fName?>" value="Y" <?echo ($val=='Y' ? 'checked' : '')?>>
 					</td>
 				</tr>
 			<?}?>
@@ -976,15 +1255,16 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				'WATERMARK_TEXT_COLOR',
 				'WATERMARK_TEXT_SIZE',
 				'WATERMARK_TEXT_POSITION',
+				'CHANGE_EXTENSION',
+				'NEW_EXTENSION'
 			);
 			$arFields = array();
 			foreach($arFieldNames as $k=>$field)
 			{
-				$fName = htmlspecialcharsex($_GET['field_name']).'[PICTURE_PROCESSING]['.$field.']';
-				$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
+				list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'PICTURE_PROCESSING');
 				$arFields[$field] = array(
-					'NAME' => htmlspecialcharsex($_GET['field_name']).'[PICTURE_PROCESSING]['.$field.']',
-					'VALUE' => eval('return $P'.$fNameEval.';')
+					'NAME' => $fName.'['.$field.']',
+					'VALUE' => (is_array($val) && array_key_exists($field, $val) ? $val[$field] : '')
 				);
 			}
 			?>
@@ -992,316 +1272,376 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td colspan="2"><?echo GetMessage("KIT_IX_SETTINGS_PICTURE_PROCESSING"); ?></td>
 			</tr>
 			<tr>
-				<td class="adm-detail-content-cell-l"></td>
-				<td class="adm-detail-content-cell-r">
-				<div class="adm-list-item">
-					<div class="adm-list-control">
-						<input
-							type="checkbox"
-							value="Y"
-							id="<?echo $arFields['SCALE']['NAME']?>"
-							name="<?echo $arFields['SCALE']['NAME']?>"
-							<?
-							if($arFields['SCALE']['VALUE']==="Y")
-								echo "checked";
-							?>
-							onclick="
-								BX('DIV_<?echo $arFields['WIDTH']['NAME']?>').style.display =
-								BX('DIV_<?echo $arFields['HEIGHT']['NAME']?>').style.display =
-								/*BX('DIV_<?echo $arFields['IGNORE_ERRORS_DIV']['NAME']?>').style.display =*/
-								BX('DIV_<?echo $arFields['METHOD_DIV']['NAME']?>').style.display =
-								BX('DIV_<?echo $arFields['COMPRESSION']['NAME']?>').style.display =
-								this.checked? 'block': 'none';
-							"
-						>
-					</div>
-					<div class="adm-list-label">
-						<label
-							for="<?echo $arFields['SCALE']['NAME']?>"
-						><?echo GetMessage("KIT_IX_PICTURE_SCALE")?></label>
-					</div>
-				</div>
-				<div class="adm-list-item"
-					id="DIV_<?echo $arFields['WIDTH']['NAME']?>"
-					style="padding-left:16px;display:<?
-						echo ($arFields['SCALE']['VALUE']==="Y")? 'block': 'none';
-					?>"
-				>
-					<?echo GetMessage("KIT_IX_PICTURE_WIDTH")?>:&nbsp;<input name="<?echo $arFields['WIDTH']['NAME']?>" type="text" value="<?echo htmlspecialcharsbx($arFields['WIDTH']['VALUE'])?>" size="7">
-				</div>
-				<div class="adm-list-item"
-					id="DIV_<?echo $arFields['HEIGHT']['NAME']?>"
-					style="padding-left:16px;display:<?
-						echo ($arFields['SCALE']['VALUE']==="Y")? 'block': 'none';
-					?>"
-				>
-					<?echo GetMessage("KIT_IX_PICTURE_HEIGHT")?>:&nbsp;<input name="<?echo $arFields['HEIGHT']['NAME']?>" type="text" value="<?echo htmlspecialcharsbx($arFields['HEIGHT']['VALUE'])?>" size="7">
-				</div>
-				<div class="adm-list-item"
-					id="DIV_<?echo $arFields['IGNORE_ERRORS_DIV']['NAME']?>"
-					style="padding-left:16px;display:<?
-						//echo ($arFields['SCALE']['VALUE']==="Y")? 'block': 'none';
-						echo 'none';
-					?>"
-				>
-					<div class="adm-list-control">
-						<input
-							type="checkbox"
-							value="Y"
-							id="<?echo $arFields['IGNORE_ERRORS']['NAME']?>"
-							name="<?echo $arFields['IGNORE_ERRORS']['NAME']?>"
-							<?
-							if($arFields['IGNORE_ERRORS']['VALUE']==="Y")
-								echo "checked";
-							?>
-						>
-					</div>
-					<div class="adm-list-label">
-						<label
-							for="<?echo $arFields['IGNORE_ERRORS']['NAME']?>"
-						><?echo GetMessage("KIT_IX_PICTURE_IGNORE_ERRORS")?></label>
-					</div>
-				</div>
-				<div class="adm-list-item"
-					id="DIV_<?echo $arFields['METHOD_DIV']['NAME']?>"
-					style="padding-left:16px;display:<?
-						echo ($arFields['SCALE']['VALUE']==="Y")? 'block': 'none';
-					?>"
-				>
-					<div class="adm-list-control">
-						<input
-							type="checkbox"
-							value="Y"
-							id="<?echo $arFields['METHOD']['NAME']?>"
-							name="<?echo $arFields['METHOD']['NAME']?>"
-							<?
-								if($arFields['METHOD']['VALUE']==="Y")
+				<td class="adm-detail-content-cell-r" colspan="2" style="padding-left: 50px;">
+				<?if($bElemPicture){?>
+						<?
+						list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'INCLUDE_PICTURE_PROCESSING');
+						$bElemPictureIncProcessing = (bool)($val=='Y');
+
+						echo BeginNote();
+						echo GetMessage("KIT_IX_SETTINGS_INCLUDE_PICTURE_PROCESSING_NOTE");
+						echo EndNote();
+						?>
+						<div class="adm-list-item">
+							<div class="adm-list-control">
+								<input type="checkbox" id="<?echo md5($fName);?>" name="<?=$fName?>" value="Y" <?echo ($val=='Y' ? 'checked' : '')?> onclick="if(this.checked){$('#kit_picprocessing_wrap').show();}else{$('#kit_picprocessing_wrap').hide();}">
+							</div>
+							<div class="adm-list-label">
+								<label
+									for="<?echo md5($fName);?>"
+								><?echo GetMessage("KIT_IX_SETTINGS_INCLUDE_PICTURE_PROCESSING");?></label>
+							</div>
+						</div>
+				<?}?>
+				<div id="kit_picprocessing_wrap" <?if($bElemPicture && !$bElemPictureIncProcessing){echo 'style="display: none;"';}?>>
+					<div></div>
+					<div class="adm-list-item">
+						<div class="adm-list-control">
+							<input
+								type="checkbox"
+								value="Y"
+								id="<?echo $arFields['SCALE']['NAME']?>"
+								name="<?echo $arFields['SCALE']['NAME']?>"
+								<?
+								if($arFields['SCALE']['VALUE']==="Y")
 									echo "checked";
-							?>
+								?>
+								onclick="
+									BX('DIV_<?echo $arFields['WIDTH']['NAME']?>').style.display =
+									BX('DIV_<?echo $arFields['HEIGHT']['NAME']?>').style.display =
+									/*BX('DIV_<?echo $arFields['IGNORE_ERRORS_DIV']['NAME']?>').style.display =*/
+									BX('DIV_<?echo $arFields['METHOD_DIV']['NAME']?>').style.display =
+									BX('DIV_<?echo $arFields['COMPRESSION']['NAME']?>').style.display =
+									this.checked? 'block': 'none';
+								"
+							>
+						</div>
+						<div class="adm-list-label">
+							<label
+								for="<?echo $arFields['SCALE']['NAME']?>"
+							><?echo GetMessage("KIT_IX_PICTURE_SCALE")?></label>
+						</div>
+					</div>
+					<div class="adm-list-item"
+						id="DIV_<?echo $arFields['WIDTH']['NAME']?>"
+						style="padding-left:16px;display:<?
+							echo ($arFields['SCALE']['VALUE']==="Y")? 'block': 'none';
+						?>"
+					>
+						<?echo GetMessage("KIT_IX_PICTURE_WIDTH")?>:&nbsp;<input name="<?echo $arFields['WIDTH']['NAME']?>" type="text" value="<?echo htmlspecialcharsbx($arFields['WIDTH']['VALUE'])?>" size="7">
+					</div>
+					<div class="adm-list-item"
+						id="DIV_<?echo $arFields['HEIGHT']['NAME']?>"
+						style="padding-left:16px;display:<?
+							echo ($arFields['SCALE']['VALUE']==="Y")? 'block': 'none';
+						?>"
+					>
+						<?echo GetMessage("KIT_IX_PICTURE_HEIGHT")?>:&nbsp;<input name="<?echo $arFields['HEIGHT']['NAME']?>" type="text" value="<?echo htmlspecialcharsbx($arFields['HEIGHT']['VALUE'])?>" size="7">
+					</div>
+					<div class="adm-list-item"
+						id="DIV_<?echo $arFields['IGNORE_ERRORS_DIV']['NAME']?>"
+						style="padding-left:16px;display:<?
+							//echo ($arFields['SCALE']['VALUE']==="Y")? 'block': 'none';
+							echo 'none';
+						?>"
+					>
+						<div class="adm-list-control">
+							<input
+								type="checkbox"
+								value="Y"
+								id="<?echo $arFields['IGNORE_ERRORS']['NAME']?>"
+								name="<?echo $arFields['IGNORE_ERRORS']['NAME']?>"
+								<?
+								if($arFields['IGNORE_ERRORS']['VALUE']==="Y")
+									echo "checked";
+								?>
+							>
+						</div>
+						<div class="adm-list-label">
+							<label
+								for="<?echo $arFields['IGNORE_ERRORS']['NAME']?>"
+							><?echo GetMessage("KIT_IX_PICTURE_IGNORE_ERRORS")?></label>
+						</div>
+					</div>
+					<div class="adm-list-item"
+						id="DIV_<?echo $arFields['METHOD_DIV']['NAME']?>"
+						style="padding-left:16px;display:<?
+							echo ($arFields['SCALE']['VALUE']==="Y")? 'block': 'none';
+						?>"
+					>
+						<div class="adm-list-control">
+							<input
+								type="checkbox"
+								value="Y"
+								id="<?echo $arFields['METHOD']['NAME']?>"
+								name="<?echo $arFields['METHOD']['NAME']?>"
+								<?
+									if($arFields['METHOD']['VALUE']==="Y")
+										echo "checked";
+								?>
+							>
+						</div>
+						<div class="adm-list-label">
+							<label
+								for="<?echo $arFields['METHOD']['NAME']?>"
+							><?echo GetMessage("KIT_IX_PICTURE_METHOD")?></label>
+						</div>
+					</div>
+					<div class="adm-list-item"
+						id="DIV_<?echo $arFields['COMPRESSION']['NAME']?>"
+						style="padding-left:16px;display:<?
+							echo ($arFields['SCALE']['VALUE']==="Y")? 'block': 'none';
+						?>"
+					>
+						<?echo GetMessage("KIT_IX_PICTURE_COMPRESSION")?>:&nbsp;<input
+							name="<?echo $arFields['COMPRESSION']['NAME']?>"
+							type="text"
+							value="<?echo htmlspecialcharsbx($arFields['COMPRESSION']['VALUE'])?>"
+							style="width: 30px"
 						>
 					</div>
-					<div class="adm-list-label">
-						<label
-							for="<?echo $arFields['METHOD']['NAME']?>"
-						><?echo GetMessage("KIT_IX_PICTURE_METHOD")?></label>
+					<div class="adm-list-item">
+						<div class="adm-list-control">
+							<input
+								type="checkbox"
+								value="Y"
+								id="<?echo $arFields['USE_WATERMARK_FILE']['NAME']?>"
+								name="<?echo $arFields['USE_WATERMARK_FILE']['NAME']?>"
+								<?
+								if($arFields['USE_WATERMARK_FILE']['VALUE']==="Y")
+									echo "checked";
+								?>
+								onclick="
+									BX('DIV_<?echo $arFields['USE_WATERMARK_FILE']['NAME']?>').style.display =
+									BX('DIV_<?echo $arFields['WATERMARK_FILE_ALPHA']['NAME']?>').style.display =
+									BX('DIV_<?echo $arFields['WATERMARK_FILE_POSITION']['NAME']?>').style.display =
+									this.checked? 'block': 'none';
+								"
+							>
+						</div>
+						<div class="adm-list-label">
+							<label
+								for="<?echo $arFields['USE_WATERMARK_FILE']['NAME']?>"
+							><?echo GetMessage("KIT_IX_PICTURE_USE_WATERMARK_FILE")?></label>
+						</div>
 					</div>
-				</div>
-				<div class="adm-list-item"
-					id="DIV_<?echo $arFields['COMPRESSION']['NAME']?>"
-					style="padding-left:16px;display:<?
-						echo ($arFields['SCALE']['VALUE']==="Y")? 'block': 'none';
-					?>"
-				>
-					<?echo GetMessage("KIT_IX_PICTURE_COMPRESSION")?>:&nbsp;<input
-						name="<?echo $arFields['COMPRESSION']['NAME']?>"
-						type="text"
-						value="<?echo htmlspecialcharsbx($arFields['COMPRESSION']['VALUE'])?>"
-						style="width: 30px"
+					<div class="adm-list-item"
+						id="DIV_<?echo $arFields['USE_WATERMARK_FILE']['NAME']?>"
+						style="padding-left:16px;display:<?
+							if($arFields['USE_WATERMARK_FILE']['VALUE']==="Y") echo 'block'; else echo 'none';
+						?>"
 					>
-				</div>
-				<div class="adm-list-item">
-					<div class="adm-list-control">
-						<input
-							type="checkbox"
-							value="Y"
-							id="<?echo $arFields['USE_WATERMARK_FILE']['NAME']?>"
-							name="<?echo $arFields['USE_WATERMARK_FILE']['NAME']?>"
-							<?
-							if($arFields['USE_WATERMARK_FILE']['VALUE']==="Y")
-								echo "checked";
-							?>
-							onclick="
-								BX('DIV_<?echo $arFields['USE_WATERMARK_FILE']['NAME']?>').style.display =
-								BX('DIV_<?echo $arFields['WATERMARK_FILE_ALPHA']['NAME']?>').style.display =
-								BX('DIV_<?echo $arFields['WATERMARK_FILE_POSITION']['NAME']?>').style.display =
-								this.checked? 'block': 'none';
-							"
+						<?CAdminFileDialog::ShowScript(array(
+							"event" => "BtnClick".strtr(htmlspecialcharsbx($_GET['field_name']), array('['=>'_', ']'=>'_')),
+							"arResultDest" => array("ELEMENT_ID" => strtr($arFields['WATERMARK_FILE']['NAME'], array('['=>'_', ']'=>'_'))),
+							"arPath" => array("PATH" => GetDirPath($arFields['WATERMARK_FILE']['VALUE'])),
+							"select" => 'F',// F - file only, D - folder only
+							"operation" => 'O',// O - open, S - save
+							"showUploadTab" => true,
+							"showAddToMenuTab" => false,
+							"fileFilter" => 'jpg,jpeg,png,gif',
+							"allowAllFiles" => false,
+							"SaveConfig" => true,
+						));?>
+						<?echo GetMessage("KIT_IX_PICTURE_WATERMARK_FILE")?>:&nbsp;<input
+							name="<?echo $arFields['WATERMARK_FILE']['NAME']?>"
+							id="<?echo strtr($arFields['WATERMARK_FILE']['NAME'], array('['=>'_', ']'=>'_'))?>"
+							type="text"
+							value="<?echo htmlspecialcharsbx($arFields['WATERMARK_FILE']['VALUE'])?>"
+							size="35"
+						>&nbsp;<input type="button" value="..." onClick="BtnClick<?echo strtr(htmlspecialcharsbx($_GET['field_name']), array('['=>'_', ']'=>'_'))?>()">
+					</div>
+					<div class="adm-list-item"
+						id="DIV_<?echo $arFields['WATERMARK_FILE_ALPHA']['NAME']?>"
+						style="padding-left:16px;display:<?
+							if($arFields['USE_WATERMARK_FILE']['VALUE']==="Y") echo 'block'; else echo 'none';
+						?>"
+					>
+						<?echo GetMessage("KIT_IX_PICTURE_WATERMARK_FILE_ALPHA")?>:&nbsp;<input
+							name="<?echo $arFields['WATERMARK_FILE_ALPHA']['NAME']?>"
+							type="text"
+							value="<?echo htmlspecialcharsbx($arFields['WATERMARK_FILE_ALPHA']['VALUE'])?>"
+							size="3"
 						>
 					</div>
-					<div class="adm-list-label">
-						<label
-							for="<?echo $arFields['USE_WATERMARK_FILE']['NAME']?>"
-						><?echo GetMessage("KIT_IX_PICTURE_USE_WATERMARK_FILE")?></label>
-					</div>
-				</div>
-				<div class="adm-list-item"
-					id="DIV_<?echo $arFields['USE_WATERMARK_FILE']['NAME']?>"
-					style="padding-left:16px;display:<?
-						if($arFields['USE_WATERMARK_FILE']['VALUE']==="Y") echo 'block'; else echo 'none';
-					?>"
-				>
-					<?CAdminFileDialog::ShowScript(array(
-						"event" => "BtnClick".strtr(htmlspecialcharsex($_GET['field_name']), array('['=>'_', ']'=>'_')),
-						"arResultDest" => array("ELEMENT_ID" => strtr($arFields['WATERMARK_FILE']['NAME'], array('['=>'_', ']'=>'_'))),
-						"arPath" => array("PATH" => GetDirPath($arFields['WATERMARK_FILE']['VALUE'])),
-						"select" => 'F',// F - file only, D - folder only
-						"operation" => 'O',// O - open, S - save
-						"showUploadTab" => true,
-						"showAddToMenuTab" => false,
-						"fileFilter" => 'jpg,jpeg,png,gif',
-						"allowAllFiles" => false,
-						"SaveConfig" => true,
-					));?>
-					<?echo GetMessage("KIT_IX_PICTURE_WATERMARK_FILE")?>:&nbsp;<input
-						name="<?echo $arFields['WATERMARK_FILE']['NAME']?>"
-						id="<?echo strtr($arFields['WATERMARK_FILE']['NAME'], array('['=>'_', ']'=>'_'))?>"
-						type="text"
-						value="<?echo htmlspecialcharsbx($arFields['WATERMARK_FILE']['VALUE'])?>"
-						size="35"
-					>&nbsp;<input type="button" value="..." onClick="BtnClick<?echo strtr(htmlspecialcharsbx($_GET['field_name']), array('['=>'_', ']'=>'_'))?>()">
-				</div>
-				<div class="adm-list-item"
-					id="DIV_<?echo $arFields['WATERMARK_FILE_ALPHA']['NAME']?>"
-					style="padding-left:16px;display:<?
-						if($arFields['USE_WATERMARK_FILE']['VALUE']==="Y") echo 'block'; else echo 'none';
-					?>"
-				>
-					<?echo GetMessage("KIT_IX_PICTURE_WATERMARK_FILE_ALPHA")?>:&nbsp;<input
-						name="<?echo $arFields['WATERMARK_FILE_ALPHA']['NAME']?>"
-						type="text"
-						value="<?echo htmlspecialcharsbx($arFields['WATERMARK_FILE_ALPHA']['VALUE'])?>"
-						size="3"
+					<div class="adm-list-item"
+						id="DIV_<?echo $arFields['WATERMARK_FILE_POSITION']['NAME']?>"
+						style="padding-left:16px;display:<?
+							if($arFields['USE_WATERMARK_FILE']['VALUE']==="Y") echo 'block'; else echo 'none';
+						?>"
 					>
-				</div>
-				<div class="adm-list-item"
-					id="DIV_<?echo $arFields['WATERMARK_FILE_POSITION']['NAME']?>"
-					style="padding-left:16px;display:<?
-						if($arFields['USE_WATERMARK_FILE']['VALUE']==="Y") echo 'block'; else echo 'none';
-					?>"
-				>
-					<?echo GetMessage("KIT_IX_PICTURE_WATERMARK_POSITION")?>:&nbsp;<?echo SelectBox(
-						$arFields['WATERMARK_FILE_POSITION']['NAME'],
-						IBlockGetWatermarkPositions(),
-						"",
-						$arFields['WATERMARK_FILE_POSITION']['VALUE']
-					);?>
-				</div>
-				<div class="adm-list-item">
-					<div class="adm-list-control">
-						<input
-							type="checkbox"
-							value="Y"
-							id="<?echo $arFields['USE_WATERMARK_TEXT']['NAME']?>"
-							name="<?echo $arFields['USE_WATERMARK_TEXT']['NAME']?>"
-							<?
-							if($arFields['USE_WATERMARK_TEXT']['VALUE']==="Y")
-								echo "checked";
-							?>
-							onclick="
-								BX('DIV_<?echo $arFields['USE_WATERMARK_TEXT']['NAME']?>').style.display =
-								BX('DIV_<?echo $arFields['WATERMARK_TEXT_FONT']['NAME']?>').style.display =
-								BX('DIV_<?echo $arFields['WATERMARK_TEXT_COLOR']['NAME']?>').style.display =
-								BX('DIV_<?echo $arFields['WATERMARK_TEXT_SIZE']['NAME']?>').style.display =
-								BX('DIV_<?echo $arFields['WATERMARK_TEXT_POSITION']['NAME']?>').style.display =
-								this.checked? 'block': 'none';
-							"
-						>
-					</div>
-					<div class="adm-list-label">
-						<label
-							for="<?echo $arFields['USE_WATERMARK_TEXT']['NAME']?>"
-						><?echo GetMessage("KIT_IX_PICTURE_USE_WATERMARK_TEXT")?></label>
-					</div>
-				</div>
-				<div class="adm-list-item"
-					id="DIV_<?echo $arFields['USE_WATERMARK_TEXT']['NAME']?>"
-					style="padding-left:16px;display:<?
-						if($arFields['USE_WATERMARK_TEXT']['VALUE']==="Y") echo 'block'; else echo 'none';
-					?>"
-				>
-					<?echo GetMessage("KIT_IX_PICTURE_WATERMARK_TEXT")?>:&nbsp;<input
-						name="<?echo $arFields['WATERMARK_TEXT']['NAME']?>"
-						type="text"
-						value="<?echo htmlspecialcharsbx($arFields['WATERMARK_TEXT']['VALUE'])?>"
-						size="35"
-					>
-					<?CAdminFileDialog::ShowScript(array(
-						"event" => "BtnClickFont".strtr(htmlspecialcharsex($_GET['field_name']), array('['=>'_', ']'=>'_')),
-						"arResultDest" => array("ELEMENT_ID" => strtr($arFields['WATERMARK_TEXT_FONT']['NAME'], array('['=>'_', ']'=>'_'))),
-						"arPath" => array("PATH" => GetDirPath($arFields['WATERMARK_TEXT_FONT']['VALUE'])),
-						"select" => 'F',// F - file only, D - folder only
-						"operation" => 'O',// O - open, S - save
-						"showUploadTab" => true,
-						"showAddToMenuTab" => false,
-						"fileFilter" => 'ttf',
-						"allowAllFiles" => false,
-						"SaveConfig" => true,
-					));?>
-				</div>
-				<div class="adm-list-item"
-					id="DIV_<?echo $arFields['WATERMARK_TEXT_FONT']['NAME']?>"
-					style="padding-left:16px;display:<?
-						if($arFields['USE_WATERMARK_TEXT']['VALUE']==="Y") echo 'block'; else echo 'none';
-					?>"
-				>
-					<?echo GetMessage("KIT_IX_PICTURE_WATERMARK_TEXT_FONT")?>:&nbsp;<input
-						name="<?echo $arFields['WATERMARK_TEXT_FONT']['NAME']?>"
-						id="<?echo strtr($arFields['WATERMARK_TEXT_FONT']['NAME'], array('['=>'_', ']'=>'_'))?>"
-						type="text"
-						value="<?echo htmlspecialcharsbx($arFields['WATERMARK_TEXT_FONT']['VALUE'])?>"
-						size="35">&nbsp;<input
-						type="button"
-						value="..."
-						onClick="BtnClickFont<?echo strtr(htmlspecialcharsex($_GET['field_name']), array('['=>'_', ']'=>'_'))?>()"
-					>
-				</div>
-				<div class="adm-list-item"
-					id="DIV_<?echo $arFields['WATERMARK_TEXT_COLOR']['NAME']?>"
-					style="padding-left:16px;display:<?
-						if($arFields['USE_WATERMARK_TEXT']['VALUE']==="Y") echo 'block'; else echo 'none';
-					?>"
-				>
-					<?echo GetMessage("KIT_IX_PICTURE_WATERMARK_TEXT_COLOR")?>:&nbsp;<input
-						name="<?echo $arFields['WATERMARK_TEXT_COLOR']['NAME']?>"
-						id="<?echo $arFields['WATERMARK_TEXT_COLOR']['NAME']?>"
-						type="text"
-						value="<?echo htmlspecialcharsbx($arFields['WATERMARK_TEXT_COLOR']['VALUE'])?>"
-						size="7"
-					><script>
-						function EXTRA_WATERMARK_TEXT_COLOR(color)
-						{
-							BX('<?echo $arFields['WATERMARK_TEXT_COLOR']['NAME']?>').value = color.substring(1);
-						}
-					</script>&nbsp;<input
-						type="button"
-						value="..."
-						onclick="BX.findChildren(this.parentNode, {'tag': 'IMG'}, true)[0].onclick();"
-					><span style="float:left;width:1px;height:1px;visibility:hidden;position:absolute;"><?
-						$APPLICATION->IncludeComponent(
-							"bitrix:main.colorpicker",
+						<?echo GetMessage("KIT_IX_PICTURE_WATERMARK_POSITION")?>:&nbsp;<?echo SelectBox(
+							$arFields['WATERMARK_FILE_POSITION']['NAME'],
+							IBlockGetWatermarkPositions(),
 							"",
-							array(
-								"SHOW_BUTTON" =>"Y",
-								"ONSELECT" => "EXTRA_WATERMARK_TEXT_COLOR",
-							)
-						);
-					?></span>
-				</div>
-				<div class="adm-list-item"
-					id="DIV_<?echo $arFields['WATERMARK_TEXT_SIZE']['NAME']?>"
-					style="padding-left:16px;display:<?
-						if($arFields['USE_WATERMARK_TEXT']['VALUE']==="Y") echo 'block'; else echo 'none';
-					?>"
-				>
-					<?echo GetMessage("KIT_IX_PICTURE_WATERMARK_SIZE")?>:&nbsp;<input
-						name="<?echo $arFields['WATERMARK_TEXT_SIZE']['NAME']?>"
-						type="text"
-						value="<?echo htmlspecialcharsbx($arFields['WATERMARK_TEXT_SIZE']['VALUE'])?>"
-						size="3"
+							$arFields['WATERMARK_FILE_POSITION']['VALUE']
+						);?>
+					</div>
+					<div class="adm-list-item">
+						<div class="adm-list-control">
+							<input
+								type="checkbox"
+								value="Y"
+								id="<?echo $arFields['USE_WATERMARK_TEXT']['NAME']?>"
+								name="<?echo $arFields['USE_WATERMARK_TEXT']['NAME']?>"
+								<?
+								if($arFields['USE_WATERMARK_TEXT']['VALUE']==="Y")
+									echo "checked";
+								?>
+								onclick="
+									BX('DIV_<?echo $arFields['USE_WATERMARK_TEXT']['NAME']?>').style.display =
+									BX('DIV_<?echo $arFields['WATERMARK_TEXT_FONT']['NAME']?>').style.display =
+									BX('DIV_<?echo $arFields['WATERMARK_TEXT_COLOR']['NAME']?>').style.display =
+									BX('DIV_<?echo $arFields['WATERMARK_TEXT_SIZE']['NAME']?>').style.display =
+									BX('DIV_<?echo $arFields['WATERMARK_TEXT_POSITION']['NAME']?>').style.display =
+									this.checked? 'block': 'none';
+								"
+							>
+						</div>
+						<div class="adm-list-label">
+							<label
+								for="<?echo $arFields['USE_WATERMARK_TEXT']['NAME']?>"
+							><?echo GetMessage("KIT_IX_PICTURE_USE_WATERMARK_TEXT")?></label>
+						</div>
+					</div>
+					<div class="adm-list-item"
+						id="DIV_<?echo $arFields['USE_WATERMARK_TEXT']['NAME']?>"
+						style="padding-left:16px;display:<?
+							if($arFields['USE_WATERMARK_TEXT']['VALUE']==="Y") echo 'block'; else echo 'none';
+						?>"
 					>
-				</div>
-				<div class="adm-list-item"
-					id="DIV_<?echo $arFields['WATERMARK_TEXT_POSITION']['NAME']?>"
-					style="padding-left:16px;display:<?
-						if($arFields['WATERMARK_TEXT_POSITION']['VALUE']==="Y") echo 'block'; else echo 'none';
-					?>"
-				>
-					<?echo GetMessage("KIT_IX_PICTURE_WATERMARK_POSITION")?>:&nbsp;<?echo SelectBox(
-						$arFields['WATERMARK_TEXT_POSITION']['NAME'],
-						IBlockGetWatermarkPositions(),
-						"",
-						$arFields['WATERMARK_TEXT_POSITION']['VALUE']
-					);?>
+						<?echo GetMessage("KIT_IX_PICTURE_WATERMARK_TEXT")?>:&nbsp;<input
+							name="<?echo $arFields['WATERMARK_TEXT']['NAME']?>"
+							type="text"
+							value="<?echo htmlspecialcharsbx($arFields['WATERMARK_TEXT']['VALUE'])?>"
+							size="35"
+						>
+						<?CAdminFileDialog::ShowScript(array(
+							"event" => "BtnClickFont".strtr(htmlspecialcharsbx($_GET['field_name']), array('['=>'_', ']'=>'_')),
+							"arResultDest" => array("ELEMENT_ID" => strtr($arFields['WATERMARK_TEXT_FONT']['NAME'], array('['=>'_', ']'=>'_'))),
+							"arPath" => array("PATH" => GetDirPath($arFields['WATERMARK_TEXT_FONT']['VALUE'])),
+							"select" => 'F',// F - file only, D - folder only
+							"operation" => 'O',// O - open, S - save
+							"showUploadTab" => true,
+							"showAddToMenuTab" => false,
+							"fileFilter" => 'ttf',
+							"allowAllFiles" => false,
+							"SaveConfig" => true,
+						));?>
+					</div>
+					<div class="adm-list-item"
+						id="DIV_<?echo $arFields['WATERMARK_TEXT_FONT']['NAME']?>"
+						style="padding-left:16px;display:<?
+							if($arFields['USE_WATERMARK_TEXT']['VALUE']==="Y") echo 'block'; else echo 'none';
+						?>"
+					>
+						<?echo GetMessage("KIT_IX_PICTURE_WATERMARK_TEXT_FONT")?>:&nbsp;<input
+							name="<?echo $arFields['WATERMARK_TEXT_FONT']['NAME']?>"
+							id="<?echo strtr($arFields['WATERMARK_TEXT_FONT']['NAME'], array('['=>'_', ']'=>'_'))?>"
+							type="text"
+							value="<?echo htmlspecialcharsbx($arFields['WATERMARK_TEXT_FONT']['VALUE'])?>"
+							size="35">&nbsp;<input
+							type="button"
+							value="..."
+							onClick="BtnClickFont<?echo strtr(htmlspecialcharsbx($_GET['field_name']), array('['=>'_', ']'=>'_'))?>()"
+						>
+					</div>
+					<div class="adm-list-item"
+						id="DIV_<?echo $arFields['WATERMARK_TEXT_COLOR']['NAME']?>"
+						style="padding-left:16px;display:<?
+							if($arFields['USE_WATERMARK_TEXT']['VALUE']==="Y") echo 'block'; else echo 'none';
+						?>"
+					>
+						<?echo GetMessage("KIT_IX_PICTURE_WATERMARK_TEXT_COLOR")?>:&nbsp;<input
+							name="<?echo $arFields['WATERMARK_TEXT_COLOR']['NAME']?>"
+							id="<?echo $arFields['WATERMARK_TEXT_COLOR']['NAME']?>"
+							type="text"
+							value="<?echo htmlspecialcharsbx($arFields['WATERMARK_TEXT_COLOR']['VALUE'])?>"
+							size="7"
+						><script>
+							function EXTRA_WATERMARK_TEXT_COLOR(color)
+							{
+								BX('<?echo $arFields['WATERMARK_TEXT_COLOR']['NAME']?>').value = color.substring(1);
+							}
+						</script>&nbsp;<input
+							type="button"
+							value="..."
+							onclick="BX.findChildren(this.parentNode, {'tag': 'IMG'}, true)[0].onclick();"
+						><span style="float:left;width:1px;height:1px;visibility:hidden;position:absolute;"><?
+							$APPLICATION->IncludeComponent(
+								"bitrix:main.colorpicker",
+								"",
+								array(
+									"SHOW_BUTTON" =>"Y",
+									"ONSELECT" => "EXTRA_WATERMARK_TEXT_COLOR",
+								)
+							);
+						?></span>
+					</div>
+					<div class="adm-list-item"
+						id="DIV_<?echo $arFields['WATERMARK_TEXT_SIZE']['NAME']?>"
+						style="padding-left:16px;display:<?
+							if($arFields['USE_WATERMARK_TEXT']['VALUE']==="Y") echo 'block'; else echo 'none';
+						?>"
+					>
+						<?echo GetMessage("KIT_IX_PICTURE_WATERMARK_SIZE")?>:&nbsp;<input
+							name="<?echo $arFields['WATERMARK_TEXT_SIZE']['NAME']?>"
+							type="text"
+							value="<?echo htmlspecialcharsbx($arFields['WATERMARK_TEXT_SIZE']['VALUE'])?>"
+							size="3"
+						>
+					</div>
+					<div class="adm-list-item"
+						id="DIV_<?echo $arFields['WATERMARK_TEXT_POSITION']['NAME']?>"
+						style="padding-left:16px;display:<?
+							if($arFields['WATERMARK_TEXT_POSITION']['VALUE']==="Y") echo 'block'; else echo 'none';
+						?>"
+					>
+						<?echo GetMessage("KIT_IX_PICTURE_WATERMARK_POSITION")?>:&nbsp;<?echo SelectBox(
+							$arFields['WATERMARK_TEXT_POSITION']['NAME'],
+							IBlockGetWatermarkPositions(),
+							"",
+							$arFields['WATERMARK_TEXT_POSITION']['VALUE']
+						);?>
+					</div>
+					
+					<div class="adm-list-item">
+						<div class="adm-list-control">
+							<input
+								type="checkbox"
+								value="Y"
+								id="<?echo $arFields['CHANGE_EXTENSION']['NAME']?>"
+								name="<?echo $arFields['CHANGE_EXTENSION']['NAME']?>"
+								<?
+								if($arFields['CHANGE_EXTENSION']['VALUE']==="Y")
+									echo "checked";
+								?>
+								onclick="
+									BX('DIV_<?echo $arFields['NEW_EXTENSION']['NAME']?>').style.display =
+									this.checked? 'block': 'none';
+								"
+							>
+						</div>
+						<div class="adm-list-label">
+							<label
+								for="<?echo $arFields['CHANGE_EXTENSION']['NAME']?>"
+							><?echo GetMessage("KIT_IX_PICTURE_CHANGE_EXTENSION")?></label>
+						</div>
+					</div>
+					<div class="adm-list-item"
+						id="DIV_<?echo $arFields['NEW_EXTENSION']['NAME']?>"
+						style="padding-left:16px;display:<?
+							if($arFields['CHANGE_EXTENSION']['VALUE']==="Y") echo 'block'; else echo 'none';
+						?>"
+					>
+						<?echo GetMessage("KIT_IX_PICTURE_NEW_EXTENSION")?>:&nbsp;<select
+							name="<?echo $arFields['NEW_EXTENSION']['NAME']?>"
+						>
+							<option value="webp"<?if($arFields['NEW_EXTENSION']['VALUE']=='webp'){echo ' selected';}?>>webp</option>
+							<option value="jpg"<?if($arFields['NEW_EXTENSION']['VALUE']=='jpg'){echo ' selected';}?>>jpg</option>
+							<option value="png"<?if($arFields['NEW_EXTENSION']['VALUE']=='png'){echo ' selected';}?>>png</option>
+						</select>
+					</div>
 				</div>
 				</td>
 			</tr>
@@ -1349,7 +1689,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 			</tr>
 		<?}*/?>
 		
-		<?if($field!='SECTION_SEP_NAME'){?>
+		<?if($fieldXpath!=='none' && $field!='SECTION_SEP_NAME'){?>
 			<tr class="heading">
 				<td colspan="2"><?echo GetMessage("KIT_IX_SETTINGS_FILTER"); ?></td>
 			</tr>
@@ -1357,15 +1697,9 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_FILTER_UPLOAD");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[UPLOAD_VALUES]';
-					$fName2 = htmlspecialcharsex($_GET['field_name']).'[UPLOAD_KEYS]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					$fNameEval2 = strtr($fName2, array("["=>"['", "]"=>"']"));
-					$arVals = array();
-					if(is_array($PEXTRASETTINGS)) eval('$arVals = $P'.$fNameEval.';');
+					list($fName, $arVals) = GetFieldEextraVal($PEXTRASETTINGS, 'UPLOAD_VALUES');
 					if(!is_array($arVals) || count($arVals) == 0) $arVals = array('');
-					$arKeys = array();
-					if(is_array($PEXTRASETTINGS)) eval('$arKeys = $P'.$fNameEval2.';');
+					list($fName2, $arKeys) = GetFieldEextraVal($PEXTRASETTINGS, 'UPLOAD_KEYS');
 					if(!is_array($arKeys) || count($arKeys) == 0) $arKeys = array('');
 					$fName .= '[]';
 					$fName2 .= '[]';
@@ -1394,15 +1728,9 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_FILTER_NOT_UPLOAD");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[NOT_UPLOAD_VALUES]';
-					$fName2 = htmlspecialcharsex($_GET['field_name']).'[NOT_UPLOAD_KEYS]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					$fNameEval2 = strtr($fName2, array("["=>"['", "]"=>"']"));
-					$arVals = array();
-					if(is_array($PEXTRASETTINGS)) eval('$arVals = $P'.$fNameEval.';');
+					list($fName, $arVals) = GetFieldEextraVal($PEXTRASETTINGS, 'NOT_UPLOAD_VALUES');
 					if(!is_array($arVals) || count($arVals) == 0) $arVals = array('');
-					$arKeys = array();
-					if(is_array($PEXTRASETTINGS)) eval('$arKeys = $P'.$fNameEval2.';');
+					list($fName2, $arKeys) = GetFieldEextraVal($PEXTRASETTINGS, 'NOT_UPLOAD_KEYS');
 					if(!is_array($arKeys) || count($arKeys) == 0) $arKeys = array('');
 					$fName .= '[]';
 					$fName2 .= '[]';
@@ -1431,9 +1759,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_USE_FILTER_FOR_DEACTIVATE");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[USE_FILTER_FOR_DEACTIVATE]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'USE_FILTER_FOR_DEACTIVATE');
 					?>
 					<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?>>
 				</td>
@@ -1442,9 +1768,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="kit-ix-settings-margin-container" colspan="2">
 					<a href="javascript:void(0)" onclick="ESettings.ShowPHPExpression(this)"><?echo GetMessage("KIT_IX_SETTINGS_FILTER_EXPRESSION");?></a>
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[FILTER_EXPRESSION]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'FILTER_EXPRESSION');
 					?>
 					<div class="kit-ix-settings-phpexpression" style="display: none;">
 						<?echo GetMessage("KIT_IX_SETTINGS_FILTER_EXPRESSION_HINT");?>
@@ -1455,45 +1779,108 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 		<?}?>	
 
 		
-		<?if(!$bVariable){?>
+		<?if(!$bOtherField || $bProfileUrl){?>
 			<tr class="heading">
 				<td colspan="2"><?echo GetMessage("KIT_IX_SETTINGS_ADDITIONAL"); ?></td>
 			</tr>
 			<tr>
-				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_ONLY_FOR_NEW");?>:</td>
+				<?
+				$forNewMess = GetMessage("KIT_IX_SETTINGS_ONLY_FOR_NEW");
+				if(in_array($field, array('PROPERTY_XML_ID', 'PROPERTY_CODE', 'PROPERTY_NAME')))
+				{
+					$forNewMess = GetMessage("KIT_IX_SETTINGS_ONLY_FOR_NEW_PROP");
+				}
+				?>
+				<td class="adm-detail-content-cell-l"><?echo $forNewMess;?>:</td>
 				<td class="adm-detail-content-cell-r" style="min-width: 30%;">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[SET_NEW_ONLY]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'SET_NEW_ONLY');
 					?>
 					<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?>>
 				</td>
 			</tr>
-			<tr>
-				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_NOT_TRIM");?>:</td>
-				<td class="adm-detail-content-cell-r" style="min-width: 30%;">
-					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[NOT_TRIM]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
-					?>
-					<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?>>
-				</td>
-			</tr>
-
-			<?if(!$bMultipleProp && !$bMultipleField){?>
+			<?if(!$bProfileUrl){?>
 				<tr>
-					<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_INDEX_LOAD_VALUE");?>:</td>
+					<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_NOT_TRIM");?>:</td>
 					<td class="adm-detail-content-cell-r" style="min-width: 30%;">
 						<?
-						$fName = htmlspecialcharsex($_GET['field_name']).'[INDEX_LOAD_VALUE]';
-						$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-						eval('$val = $P'.$fNameEval.';');
+						list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'NOT_TRIM');
 						?>
-						<input type="text" name="<?=$fName?>" value="<?=htmlspecialcharsbx($val)?>" size="3">
+						<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?>>
 					</td>
 				</tr>
+
+				<?if(!$bMultipleProp && !$bMultipleField){?>
+					<tr>
+						<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_INDEX_LOAD_VALUE");?>:</td>
+						<td class="adm-detail-content-cell-r" style="min-width: 30%;">
+							<?
+							list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'INDEX_LOAD_VALUE');
+							?>
+							<input type="text" name="<?=$fName?>" value="<?=htmlspecialcharsbx($val)?>" size="3">
+						</td>
+					</tr>
+				<?}?>
+				
+			<?if($bMultipleProp && $bIblockElement && strlen($propertyName) > 0 && (!$iblockElementIblock || $iblockElementIblock==$IBLOCK_ID)){?>
+				<tr>
+					<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_EXCLUDE_CURRENT_ELEMENT");?>:</td>
+					<td class="adm-detail-content-cell-r">
+						<?
+						list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'EXCLUDE_CURRENT_ELEMENT');
+						?>
+						<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?>>
+					</td>
+				</tr>
+			<?}?>
+				
+			<?if($isOffer /*$bCanUseForSKUGenerate*/){?>
+				<tr>
+					<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_BIND_TO_GENERATED_SKU");?>: <span id="hint_BIND_TO_GENERATED_SKU"></span><script>BX.hint_replace(BX('hint_BIND_TO_GENERATED_SKU'), '<?echo GetMessage("KIT_IX_SETTINGS_BIND_TO_GENERATED_SKU_HINT"); ?>');</script></td>
+					<td class="adm-detail-content-cell-r">
+						<?
+						list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'BIND_TO_GENERATED_SKU');
+						?>
+						<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?>>
+					</td>
+				</tr>
+			<?}?>
+				
+				<?if($bPicture){?>
+					<tr>
+						<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_FILE_TIMEOUT");?>:</td>
+						<td class="adm-detail-content-cell-r" style="min-width: 30%;">
+							<?
+							list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'FILE_TIMEOUT');
+							?>
+							<input type="text" name="<?=$fName?>" value="<?=htmlspecialcharsbx($val)?>" size="8" placeholder="0">
+						</td>
+					</tr>
+					
+					<tr>
+						<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_FIELD_FILE_HEADERS");?>:</td>
+						<td class="adm-detail-content-cell-r" style="min-width: 30%;">
+							<?
+							list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'FILE_HEADERS');
+							?>
+							<textarea name="<?echo $fName?>" rows="2" cols="60" placeholder="<?echo GetMessage("KIT_IX_SETTINGS_EXAMPLE").":\r\n";
+							?>User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:81.0)<?echo "\r\n";
+							?>Accept: text/html;q=0.9,image/webp,*/*;q=0.8"><?echo $val?></textarea>
+						</td>
+					</tr>
+				<?}?>
+				
+				<?if($field=='PROPERTY_NAME'){?>
+					<tr>
+						<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_PROPERTY_SEARCH_WO_XML_ID");?>:</td>
+						<td class="adm-detail-content-cell-r" style="min-width: 30%;">
+							<?
+							list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'PROPERTY_SEARCH_WO_XML_ID');
+							?>
+							<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?>>
+						</td>
+					</tr>
+				<?}?>
 			<?}?>
 		<?}?>
 		
@@ -1502,9 +1889,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_LOAD_BY_EXTLINK");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[LOAD_BY_EXTLINK]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'LOAD_BY_EXTLINK');
 					?>
 					<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?>>
 				</td>
@@ -1516,9 +1901,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_LOADING_MODE");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[LOADING_MODE]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'LOADING_MODE');
 					?>
 					<select name="<?=$fName?>">
 						<option value=""><?echo GetMessage("KIT_IX_SETTINGS_LOADING_MODE_CHANGE");?></option>
@@ -1533,9 +1916,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 			<td class="kit-ix-settings-margin-container" colspan="2">
 				<a href="javascript:void(0)" onclick="ESettings.ShowPHPExpression(this)"><?echo GetMessage("KIT_IX_SETTINGS_FIELD_NOTE");?></a>
 				<?
-				$fName = htmlspecialcharsex($_GET['field_name']).'[FIELD_NOTE]';
-				$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-				eval('$val = $P'.$fNameEval.';');
+				list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'FIELD_NOTE');
 				?>
 				<div class="kit-ix-settings-phpexpression" style="display: none;">
 					<textarea name="<?echo $fName?>"><?echo $val?></textarea>
@@ -1545,7 +1926,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 		
 		
 		<?
-		if(!$bVariable)
+		if(!$bOtherField || $bProfileUrl)
 		{
 			if(strpos($field, 'ISECT_')===0 || strpos($field, 'ISUBSECT_')===0)
 			{
@@ -1561,15 +1942,9 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td colspan="2"><?echo GetMessage("KIT_IX_SETTINGS_EXTRA_CONVERSION_TITLE");?></td>
 			</tr>
 			<tr>
-				<td class="kit-ix-settings-margin-container" colspan="2">
+				<td class="kit-ix-settings-margin-container" colspan="2" id="kit-ix-conv-wrap1">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[EXTRA_CONVERSION]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					$arVals = array();
-					if(is_array($PEXTRASETTINGS))
-					{
-						eval('$arVals = $P'.$fNameEval.';');
-					}
+					list($fName, $arVals) = GetFieldEextraVal($PEXTRASETTINGS, 'EXTRA_CONVERSION');
 					$showCondition = true;
 					if(!is_array($arVals) || count($arVals)==0)
 					{
@@ -1596,13 +1971,23 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 								$cellsOptions .= '<optgroup label="'.$arGroup['TITLE'].'">';
 								foreach($arGroup['FIELDS'] as $gkey=>$gfield)
 								{
-									$cellsOptions .= '<option value="'.$gkey.'"'.($v['CELL']==$gkey ? ' selected' : '').'>'.$gfield.'</option>';
+									$cellsOptions .= '<option value="'.$gkey.'"'.($v['CELL']==$gkey ? ' selected' : '').'>'.htmlspecialcharsbx($gfield).'</option>';
 								}
 								$cellsOptions .= '</optgroup>';
 							}
 						}
+						if(!empty($availableTags))
+						{
+							$cellsOptions .= '<optgroup label="'.GetMessage('KIT_IX_SETTINGS_VALS_FROM_FILE').'">';
+							foreach($availableTags as $k2=>$v2)
+							{
+								$cellsOptions .= '<option value="{'.htmlspecialcharsbx($k2).'}"'.($v['CELL']=='{'.$k2.'}' ? ' selected' : '').'>'.htmlspecialcharsbx($v2).'</option>';
+							}
+							$cellsOptions .= '</optgroup>';
+						}
 						$cellsOptions .= '<optgroup label="'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CELL_GROUP_OTHER").'">';
 						$cellsOptions .= '<option value="LOADED"'.($v['CELL']=='LOADED' ? ' selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CELL_LOADED").'</option>';
+						$cellsOptions .= '<option value="DUPLICATE"'.($v['CELL']=='DUPLICATE' ? ' selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CELL_DUPLICATE").'</option>';
 						$cellsOptions .= '<option value="ELSE"'.($v['CELL']=='ELSE' ? ' selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CELL_ELSE").'</option>';
 						$cellsOptions .= '</optgroup>';
 						
@@ -1618,8 +2003,11 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 									'<option value="LT" '.($v['WHEN']=='LT' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_LT").'</option>'.
 									'<option value="GEQ" '.($v['WHEN']=='GEQ' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_GEQ").'</option>'.
 									'<option value="LEQ" '.($v['WHEN']=='LEQ' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_LEQ").'</option>'.
+									'<option value="BETWEEN" '.($v['WHEN']=='BETWEEN' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_BETWEEN").'</option>'.
 									'<option value="CONTAIN" '.($v['WHEN']=='CONTAIN' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_CONTAIN").'</option>'.
 									'<option value="NOT_CONTAIN" '.($v['WHEN']=='NOT_CONTAIN' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_NOT_CONTAIN").'</option>'.
+									'<option value="BEGIN_WITH" '.($v['WHEN']=='BEGIN_WITH' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_BEGIN_WITH").'</option>'.
+									'<option value="ENDS_IN" '.($v['WHEN']=='ENDS_IN' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_ENDS_IN").'</option>'.
 									'<option value="EMPTY" '.($v['WHEN']=='EMPTY' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_EMPTY").'</option>'.
 									'<option value="NOT_EMPTY" '.($v['WHEN']=='NOT_EMPTY' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_NOT_EMPTY").'</option>'.
 									'<option value="REGEXP" '.($v['WHEN']=='REGEXP' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_CONDITION_REGEXP").'</option>'.
@@ -1640,8 +2028,12 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 										'<option value="UFIRST" '.($v['THEN']=='UFIRST' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_UFIRST").'</option>'.
 										'<option value="UWORD" '.($v['THEN']=='UWORD' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_UWORD").'</option>'.
 										'<option value="TRANSLIT" '.($v['THEN']=='TRANSLIT' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_TRANSLIT").'</option>'.
+									'</optgroup>'.
+									'<optgroup label="'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_GROUP_HTML").'">'.
 										'<option value="STRIP_TAGS" '.($v['THEN']=='STRIP_TAGS' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_STRIP_TAGS").'</option>'.
 										'<option value="CLEAR_TAGS" '.($v['THEN']=='CLEAR_TAGS' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_CLEAR_TAGS").'</option>'.
+										'<option value="DOWNLOAD_BY_LINK" '.($v['THEN']=='DOWNLOAD_BY_LINK' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_DOWNLOAD_BY_LINK").'</option>'.
+										'<option value="DOWNLOAD_IMAGES" '.($v['THEN']=='DOWNLOAD_IMAGES' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_DOWNLOAD_IMAGES").'</option>'.
 									'</optgroup>'.
 									'<optgroup label="'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_GROUP_MATH").'">'.
 										'<option value="MATH_ROUND" '.($v['THEN']=='MATH_ROUND' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_MATH_ROUND").'</option>'.
@@ -1649,6 +2041,9 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 										'<option value="MATH_DIVIDE" '.($v['THEN']=='MATH_DIVIDE' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_MATH_DIVIDE").'</option>'.
 										'<option value="MATH_ADD" '.($v['THEN']=='MATH_ADD' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_MATH_ADD").'</option>'.
 										'<option value="MATH_SUBTRACT" '.($v['THEN']=='MATH_SUBTRACT' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_MATH_SUBTRACT").'</option>'.
+										'<option value="MATH_ADD_PERCENT" '.($v['THEN']=='MATH_ADD_PERCENT' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_MATH_ADD_PERCENT").'</option>'.
+										'<option value="MATH_SUBTRACT_PERCENT" '.($v['THEN']=='MATH_SUBTRACT_PERCENT' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_MATH_SUBTRACT_PERCENT").'</option>'.
+										'<option value="MATH_FORMULA" '.($v['THEN']=='MATH_FORMULA' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_MATH_FORMULA").'</option>'.
 									'</optgroup>'.
 									'<optgroup label="'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_GROUP_OTHER").'">'.
 										'<option value="NOT_LOAD" '.($v['THEN']=='NOT_LOAD' ? 'selected' : '').'>'.GetMessage("KIT_IX_SETTINGS_CONVERSION_THEN_NOT_LOAD_FIELD").'</option>'.
@@ -1658,6 +2053,8 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 								'</select> '.
 								'<input type="text" name="'.$fName.'[TO][]" value="'.htmlspecialcharsbx($v['TO']).'">'.
 								'<input class="choose_val" value="..." type="button" onclick="ESettings.ShowExtraChooseVal(this, '.$countCols.')">'.
+								'<a href="javascript:void(0)" onclick="ESettings.ConversionUp(this)" title="'.GetMessage("KIT_IX_SETTINGS_UP").'" class="up"></a>'.
+								'<a href="javascript:void(0)" onclick="ESettings.ConversionDown(this)" title="'.GetMessage("KIT_IX_SETTINGS_DOWN").'" class="down"></a>'.
 								'<a href="javascript:void(0)" onclick="ESettings.RemoveConversion(this)" title="'.GetMessage("KIT_IX_SETTINGS_DELETE").'" class="delete"></a>'.
 							 '</div>';
 					}
@@ -1670,15 +2067,34 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 </form>
 <?
 if(!is_array($arSFields)) $arSFields = array();
+
+$arRates = array(
+	'USD' => GetMessage("KIT_IX_SETTINGS_LANG_RATE_USD"),
+	'EUR' => GetMessage("KIT_IX_SETTINGS_LANG_RATE_EUR"),
+);
+if($bCurrency && is_callable(array('\Bitrix\Currency\CurrencyTable', 'getList')))
+{
+	$dbRes = \Bitrix\Currency\CurrencyTable::getList(array('filter'=>array('!CURRENCY'=>array('USD', 'EUR', 'RUB', 'RUR')), 'select'=>array('CURRENCY', 'NAME'=>'CURRENT_LANG_FORMAT.FULL_NAME')));
+	while($arr = $dbRes->Fetch())
+	{
+		$arRates[$arr['CURRENCY']] = GetMessage("KIT_IX_SETTINGS_LANG_RATE_ITEM").' '.$arr['CURRENCY'].' ('.$arr['NAME'].')';
+	}
+}
 ?>
 <script>
 var admKDASettingMessages = {
-	'CELL_VALUE': '<?echo htmlspecialcharsex(GetMessage("KIT_IX_SETTINGS_LANG_CELL_VALUE"));?>',
-	'RATE_USD': '<?echo htmlspecialcharsex(GetMessage("KIT_IX_SETTINGS_LANG_RATE_USD"));?>',
-	'RATE_EUR': '<?echo htmlspecialcharsex(GetMessage("KIT_IX_SETTINGS_LANG_RATE_EUR"));?>',
-	'HASH_FILEDS': '<?echo htmlspecialcharsex(GetMessage("KIT_IX_SETTINGS_LANG_HASH_FILEDS"));?>',
-	'EXTRAFIELDS': <?echo CUtil::PhpToJSObject($arSFields)?>,
-	'AVAILABLE_TAGS': <?echo CUtil::PhpToJSObject($availableTags)?>
+	'CURRENT_VALUE': '<?echo htmlspecialcharsex(GetMessage("KIT_IX_SETTINGS_LANG_CURRENT_VALUE"));?>',
+	'CELL_VALUE': '<?echo htmlspecialcharsbx(GetMessage("KIT_IX_SETTINGS_LANG_CELL_VALUE"));?>',
+	'RATE_USD': '<?echo htmlspecialcharsbx(GetMessage("KIT_IX_SETTINGS_LANG_RATE_USD"));?>',
+	'RATE_EUR': '<?echo htmlspecialcharsbx(GetMessage("KIT_IX_SETTINGS_LANG_RATE_EUR"));?>',
+	'RATES': <?echo (is_array($arRates) && count($arRates) > 0 ? \CUtil::PhpToJSObject($arRates) : "''");?>,
+	'HASH_FILEDS': '<?echo htmlspecialcharsbx(GetMessage("KIT_IX_SETTINGS_LANG_HASH_FILEDS"));?>',
+	'IFILELINK': '<?echo htmlspecialcharsbx(GetMessage("KIT_IX_SETTINGS_LANG_IFILELINK"));?>',
+	'IFILEDATE': '<?echo htmlspecialcharsex(GetMessage("KIT_IX_SETTINGS_LANG_IFILEDATE"));?>',
+	'IDATETIME': '<?echo htmlspecialcharsbx(GetMessage("KIT_IX_SETTINGS_LANG_IDATETIME"));?>',
+	'EXTRAFIELDS': <?echo \CUtil::PhpToJSObject($arSFields)?>,
+	'AVAILABLE_TAGS': <?echo \CUtil::PhpToJSObject($availableTags)?>,
+	'VALUES': <?echo (is_array($arPropVals) && count($arPropVals) > 0 ? \CUtil::PhpToJSObject($arPropVals) : "''");?>
 };
 </script>
 <?require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/epilog_popup_admin.php");?>

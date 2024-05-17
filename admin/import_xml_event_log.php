@@ -1,139 +1,237 @@
 <?php
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
+use Bitrix\Main\Entity\Query;
+use Bitrix\Main\Entity\ExpressionField;
 
+if(!defined('NO_AGENT_CHECK')) define('NO_AGENT_CHECK', true);
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_before.php");
 require_once($_SERVER["DOCUMENT_ROOT"].BX_ROOT."/modules/main/prolog.php");
-
-if(!$USER->CanDoOperation('view_event_log'))
-	$APPLICATION->AuthForm(GetMessage("ACCESS_DENIED"));
-
-IncludeModuleLangFile(__FILE__);
-$MODULE_ID = 'kit.importxml';
-CModule::IncludeModule($MODULE_ID);
+$moduleId = 'kit.importxml';
+$moduleFilePrefix = 'kit_import_xml';
+$moduleJsId = str_replace('.', '_', $moduleId);
+$moduleJsId2 = $moduleJsId;
+$moduleDemoExpiredFunc = $moduleJsId2.'_demo_expired';
+$moduleShowDemoFunc = $moduleJsId2.'_show_demo';
 CModule::IncludeModule('iblock');
+CModule::IncludeModule($moduleId);
+CJSCore::Init(array($moduleJsId));
+IncludeModuleLangFile(__FILE__);
+
+include_once(dirname(__FILE__).'/../install/demo.php');
+if (call_user_func($moduleDemoExpiredFunc)) {
+	require ($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_after.php");
+	call_user_func($moduleShowDemoFunc);
+	require ($DOCUMENT_ROOT."/bitrix/modules/main/include/epilog_admin.php");
+	die();
+}
+
+$MODULE_RIGHT = $APPLICATION->GetGroupRight($moduleId);
+if($MODULE_RIGHT < "W") $APPLICATION->AuthForm(GetMessage("ACCESS_DENIED"));
+
+$oProfile = \Bitrix\KitImportxml\Profile::getInstance();
+$arProfiles = $oProfile->GetList();
 $logger = new \Bitrix\KitImportxml\Logger(false);
 
-$oProfile = new \Bitrix\KitImportxml\Profile();
-$arProfiles = $oProfile->GetList();
-
-$sTableID = "tbl_kit_importxml_event_log";
+$sTableID = "tbl_kit_importxml_view_stat";
 $oSort = new CAdminSorting($sTableID, "ID", "DESC");
 $lAdmin = new CAdminList($sTableID, $oSort);
 
 $arFilterFields = array(
 	"find",
 	"find_type",
-	"find_id",
+	"find_exec_id",
 	"find_timestamp_x_1",
 	"find_timestamp_x_2",
-	"find_audit_type_id",
+	"find_profile_id",
 	"find_item_id",
-	"find_site_id",
 	"find_user_id",
-	"find_guest_id",
-	"find_remote_addr",
-	"find_user_agent",
-	"find_request_uri",
 );
-function CheckFilter()
-{
-	$str = "";
-	if(strlen($_REQUEST["find_timestamp_x_1"])>0)
-	{
-		if(!CheckDateTime($_REQUEST["find_timestamp_x_1"], CSite::GetDateFormat("FULL")))
-			$str.= GetMessage("KIT_IX_EVENTLOG_WRONG_TIMESTAMP_X_FROM")."<br>";
-	}
-	if(strlen($_REQUEST["find_timestamp_x_2"])>0)
-	{
-		if(!CheckDateTime($_REQUEST["find_timestamp_x_2"], CSite::GetDateFormat("FULL")))
-			$str.= GetMessage("KIT_IX_EVENTLOG_WRONG_TIMESTAMP_X_TO")."<br>";
-	}
-
-	if(strlen($str) > 0)
-	{
-		global $lAdmin;
-		$lAdmin->AddFilterError($str);
-		return false;
-	}
-
-	return true;
-}
 
 $arFilter = array();
 $lAdmin->InitFilter($arFilterFields);
 InitSorting();
 
 $find = $_REQUEST["find"];
-$find_id = $_REQUEST["find_id"];
-$find_audit_type = $_REQUEST["find_audit_type"];
+$find_exec_id = $_REQUEST["find_exec_id"];
 $find_type = $_REQUEST["find_type"];
-$find_audit_type_id = $_REQUEST["find_audit_type_id"];
+$find_profile_id = $_REQUEST["find_profile_id"];
 $find_timestamp_x_1 = $_REQUEST["find_timestamp_x_1"];
 $find_timestamp_x_2 = $_REQUEST["find_timestamp_x_2"];
 $find_item_id = $_REQUEST["find_item_id"];
-$find_site_id = $_REQUEST["find_site_id"];
-$find_guest_id = $_REQUEST["find_guest_id"];
-$find_remote_addr = $_REQUEST["find_remote_addr"];
-$find_request_uri = $_REQUEST["find_request_uri"];
-$find_user_agent = $_REQUEST["find_user_agent"];
 
-if(CheckFilter())
+if(strlen($find_profile_id) > 0) $arFilter['PROFILE_ID'] = $find_profile_id;
+if(strlen($find_exec_id) > 0) $arFilter['PROFILE_EXEC_ID'] = $find_exec_id;
+if(strlen($find_timestamp_x_1) > 0) $arFilter['>=DATE_EXEC'] = $find_timestamp_x_1;
+if(strlen($find_timestamp_x_2) > 0) $arFilter['<=DATE_EXEC'] = $find_timestamp_x_2;
+if(!is_array($find_type) && strlen($find_type) > 0) $arFilter['TYPE'] = $find_type;
+elseif(is_array($find_type))
 {
-	if(is_array($find_audit_type) && $find_audit_type[0] == "NOT_REF")
+	$find_type = array_diff($find_type, array('NOT_REF'));
+	if(!empty($find_type)) $arFilter['TYPE'] = $find_type;
+}
+if(strlen(trim($find_item_id)) > 0)
+{
+	$find_item_id = trim($find_item_id);
+	if(is_numeric($find_item_id)) $arFilter['ENTITY_ID'] = $find_item_id;
+	else $arFilter['?IBLOCK_ELEMENT.NAME'] = $find_item_id;
+}
+if(strlen($find_user_id) > 0) $arFilter['PROFILE_EXEC.RUNNED_BY'] = $find_user_id;
+
+
+if(($arID = $lAdmin->GroupAction()))
+{
+	$removedCnt = 0;
+	if($_REQUEST['action_target']=='selected')
 	{
-		$audit_type_id_op = "=";
-		$audit_type_id_filter = false;
+		$arID = Array();
+		$dbResultList = \Bitrix\KitImportxml\ProfileExecStatTable::getList(array('filter'=>$arFilter, 'select'=>array('ID')));
+		while($arResult = $dbResultList->Fetch())
+			$arID[] = $arResult['ID'];
 	}
-	elseif($find_type == "audit_type_id" && $find != '')
+
+	foreach ($arID as $ID)
 	{
-		$audit_type_id_op = "";
-		$audit_type_id_filter = $find;
+		if(strlen($ID) <= 0)
+			continue;
+
+		switch ($_REQUEST['action'])
+		{
+			case "delete":
+				$dbRes = \Bitrix\KitImportxml\ProfileExecStatTable::delete($ID);
+				if($dbRes->isSuccess())
+				{
+					$removedCnt++;
+				}				
+				else
+				{
+					$error = '';
+					if($dbRes->getErrors())
+					{
+						foreach($dbRes->getErrors() as $errorObj)
+						{
+							$error .= $errorObj->getMessage().'. ';
+						}
+					}
+					if($error)
+						$lAdmin->AddGroupError($error, $ID);
+					else
+						$lAdmin->AddGroupError(GetMessage("KIT_IX_ERROR_DELETING_TYPE"), $ID);
+				}
+				break;
+		}
 	}
-	elseif(is_array($find_audit_type))
+	
+	if($removedCnt > 0)
 	{
-		$audit_type_id_op = "=";
-		$audit_type_id_filter = $find_audit_type;
+		$dbRes = \Bitrix\KitImportxml\ProfileExecTable::getList(array(
+			'select' => array(
+				'ID', 
+				'PROFILE_EXEC_STAT_CNT'
+			),
+			'runtime' => array(
+				'PROFILE_EXEC_STAT_CNT' => array(
+					"data_type" => "integer",
+					"expression" => array("COUNT(%s)", 'PROFILE_EXEC_STAT.ID')
+				)
+			),
+			'filter' => array('PROFILE_EXEC_STAT_CNT'=>0)
+		));
+		while($arProfileExec = $dbRes->Fetch())
+		{
+			\Bitrix\KitImportxml\ProfileExecTable::delete($arProfileExec['ID']);
+		}
+	}
+}
+
+	
+$usePageNavigation = true;
+if (isset($_REQUEST['mode']) && $_REQUEST['mode'] == 'excel')
+{
+	$usePageNavigation = false;
+}
+else
+{
+	$navyParams = CDBResult::GetNavParams(CAdminResult::GetNavSize(
+		$sTableID,
+		array('nPageSize' => 20, 'sNavID' => $APPLICATION->GetCurPage())
+	));
+	if ($navyParams['SHOW_ALL'])
+	{
+		$usePageNavigation = false;
 	}
 	else
 	{
-		$audit_type_id_op = "";
-		$audit_type_id_filter = $find_audit_type;
+		$navyParams['PAGEN'] = (int)$navyParams['PAGEN'];
+		$navyParams['SIZEN'] = (int)$navyParams['SIZEN'];
 	}
-
-	if(!is_array($audit_type_id_filter) && strlen($find_audit_type_id))
-	{
-		$audit_type_id_op = "";
-		$audit_type_id_filter = "(".$audit_type_id_filter.")|(".$find_audit_type_id.")";
-	}
-
-	$arFilter = array(
-		"ID" => $find_id,
-		"TIMESTAMP_X_1" => $find_timestamp_x_1,
-		"TIMESTAMP_X_2" => $find_timestamp_x_2,
-		$audit_type_id_op."AUDIT_TYPE_ID" => $audit_type_id_filter,
-		"MODULE_ID" => $MODULE_ID,
-		"ITEM_ID" => $find_item_id,
-		"SITE_ID" => $find_site_id,
-		"USER_ID" => ($find != '' && $find_type == "user_id" ? $find : $find_user_id),
-		"GUEST_ID" => $find_guest_id,
-		"REMOTE_ADDR" => ($find != '' && $find_type == "remote_addr" ? $find : $find_remote_addr),
-		"REQUEST_URI" => $find_request_uri,
-		"USER_AGENT" => ($find != '' && $find_type == "user_agent" ? $find : $find_user_agent),
-	);
 }
 
-if(isset($_REQUEST["mode"]) && $_REQUEST["mode"] == "excel")
-	$arNavParams = false;
-else
-	$arNavParams = array("nPageSize"=>CAdminResult::GetNavSize($sTableID));
+$getListParams = array(
+	'order'=>array(ToUpper($by) => ToUpper($order)), 
+	'filter'=>$arFilter, 
+	'select'=>array(
+		'ID', 
+		'DATE_EXEC', 
+		'PROFILE_ID', 
+		'PROFILE_NAME'=>'PROFILE.NAME', 
+		'PROFILE_EXEC_ID', 
+		'TYPE', 
+		'ENTITY_ID', 
+		'RUNNED_BY_USER'=>'PROFILE_EXEC.RUNNED_BY_USER.LOGIN', 
+		'RUNNED_BY_USER_ID'=>'PROFILE_EXEC.RUNNED_BY_USER.ID', 
+		'FIELDS',
+		'IBLOCK_ELEMENT_ID'=>'IBLOCK_ELEMENT.ID',
+		'IBLOCK_ELEMENT_NAME'=>'IBLOCK_ELEMENT.NAME',
+		'IBLOCK_ELEMENT_IBLOCK_ID'=>'IBLOCK_ELEMENT.IBLOCK_ID',
+		'IBLOCK_ELEMENT_IBLOCK_TYPE_ID'=>'IBLOCK_ELEMENT.IBLOCK.IBLOCK_TYPE_ID',
+		'IBLOCK_SECTION_ID'=>'IBLOCK_SECTION.ID',
+		'IBLOCK_SECTION_NAME'=>'IBLOCK_SECTION.NAME',
+		'IBLOCK_SECTION_IBLOCK_ID'=>'IBLOCK_SECTION.IBLOCK_ID',
+		'IBLOCK_SECTION_IBLOCK_TYPE_ID'=>'IBLOCK_SECTION.IBLOCK.IBLOCK_TYPE_ID',
+	)
+);
 
-/** @global string $by  */
-/** @global string $order  */
-$rsData = CEventLog::GetList(array($by => $order), $arFilter, $arNavParams);
-$rsData = new CAdminResult($rsData, $sTableID);
-$rsData->NavStart();
+if ($usePageNavigation)
+{
+	$getListParams['limit'] = $navyParams['SIZEN'];
+	$getListParams['offset'] = $navyParams['SIZEN']*($navyParams['PAGEN']-1);
+}
+
+if ($usePageNavigation)
+{
+	$countQuery = new Query(\Bitrix\KitImportxml\ProfileExecStatTable::getEntity());
+	$countQuery->addSelect(new ExpressionField('CNT', 'COUNT(1)'));
+	$countQuery->setFilter($getListParams['filter']);
+	$totalCount = $countQuery->setLimit(null)->setOffset(null)->exec()->fetch();
+	unset($countQuery);
+	$totalCount = (int)$totalCount['CNT'];
+	if ($totalCount > 0)
+	{
+		$totalPages = ceil($totalCount/$navyParams['SIZEN']);
+		if ($navyParams['PAGEN'] > $totalPages)
+			$navyParams['PAGEN'] = $totalPages;
+		$getListParams['limit'] = $navyParams['SIZEN'];
+		$getListParams['offset'] = $navyParams['SIZEN']*($navyParams['PAGEN']-1);
+	}
+	else
+	{
+		$navyParams['PAGEN'] = 1;
+		$getListParams['limit'] = $navyParams['SIZEN'];
+		$getListParams['offset'] = 0;
+	}
+}
+$rsData = new CAdminResult(\Bitrix\KitImportxml\ProfileExecStatTable::getList($getListParams), $sTableID);
+if ($usePageNavigation)
+{
+	$rsData->NavStart($getListParams['limit'], $navyParams['SHOW_ALL'], $navyParams['PAGEN']);
+	$rsData->NavRecordCount = $totalCount;
+	$rsData->NavPageCount = $totalPages;
+	$rsData->NavPageNomer = $navyParams['PAGEN'];
+}
+else
+{
+	$rsData->NavStart();
+}
+
 $lAdmin->NavText($rsData->GetNavPrint(GetMessage("KIT_IX_EVENTLOG_LIST_PAGE")));
 
 $arHeaders = array(
@@ -145,47 +243,43 @@ $arHeaders = array(
 		"align" => "right",
 	),
 	array(
-		"id" => "TIMESTAMP_X",
+		"id" => "DATE_EXEC",
 		"content" => GetMessage("KIT_IX_EVENTLOG_TIMESTAMP_X"),
-		"sort" => "TIMESTAMP_X",
+		"sort" => "DATE_EXEC",
 		"default" => true,
 		"align" => "right",
 	),
 	array(
-		"id" => "AUDIT_TYPE_ID",
+		"id" => "PROFILE_ID",
 		"content" => GetMessage("KIT_IX_EVENTLOG_PROFILE_ID"),
 		"default" => true,
 	),
 	array(
-		"id" => "ITEM_ID",
+		"id" => "PROFILE_EXEC_ID",
+		"content" => GetMessage("KIT_IX_EVENTLOG_PROFILE_EXEC_ID"),
+		"default" => true,
+	),
+	array(
+		"id" => "TYPE",
+		"content" => GetMessage("KIT_IX_EVENTLOG_TYPE"),
+		"default" => true,
+	),
+	array(
+		"id" => "ENTITY_ID",
 		"content" => GetMessage("KIT_IX_EVENTLOG_ITEM_ID"),
 		"default" => true,
 	),
 	array(
-		"id" => "REMOTE_ADDR",
-		"content" => GetMessage("KIT_IX_EVENTLOG_REMOTE_ADDR"),
-		"default" => true,
-	),
-	array(
-		"id" => "USER_AGENT",
-		"content" => GetMessage("KIT_IX_EVENTLOG_USER_AGENT"),
-	),
-	array(
-		"id" => "REQUEST_URI",
-		"content" => GetMessage("KIT_IX_EVENTLOG_REQUEST_URI"),
-		"default" => true,
-	),
-	array(
-		"id" => "SITE_ID",
-		"content" => GetMessage("KIT_IX_EVENTLOG_SITE_ID"),
-	),
-	array(
-		"id" => "USER_ID",
+		"id" => "RUNNED_BY",
 		"content" => GetMessage("KIT_IX_EVENTLOG_USER_ID"),
 		"default" => true,
 	),
 	array(
-		"id" => "DESCRIPTION",
+		"id" => "UID",
+		"content" => GetMessage("KIT_IX_EVENTLOG_UID"),
+	),
+	array(
+		"id" => "FIELDS",
 		"content" => GetMessage("KIT_IX_EVENTLOG_DESCRIPTION"),
 		"default" => true,
 	),
@@ -196,72 +290,101 @@ $lAdmin->AddHeaders($arHeaders);
 $arUsersCache = array();
 $arGroupsCache = array();
 $arForumCache = array("FORUM" => array(), "TOPIC" => array(), "MESSAGE" => array());
-$a_ID = $a_AUDIT_TYPE_ID = $a_GUEST_ID = $a_USER_ID = $a_ITEM_ID = $a_REQUEST_URI = $a_DESCRIPTION = $a_REMOTE_ADDR = '';
+$a_ID = $a_DATE_EXEC = $a_PROFILE_NAME = $a_PROFILE_EXEC_ID = $a_TYPE = $a_ENTITY_ID = $a_RUNNED_BY_USER_ID = $a_RUNNED_BY_USER = $a_FIELDS = '';
 while($db_res = $rsData->NavNext(true, "a_"))
 {
 	$row =& $lAdmin->AddRow($a_ID, $db_res);
 	
-	$profileName = $arProfiles[(int)preg_replace('/^.*_(\d+)$/', '$1', $a_AUDIT_TYPE_ID)];
-	$row->AddViewField("AUDIT_TYPE_ID", $profileName);
-	if($a_USER_ID)
+	$elink = '';
+	$arFields = unserialize(htmlspecialcharsback($a_FIELDS));
+	if(!is_array($arFields)) $arFields = array();
+	$arUidFields = array();
+	if(isset($arFields['FILTER'])) $arUidFields = array_diff_key($arFields['FILTER'], array('IBLOCK_ID'=>'','CHECK_PERMISSIONS'=>''));
+	else foreach($arFields as $k=>$v) if(strpos($k, 'FILTER_')===0) $arUidFields[] = (is_array($v) ? implode(', ', $v) : $v);
+	if($a_TYPE)
 	{
-		if(!array_key_exists($a_USER_ID, $arUsersCache))
+		if($a_TYPE=='ELEMENT_NOT_FOUND')
 		{
-			$rsUser = CUser::GetByID($a_USER_ID);
-			if($arUser = $rsUser->GetNext())
+			$arFieldsFilter = (isset($arFields['FILTER']) ? $arFields['FILTER'] : $arFields);
+			$arFieldsFields = (isset($arFields['FIELDS']) ? $arFields['FIELDS'] : array());
+			$a_FIELDS = '<b>'.GetMessage("KIT_IX_EVENTLOG_FILTER_FIELDS").'</b>'.$logger->GetElementDescriptionArray($arFieldsFilter);
+			if(!empty($arFieldsFields)) $a_FIELDS .= $logger->GetElementDescription($arFieldsFields);
+		}
+		elseif(strpos($a_TYPE, 'ELEMENT_')===0 && $a_ENTITY_ID > 0)
+		{
+			if($a_IBLOCK_ELEMENT_ID)
 			{
-				$arUser["FULL_NAME"] = $arUser["NAME"].(strlen($arUser["NAME"])<=0 || strlen($arUser["LAST_NAME"])<=0?"":" ").$arUser["LAST_NAME"];
+				$elink = '[<a href="/bitrix/admin/iblock_element_edit.php?IBLOCK_ID='.$a_IBLOCK_ELEMENT_IBLOCK_ID.'&type='.$a_IBLOCK_ELEMENT_IBLOCK_TYPE_ID.'&ID='.$a_IBLOCK_ELEMENT_ID.'&lang='.LANGUAGE_ID.'">'.$a_IBLOCK_ELEMENT_ID.'</a>] '.$a_IBLOCK_ELEMENT_NAME;
 			}
-			$arUsersCache[$a_USER_ID] = $arUser;
-		}
-		if($arUsersCache[$a_USER_ID])
-			$row->AddViewField("USER_ID", '[<a href="user_edit.php?lang='.LANG.'&ID='.$a_USER_ID.'">'.$a_USER_ID.'</a>] '.$arUsersCache[$a_USER_ID]["FULL_NAME"]);
-	}
-	if($a_ITEM_ID)
-	{
-		if($a_ITEM_ID=='ELEMENT_NOT_FOUND')
-		{
-			$row->AddViewField("ITEM_ID", '['.$a_ITEM_ID.'] '.GetMessage("KIT_IX_EVENTLOG_IBLOCK_ELEMENT_NOT_FOUND"));
-			$a_DESCRIPTION = '<b>'.GetMessage("KIT_IX_EVENTLOG_FILTER_FIELDS").'</b>'.$logger->GetElementDescriptionArray($a_DESCRIPTION);
-		}
-		elseif(strpos($a_ITEM_ID, 'ELEMENT_')===0)
-		{
-			list($eobject, $eaction, $eid) = explode('_', $a_ITEM_ID);
-			if($eid > 0)
+			
+			if(strlen($a_FIELDS))
 			{
-				$dbRes = CIblockElement::GetList(array(), array('ID'=>$eid), false, array('nTopCount'=>1), array('ID', 'IBLOCK_ID', 'IBLOCK_TYPE_ID'));
-				if($arElement = $dbRes->Fetch())
-				{
-					$a_ITEM_ID = '<a href="/bitrix/admin/iblock_element_edit.php?IBLOCK_ID='.$arElement['IBLOCK_ID'].'&type='.$arElement['IBLOCK_TYPE_ID'].'&ID='.$arElement['ID'].'&lang='.LANGUAGE_ID.'">'.$a_ITEM_ID.'</a>';
-				}
-				$row->AddViewField("ITEM_ID", '['.$a_ITEM_ID.'] '.GetMessage("KIT_IX_EVENTLOG_IBLOCK_ELEMENT_".$eaction));
-				
-				if(strlen($a_DESCRIPTION))
-				{
-					$a_DESCRIPTION = $logger->GetElementDescription($a_DESCRIPTION);
-				}
+				$a_FIELDS = $logger->GetElementDescription($a_FIELDS);
+			}
+		}
+		elseif(strpos($a_TYPE, 'SECTION_')===0 && $a_ENTITY_ID > 0)
+		{
+			if($a_IBLOCK_SECTION_ID)
+			{
+				$elink = '[<a href="/bitrix/admin/iblock_section_edit.php?IBLOCK_ID='.$a_IBLOCK_SECTION_IBLOCK_ID.'&type='.$a_IBLOCK_SECTION_IBLOCK_TYPE_ID.'&ID='.$a_IBLOCK_SECTION_ID.'&lang='.LANGUAGE_ID.'">'.$a_IBLOCK_SECTION_ID.'</a>] '.$a_IBLOCK_SECTION_NAME;
+			}
+			
+			if(strlen($a_FIELDS))
+			{
+				$a_FIELDS = $logger->GetSectionDescription($a_FIELDS, $a_IBLOCK_SECTION_IBLOCK_ID);
 			}
 		}
 	}
-	if(strlen($a_REQUEST_URI))
+	
+	$row->AddViewField("DATE_EXEC", $a_DATE_EXEC);
+	$row->AddViewField("PROFILE_ID", '<a href="/bitrix/admin/'.$moduleFilePrefix.'.php?lang=ru&PROFILE_ID='.($a_PROFILE_ID - 1).'">'.$a_PROFILE_NAME.'</a>');
+	$row->AddViewField("PROFILE_EXEC_ID", $a_PROFILE_EXEC_ID);
+	$row->AddViewField("TYPE", GetMessage("KIT_IX_EVENTLOG_IBLOCK_".$a_TYPE));
+	$row->AddViewField("ENTITY_ID", $elink);
+	$row->AddViewField("RUNNED_BY", ($a_RUNNED_BY_USER_ID ? '[<a href="user_edit.php?lang='.LANG.'&ID='.$a_RUNNED_BY_USER_ID.'">'.$a_RUNNED_BY_USER_ID.'</a>] '.$a_RUNNED_BY_USER : ''));
+	$row->AddViewField("UID", implode(', ', $arUidFields));
+	$row->AddViewField("FIELDS", '');
+	if(strlen($a_FIELDS))
 	{
-		$row->AddViewField("REQUEST_URI", htmlspecialcharsbx($a_REQUEST_URI));
-	}
-	if(strlen($a_DESCRIPTION))
-	{
-		if(strncmp("==", $a_DESCRIPTION, 2)===0)
-			$DESCRIPTION = htmlspecialcharsbx(base64_decode(substr($a_DESCRIPTION, 2)));
+		if(strncmp("==", $a_FIELDS, 2)===0)
+			$FIELDS = htmlspecialcharsbx(base64_decode(substr($a_FIELDS, 2)));
 		else
-			$DESCRIPTION = $a_DESCRIPTION;
+			$FIELDS = $a_FIELDS;
 		//htmlspecialcharsback for <br> <BR> <br/>
-		$DESCRIPTION = preg_replace("#(&lt;)(\\s*br\\s*/{0,1})(&gt;)#is", "<\\2>", $DESCRIPTION);
-		$row->AddViewField("DESCRIPTION", $DESCRIPTION);
+		$FIELDS = preg_replace("#(&lt;)(\\s*br\\s*/{0,1})(&gt;)#is", "<\\2>", $FIELDS);
+		$row->AddViewField("FIELDS", $FIELDS);
 	}
 	else
 	{
-		$row->AddViewField("DESCRIPTION", '');
+		$row->AddViewField("FIELDS", '');
 	}
+	
+	$arActions = array();
+	$arActions[] = array("ICON"=>"delete", "TEXT"=>GetMessage("KIT_IX_LOG_RECORD_DELETE"), "ACTION"=>"if(confirm('".GetMessageJS('KIT_IX_LOG_RECORD_DELETE_CONFIRM')."')) ".$lAdmin->ActionDoGroup($a_ID, "delete"));
+
+	$row->AddActions($arActions);
 }
+
+$lAdmin->AddFooter(
+	array(
+		array(
+			"title" => GetMessage("MAIN_ADMIN_LIST_SELECTED"),
+			"value" => $rsData->SelectedRowsCount()
+		),
+		array(
+			"counter" => true,
+			"title" => GetMessage("MAIN_ADMIN_LIST_CHECKED"),
+			"value" => "0"
+		),
+	)
+);
+
+$lAdmin->AddGroupActionTable(
+	array(
+		"delete" => GetMessage("MAIN_ADMIN_LIST_DELETE"),
+	)
+);
+
 
 $aContext = array();
 $lAdmin->AddAdminContextMenu($aContext);
@@ -270,19 +393,20 @@ $APPLICATION->SetTitle(GetMessage("KIT_IX_EVENTLOG_PAGE_TITLE"));
 $lAdmin->CheckListMode();
 
 require($_SERVER["DOCUMENT_ROOT"].BX_ROOT."/modules/main/include/prolog_admin_after.php");
+
+if (!call_user_func($moduleDemoExpiredFunc)) {
+	call_user_func($moduleShowDemoFunc);
+}
 ?>
-<form name="find_form" method="GET" action="<?echo $APPLICATION->GetCurPage()?>?">
+<form name="find_form" id="filter_find_form" method="GET" action="<?echo $APPLICATION->GetCurPage()?>?">
 <input type="hidden" name="lang" value="<?echo LANG?>">
 <?
 $arFilterNames = array(
-	"find_id" => GetMessage("KIT_IX_EVENTLOG_ID"),
+	"find_exec_id" => GetMessage("KIT_IX_EVENTLOG_PROFILE_EXEC_ID"),
 	"find_timestamp_x" => GetMessage("KIT_IX_EVENTLOG_TIMESTAMP_X"),
+	"find_type" => GetMessage("KIT_IX_EVENTLOG_TYPE"),
 	"find_item_id" => GetMessage("KIT_IX_EVENTLOG_ITEM_ID"),
-	"find_site_id" => GetMessage("KIT_IX_EVENTLOG_SITE_ID"),
 	"find_user_id" => GetMessage("KIT_IX_EVENTLOG_USER_ID"),
-	"find_remote_addr" => GetMessage("KIT_IX_EVENTLOG_REMOTE_ADDR"),
-	"find_user_agent" => GetMessage("KIT_IX_EVENTLOG_USER_AGENT"),
-	"find_request_uri" => GetMessage("KIT_IX_EVENTLOG_REQUEST_URI"),
 );
 
 $oFilter = new CAdminFilter($sTableID."_filter", $arFilterNames);
@@ -291,60 +415,60 @@ $oFilter->Begin();
 <tr>
 	<td><?echo GetMessage("KIT_IX_EVENTLOG_PROFILE_ID")?>:</td>
 	<td>
-		<select name="find_audit_type_id" >
+		<select name="find_profile_id" >
 			<option value=""><?echo GetMessage("KIT_IX_ALL"); ?></option>
 			<?
 			foreach($arProfiles as $k=>$profile)
 			{
-				$key = 'KIT_IX_PROFILE_'.$k;
-				?><option value="<?echo $key;?>" <?if($find_audit_type_id==$key){echo 'selected';}?>><?echo $profile; ?></option><?
+				$key = $k + 1;
+				?><option value="<?echo $key;?>" <?if($find_profile_id==$key){echo 'selected';}?>><?echo $profile; ?></option><?
 			}
 			?>
 		</select>
 	</td>
 </tr>
 <tr>
-	<td><?echo GetMessage("KIT_IX_EVENTLOG_ID")?>:</td>
-	<td><input type="text" name="find_id" size="47" value="<?echo htmlspecialcharsbx($find_id)?>"></td>
+	<td><?echo GetMessage("KIT_IX_EVENTLOG_PROFILE_EXEC_ID")?>:</td>
+	<td><input type="text" name="find_exec_id" size="47" value="<?echo htmlspecialcharsbx($find_exec_id)?>"></td>
 </tr>
 <tr>
 	<td><?echo GetMessage("KIT_IX_EVENTLOG_TIMESTAMP_X")?>:</td>
 	<td><?echo CAdminCalendar::CalendarPeriod("find_timestamp_x_1", "find_timestamp_x_2", $find_timestamp_x_1, $find_timestamp_x_2, false, 15, true)?></td>
 </tr>
-<tr>
-	<td><?echo GetMessage("KIT_IX_EVENTLOG_ITEM_ID")?>:</td>
-	<td><input type="text" name="find_item_id" size="47" value="<?echo htmlspecialcharsbx($find_item_id)?>">&nbsp;<?=ShowFilterLogicHelp()?></td>
-</tr>
 <?
-$arSiteDropdown = array("reference" => array(), "reference_id" => array());
-$v1 = "sort";
-$v2 = "asc";
-$rs = CSite::GetList($v1, $v2);
-while ($ar = $rs->Fetch())
-{
-	$arSiteDropdown["reference_id"][] = $ar["ID"];
-	$arSiteDropdown["reference"][]    = "[".$ar["ID"]."] ".$ar["NAME"];
-}
+$arSiteDropdown = array("reference" => array(
+	GetMessage("KIT_IX_EVENTLOG_IBLOCK_ELEMENT_ADD"),
+	GetMessage("KIT_IX_EVENTLOG_IBLOCK_ELEMENT_UPDATE"),
+	GetMessage("KIT_IX_EVENTLOG_IBLOCK_ELEMENT_DELETE"),
+	GetMessage("KIT_IX_EVENTLOG_IBLOCK_ELEMENT_FOUND"),
+	GetMessage("KIT_IX_EVENTLOG_IBLOCK_ELEMENT_NOT_FOUND"),
+	GetMessage("KIT_IX_EVENTLOG_IBLOCK_SECTION_ADD"),
+	GetMessage("KIT_IX_EVENTLOG_IBLOCK_SECTION_UPDATE"),
+	GetMessage("KIT_IX_EVENTLOG_IBLOCK_SECTION_DELETE"),
+	GetMessage("KIT_IX_EVENTLOG_IBLOCK_SECTION_NOT_FOUND")
+), "reference_id" => array(
+	'ELEMENT_ADD',
+	'ELEMENT_UPDATE',
+	'ELEMENT_DELETE',
+	'ELEMENT_FOUND',
+	'ELEMENT_NOT_FOUND',
+	'SECTION_ADD',
+	'SECTION_UPDATE',
+	'SECTION_DELETE',
+	'SECTION_NOT_FOUND'
+));
 ?>
 <tr>
-	<td><?echo GetMessage("KIT_IX_EVENTLOG_SITE_ID")?>:</td>
-	<td><?echo SelectBoxFromArray("find_site_id", $arSiteDropdown, $find_site_id, GetMessage("KIT_IX_ALL"), "");?></td>
+	<td><?echo GetMessage("KIT_IX_EVENTLOG_TYPE")?>:</td>
+	<td><?echo SelectBoxMFromArray("find_type[]", $arSiteDropdown, $find_type, GetMessage("KIT_IX_ALL"), "");?></td>
+</tr>
+<tr>
+	<td><?echo GetMessage("KIT_IX_EVENTLOG_ITEM_ID")?>:</td>
+	<td><input type="text" name="find_item_id" size="47" value="<?echo htmlspecialcharsbx($find_item_id)?>"></td>
 </tr>
 <tr>
 	<td><?echo GetMessage("KIT_IX_EVENTLOG_USER_ID")?>:</td>
 	<td><input type="text" name="find_user_id" size="47" value="<?echo htmlspecialcharsbx($find_user_id)?>"></td>
-</tr>
-<tr>
-	<td><?echo GetMessage("KIT_IX_EVENTLOG_REMOTE_ADDR")?>:</td>
-	<td><input type="text" name="find_remote_addr" size="47" value="<?echo htmlspecialcharsbx($find_remote_addr)?>">&nbsp;<?=ShowFilterLogicHelp()?></td>
-</tr>
-<tr>
-	<td><?echo GetMessage("KIT_IX_EVENTLOG_USER_AGENT")?>:</td>
-	<td><input type="text" name="find_user_agent" size="47" value="<?echo htmlspecialcharsbx($find_user_agent)?>">&nbsp;<?=ShowFilterLogicHelp()?></td>
-</tr>
-<tr>
-	<td><?echo GetMessage("KIT_IX_EVENTLOG_REQUEST_URI")?>:</td>
-	<td><input type="text" name="find_request_uri" size="47" value="<?echo htmlspecialcharsbx($find_request_uri)?>">&nbsp;<?=ShowFilterLogicHelp()?></td>
 </tr>
 <?
 $oFilter->Buttons(array("table_id"=>$sTableID, "url"=>$APPLICATION->GetCurPage(), "form"=>"find_form"));
@@ -354,6 +478,10 @@ $oFilter->End();
 <?
 
 $lAdmin->DisplayList();
+
+/*echo BeginNote();
+echo GetMessage("KIT_IX_EVENTLOG_BOTTOM_NOTE");
+echo EndNote();*/
 
 require($_SERVER["DOCUMENT_ROOT"].BX_ROOT."/modules/main/include/epilog_admin.php");
 ?>

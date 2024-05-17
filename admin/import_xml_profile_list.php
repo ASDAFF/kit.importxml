@@ -1,8 +1,5 @@
 <?
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
+if(!defined('NO_AGENT_CHECK')) define('NO_AGENT_CHECK', true);
 require_once ($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_before.php");
 $moduleId = 'kit.importxml';
 $moduleFilePrefix = 'kit_import_xml';
@@ -15,15 +12,84 @@ require_once ($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/iblock/prolog.php");
 IncludeModuleLangFile(__FILE__);
 
 include_once(dirname(__FILE__).'/../install/demo.php');
-if ($moduleDemoExpiredFunc()) {
+if (call_user_func($moduleDemoExpiredFunc)) {
 	require ($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_after.php");
-	$moduleShowDemoFunc();
+	call_user_func($moduleShowDemoFunc);
 	require ($DOCUMENT_ROOT."/bitrix/modules/main/include/epilog_admin.php");
 	die();
 }
 
 $MODULE_RIGHT = $APPLICATION->GetGroupRight($moduleId);
 if($MODULE_RIGHT < "W") $APPLICATION->AuthForm(GetMessage("ACCESS_DENIED"));
+
+if($_GET['action']=='showoldparams' || $_GET['action']=='saveoldparams')
+{
+	$APPLICATION->RestartBuffer();
+	ob_end_clean();
+	$pid = $_GET['pid'];
+	$suffix = 'iblock';
+	if(mb_strpos($pid, 'hl')===0)
+	{
+		$pid = mb_substr($pid, 2);
+		$suffix = 'highload';
+	}
+	$oProfile = \Bitrix\KitImportxml\Profile::getInstance($suffix);
+	
+	if($_GET['action']=='saveoldparams')
+	{
+		if((int)$_POST['restore_point'] > 0)
+		{
+			$oProfile->RestoreFromChanges($pid, (int)$_POST['restore_point']);
+		}
+		echo \CUtil::PhpToJSObject(array('TYPE'=>'SUCCESS', 'MESSAGE'=>GetMessage("KIT_IX_OLD_SETTINGS_RESTORE_SUCCESS")));
+	}
+	elseif($_GET['action']=='showoldparams')
+	{
+		require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_admin.php");
+		$arProfile = $oProfile->GetFieldsByID($pid - 1);
+		$arChanges = $oProfile->GetChangesList($pid);
+		?>
+		<form action="" method="post" enctype="multipart/form-data" id="restore_profile_params">
+			<?
+			if(false /*empty($arChanges)*/)
+			{
+				echo GetMessage("KIT_IX_OLD_SETTINGS_NO_POINTS");
+			}
+			else
+			{
+				?>
+			<input type="hidden" name="action" value="saveoldparams">
+			<table width="100%">
+				<col width="50%">
+				<col width="50%">
+				<tr>
+					<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_OLD_SETTINGS_PROFILE_NAME")?>:</td>
+					<td class="adm-detail-content-cell-r"><b><?echo $arProfile['NAME']?></b></td>
+				</tr>
+				<tr>
+					<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_OLD_SETTINGS_RESTORE_POINT")?>:</td>
+					<td class="adm-detail-content-cell-r">
+						<select name="restore_point" id="restore_point">
+							<option value=""><?echo GetMessage("KIT_IX_OLD_SETTINGS_RESTORE_POINT_CURRENT")?></option>
+						<?
+						foreach($arChanges as $arChangeItem)
+						{
+							echo '<option value="'.htmlspecialcharsbx($arChangeItem['ID']).'">'.htmlspecialcharsbx($arChangeItem['DATE']).'</option>';
+						}
+						?>
+						</select>
+					</td>
+				</tr>
+			</table>
+			<?
+			}
+			?>
+		</form>
+		<?
+		require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/epilog_popup_admin.php");
+	}
+	die();
+}
 
 $oProfile = new \Bitrix\KitImportxml\Profile();
 $sTableID = "tbl_kitimportxml_profile";
@@ -98,7 +164,8 @@ if(($arID = $lAdmin->GroupAction()))
 		switch ($_REQUEST['action'])
 		{
 			case "delete":
-				$dbRes = \Bitrix\KitImportxml\ProfileTable::delete($ID);
+				$oProfile->Delete($ID - 1);
+				/*$dbRes = \Bitrix\KitImportxml\ProfileTable::delete($ID);
 				if(!$dbRes->isSuccess())
 				{
 					$error = '';
@@ -113,20 +180,34 @@ if(($arID = $lAdmin->GroupAction()))
 						$lAdmin->AddGroupError($error, $ID);
 					else
 						$lAdmin->AddGroupError(GetMessage("KIT_IX_ERROR_DELETING_TYPE"), $ID);
-				}
+				}*/
 				break;
 		}
 	}
 }
 
-$params = array(
-	'select' => array('ID', 'ACTIVE', 'NAME', 'DATE_START', 'DATE_FINISH', 'SORT'),
+$getListParams = array(
+	'select' => array(
+		'ID', 
+		'ACTIVE', 
+		'NAME', 
+		'DATE_START', 
+		'DATE_FINISH', 
+		'SORT',
+		//'PROFILE_EXEC_ID'
+	),
+	/*'runtime' => array(
+		'PROFILE_EXEC_ID' => array(
+			"data_type" => "integer",
+			"expression" => array("MAX(%s)", 'PROFILE_EXEC_STAT.PROFILE_EXEC.ID')
+		)
+	),*/ //slow select
 	'filter' => $filter
 );
 
-$params['order'] = array(ToUpper($by) => ToUpper($order));
+$getListParams['order'] = array(ToUpper($by) => ToUpper($order));
 
-$dbRes = \Bitrix\KitImportxml\ProfileTable::getList($params);
+$dbRes = \Bitrix\KitImportxml\ProfileTable::getList($getListParams);
 
 $result = array();
 
@@ -162,14 +243,23 @@ while ($arProfile = $dbRes->NavNext(true, "f_"))
 
 	$row->AddField("ID", "<a href=\"".$moduleFilePrefix.".php?PROFILE_ID=".$f_ID."&lang=".LANG."\">".$f_ID."</a>");
 	$row->AddCheckField("ACTIVE", $f_ACTIVE);
-	$row->AddInputField("NAME", $f_NAME);
-	$row->AddInputField("SORT", $f_SORT);
+	$row->AddInputField("NAME", array('SIZE'=>40));
+	$row->AddInputField("SORT", array('SIZE'=>10));
 	$row->AddField("DATE_START", $f_DATE_START);
 	$row->AddField("DATE_FINISH", $f_DATE_FINISH);
 	$row->AddField("STATUS", $oProfile->GetStatus($f_ID));
 	
 	$arActions = array();
 	$arActions[] = array("ICON"=>"edit", "TEXT"=>GetMessage("KIT_IX_TO_PROFILE_ACT"), "ACTION"=>$lAdmin->ActionRedirect($moduleFilePrefix.".php?PROFILE_ID=".$f_ID."&lang=".LANG), "DEFAULT"=>true);
+	if(true /*$f_PROFILE_EXEC_ID > 0*/)
+	{
+		$arActions[] = array("ICON"=>"move", "TEXT"=>GetMessage("KIT_IX_RESTORE_ACT"), "ACTION"=>$lAdmin->ActionRedirect($moduleFilePrefix."_rollback.php?PROFILE_ID=".$f_ID."&lang=".LANG));
+	}
+	
+	if(true)
+	{
+		$arActions[] = array("ICON"=>"move", "TEXT"=>GetMessage("KIT_IX_OLD_PARAMS_ACT"), "ACTION"=>"EProfileList.ShowOldParamsWindow(".($f_ID+1).");");
+	}
 
 	$arActions[] = array("SEPARATOR" => true);
 	$arActions[] = array("ICON"=>"delete", "TEXT"=>GetMessage("KIT_IX_PROFILE_DELETE"), "ACTION"=>"if(confirm('".GetMessageJS("KIT_IX_PROFILE_DELETE_CONFIRM")."')) ".$lAdmin->ActionDoGroup(($f_ID+1), "delete"));
@@ -202,8 +292,8 @@ $lAdmin->CheckListMode();
 $APPLICATION->SetTitle(GetMessage("KIT_IX_PROFILE_LIST_TITLE"));
 require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_after.php");
 
-if (!$moduleDemoExpiredFunc()) {
-	$moduleShowDemoFunc();
+if (!call_user_func($moduleDemoExpiredFunc)) {
+	call_user_func($moduleShowDemoFunc);
 }
 
 $aMenu = array(

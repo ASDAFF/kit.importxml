@@ -1,8 +1,4 @@
 <?php
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 $MESS['KIT_IX_IMAP_ERR_DEFAULT'] = 'Неизвестная ошибка';
 $MESS['KIT_IX_IMAP_ERR_CONNECT'] = 'Ошибка подключения к серверу';
 $MESS['KIT_IX_IMAP_ERR_REJECTED'] = 'Подключение отклонено';

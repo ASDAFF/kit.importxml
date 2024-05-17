@@ -1,8 +1,5 @@
 <?
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
+if(!defined('NO_AGENT_CHECK')) define('NO_AGENT_CHECK', true);
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_before.php");
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/iblock/prolog.php");
 $moduleId = 'kit.importxml';
@@ -13,6 +10,19 @@ IncludeModuleLangFile(__FILE__);
 
 $MODULE_RIGHT = $APPLICATION->GetGroupRight($moduleId);
 if($MODULE_RIGHT < "W") $APPLICATION->AuthForm(GetMessage("ACCESS_DENIED"));
+$fNameFromGet = $_GET['field_name'];
+
+function GetFieldEextraVal($arSettings, $name)
+{
+	if(!is_array($arSettings)) return '';
+	$fName = htmlspecialcharsbx($_GET['field_name']).'['.$name.']';
+	if(preg_match_all('/\[([^\]]*)\]/Us', $_GET['field_name'], $m))
+	{
+		foreach($m[1] as $key) $arSettings = (isset($arSettings[$key]) ? $arSettings[$key] : array());
+	}
+	$val = (isset($arSettings[$name]) ? $arSettings[$name] : '');
+	return array($fName, $val);
+}
 
 $oProfile = new \Bitrix\KitImportxml\Profile('highload');
 $oProfile->Apply($SETTINGS_DEFAULT, $SETTINGS, $_REQUEST['PROFILE_ID']);
@@ -24,7 +34,7 @@ $fl = new \Bitrix\KitImportxml\FieldList();
 $arFields = $fl->GetHigloadBlockFields($HIGHLOADBLOCK_ID);
 
 $addField = '';
-if(strpos($field, '|') !== false)
+if(strpos($field, '|')!==false)
 {
 	list($field, $addField) = explode('|', $field);
 }
@@ -37,14 +47,24 @@ if(isset($_POST['POSTEXTRA']))
 	{
 		$arFieldParams = $APPLICATION->ConvertCharsetArray($arFieldParams, 'UTF-8', 'CP1251');
 	}
-	$fName = htmlspecialcharsex($_GET['field_name']);
-	$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-	eval('$arFieldsParamsInArray = &$P'.$fNameEval.';');
+	$fName = htmlspecialcharsbx($fNameFromGet);
+	//$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
+	//eval('$arFieldsParamsInArray = &$P'.$fNameEval.';');
+	$arFieldsParamsInArray = &$PEXTRASETTINGS;
+	if(preg_match_all('/\[([^\]]*)\]/Us', $fName, $m))
+	{
+		foreach($m[1] as $key)
+		{
+			if(!is_array($arFieldsParamsInArray) || !array_key_exists($key, $arFieldsParamsInArray)) $arFieldsParamsInArray[$key] = array();
+			$arFieldsParamsInArray = &$arFieldsParamsInArray[$key];
+		}
+	}
 	$arFieldsParamsInArray = $arFieldParams;
 }
 
 if($_POST['action']=='save' && is_array($_POST['EXTRASETTINGS']))
 {
+	define('PUBLIC_AJAX_MODE', 'Y');
 	$APPLICATION->RestartBuffer();
 	if(ob_get_contents()) ob_end_clean();
 
@@ -143,13 +163,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_REL_ELEMENT_FIELD");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[REL_ELEMENT_FIELD]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					$val = '';
-					if(is_array($PEXTRASETTINGS))
-					{
-						eval('$val = $P'.$fNameEval.';');
-					}
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'REL_ELEMENT_FIELD');
 					
 					$strOptions = $fl->GetSelectUidFields($iblockElementIblock, $val, '');
 					if(preg_match('/<option[^>]+value="IE_ID".*<\/option>/Uis', $strOptions, $m))
@@ -167,13 +181,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_REL_SECTION_FIELD");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[REL_SECTION_FIELD]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					$val = '';
-					if(is_array($PEXTRASETTINGS))
-					{
-						eval('$val = $P'.$fNameEval.';');
-					}
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'REL_SECTION_FIELD');
 					?>
 					<select name="<?echo $fName;?>" class="chosen">
 						<option value="ID"<?if($val=='ID') echo ' selected';?>><?echo GetMessage("KIT_IX_SETTINGS_SECTION_ID"); ?></option>
@@ -190,13 +198,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_HLBL_FIELD");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[HLBL_FIELD]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					$val = '';
-					if(is_array($PEXTRASETTINGS))
-					{
-						eval('$val = $P'.$fNameEval.';');
-					}
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'HLBL_FIELD');
 					?>
 					<select name="<?echo $fName;?>" class="chosen">
 						<?
@@ -215,9 +217,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_ELEMENT_SEARCH_SUBSTRING");?>: <span id="hint_UID_SEARCH_SUBSTRING"></span><script>BX.hint_replace(BX('hint_UID_SEARCH_SUBSTRING'), '<?echo GetMessage("KIT_IX_SETTINGS_ELEMENT_SEARCH_SUBSTRING_HINT"); ?>');</script></td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[UID_SEARCH_SUBSTRING]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'UID_SEARCH_SUBSTRING');
 					?>
 					<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?>>
 				</td>
@@ -229,15 +229,11 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l" valign="top"><?echo GetMessage("KIT_IX_SETTINGS_CHANGE_MULTIPLE_SEPARATOR");?>:</td>
 				<td class="adm-detail-content-cell-r">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[CHANGE_MULTIPLE_SEPARATOR]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
-					$fName2 = htmlspecialcharsex($_GET['field_name']).'[MULTIPLE_SEPARATOR]';
-					$fNameEval2 = strtr($fName2, array("["=>"['", "]"=>"']"));
-					eval('$val2 = $P'.$fNameEval2.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'CHANGE_MULTIPLE_SEPARATOR');
+					list($fName2, $v2) = GetFieldEextraVal($PEXTRASETTINGS, 'MULTIPLE_SEPARATOR');
 					?>
 					<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?> onchange="$('#multiple_separator').css('display', (this.checked ? '' : 'none'));"><br>
-					<input type="text" id="multiple_separator" name="<?=$fName2?>" value="<?=htmlspecialcharsbx($val2)?>" placeholder="<?echo GetMessage("KIT_IX_SETTINGS_MULTIPLE_SEPARATOR_PLACEHOLDER");?>" <?=($val!='Y' ? 'style="display: none"' : '')?>>
+					<input type="text" id="multiple_separator" name="<?=$fName2?>" value="<?=htmlspecialcharsbx($v2)?>" placeholder="<?echo GetMessage("KIT_IX_SETTINGS_MULTIPLE_SEPARATOR_PLACEHOLDER");?>" <?=($val!='Y' ? 'style="display: none"' : '')?>>
 				</td>
 			</tr>
 		<?}?>
@@ -248,13 +244,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 		<tr>
 			<td class="kit-ix-settings-margin-container" colspan="2">
 				<?
-				$fName = htmlspecialcharsex($_GET['field_name']).'[CONVERSION]';
-				$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-				$arVals = array();
-				if(is_array($PEXTRASETTINGS))
-				{
-					eval('$arVals = $P'.$fNameEval.';');
-				}
+				list($fName, $arVals) = GetFieldEextraVal($PEXTRASETTINGS, 'CONVERSION');
 				$showCondition = true;
 				if(!is_array($arVals) || count($arVals)==0)
 				{
@@ -346,13 +336,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 			<tr>
 				<td class="kit-ix-settings-margin-container" colspan="2">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[CONDITIONS]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					$arVals = array();
-					if(is_array($PEXTRASETTINGS))
-					{
-						eval('$arVals = $P'.$fNameEval.';');
-					}
+					list($fName, $arVals) = GetFieldEextraVal($PEXTRASETTINGS, 'CONDITIONS');
 					$showCondition = true;
 					if(!is_array($arVals) || count($arVals)==0)
 					{
@@ -431,11 +415,10 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 			$arFields = array();
 			foreach($arFieldNames as $k=>$field)
 			{
-				$fName = htmlspecialcharsex($_GET['field_name']).'[PICTURE_PROCESSING]['.$field.']';
-				$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
+				list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'PICTURE_PROCESSING');
 				$arFields[$field] = array(
-					'NAME' => htmlspecialcharsex($_GET['field_name']).'[PICTURE_PROCESSING]['.$field.']',
-					'VALUE' => eval('return $P'.$fNameEval.';')
+					'NAME' => $fName.'['.$field.']',
+					'VALUE' => (is_array($val) && array_key_exists($field, $val) ? $val[$field] : '')
 				);
 			}
 			?>
@@ -582,7 +565,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 					?>"
 				>
 					<?CAdminFileDialog::ShowScript(array(
-						"event" => "BtnClick".strtr(htmlspecialcharsex($_GET['field_name']), array('['=>'_', ']'=>'_')),
+						"event" => "BtnClick".strtr(htmlspecialcharsbx($_GET['field_name']), array('['=>'_', ']'=>'_')),
 						"arResultDest" => array("ELEMENT_ID" => strtr($arFields['WATERMARK_FILE']['NAME'], array('['=>'_', ']'=>'_'))),
 						"arPath" => array("PATH" => GetDirPath($arFields['WATERMARK_FILE']['VALUE'])),
 						"select" => 'F',// F - file only, D - folder only
@@ -667,7 +650,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 						size="35"
 					>
 					<?CAdminFileDialog::ShowScript(array(
-						"event" => "BtnClickFont".strtr(htmlspecialcharsex($_GET['field_name']), array('['=>'_', ']'=>'_')),
+						"event" => "BtnClickFont".strtr(htmlspecialcharsbx($_GET['field_name']), array('['=>'_', ']'=>'_')),
 						"arResultDest" => array("ELEMENT_ID" => strtr($arFields['WATERMARK_TEXT_FONT']['NAME'], array('['=>'_', ']'=>'_'))),
 						"arPath" => array("PATH" => GetDirPath($arFields['WATERMARK_TEXT_FONT']['VALUE'])),
 						"select" => 'F',// F - file only, D - folder only
@@ -693,7 +676,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 						size="35">&nbsp;<input
 						type="button"
 						value="..."
-						onClick="BtnClickFont<?echo strtr(htmlspecialcharsex($_GET['field_name']), array('['=>'_', ']'=>'_'))?>()"
+						onClick="BtnClickFont<?echo strtr(htmlspecialcharsbx($_GET['field_name']), array('['=>'_', ']'=>'_'))?>()"
 					>
 				</div>
 				<div class="adm-list-item"
@@ -766,13 +749,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 			<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_FILTER_UPLOAD");?>:</td>
 			<td class="adm-detail-content-cell-r">
 				<?
-				$fName = htmlspecialcharsex($_GET['field_name']).'[UPLOAD_VALUES]';
-				$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-				$arVals = array();
-				if(is_array($PEXTRASETTINGS))
-				{
-					eval('$arVals = $P'.$fNameEval.';');
-				}
+				list($fName, $arVals) = GetFieldEextraVal($PEXTRASETTINGS, 'UPLOAD_VALUES');
 				$fName .= '[]';
 				if(!is_array($arVals) || count($arVals) == 0)
 				{
@@ -796,13 +773,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 			<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_FILTER_NOT_UPLOAD");?>:</td>
 			<td class="adm-detail-content-cell-r">
 				<?
-				$fName = htmlspecialcharsex($_GET['field_name']).'[NOT_UPLOAD_VALUES]';
-				$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-				$arVals = array();
-				if(is_array($PEXTRASETTINGS))
-				{
-					eval('$arVals = $P'.$fNameEval.';');
-				}
+				list($fName, $arVals) = GetFieldEextraVal($PEXTRASETTINGS, 'NOT_UPLOAD_VALUES');
 				$fName .= '[]';
 				if(!is_array($arVals) || count($arVals) == 0)
 				{
@@ -826,9 +797,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 			<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_USE_FILTER_FOR_DEACTIVATE");?>:</td>
 			<td class="adm-detail-content-cell-r">
 				<?
-				$fName = htmlspecialcharsex($_GET['field_name']).'[USE_FILTER_FOR_DEACTIVATE]';
-				$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-				eval('$val = $P'.$fNameEval.';');
+				list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'USE_FILTER_FOR_DEACTIVATE');
 				?>
 				<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?>>
 			</td>
@@ -837,9 +806,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 			<td class="kit-ix-settings-margin-container" colspan="2">
 				<a href="javascript:void(0)" onclick="ESettings.ShowPHPExpression(this)"><?echo GetMessage("KIT_IX_SETTINGS_FILTER_EXPRESSION");?></a>
 				<?
-				$fName = htmlspecialcharsex($_GET['field_name']).'[FILTER_EXPRESSION]';
-				$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-				eval('$val = $P'.$fNameEval.';');
+				list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'FILTER_EXPRESSION');
 				?>
 				<div class="kit-ix-settings-phpexpression" style="display: none;">
 					<?echo GetMessage("KIT_IX_SETTINGS_FILTER_EXPRESSION_HINT");?>
@@ -857,9 +824,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_ONLY_FOR_NEW");?>:</td>
 				<td class="adm-detail-content-cell-r" style="min-width: 30%;">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[SET_NEW_ONLY]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'SET_NEW_ONLY');
 					?>
 					<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?>>
 				</td>
@@ -868,9 +833,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 				<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_NOT_TRIM");?>:</td>
 				<td class="adm-detail-content-cell-r" style="min-width: 30%;">
 					<?
-					$fName = htmlspecialcharsex($_GET['field_name']).'[NOT_TRIM]';
-					$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-					eval('$val = $P'.$fNameEval.';');
+					list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'NOT_TRIM');
 					?>
 					<input type="checkbox" name="<?=$fName?>" value="Y" <?=($val=='Y' ? 'checked' : '')?>>
 				</td>
@@ -881,9 +844,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 					<td class="adm-detail-content-cell-l"><?echo GetMessage("KIT_IX_SETTINGS_INDEX_LOAD_VALUE");?>:</td>
 					<td class="adm-detail-content-cell-r" style="min-width: 30%;">
 						<?
-						$fName = htmlspecialcharsex($_GET['field_name']).'[INDEX_LOAD_VALUE]';
-						$fNameEval = strtr($fName, array("["=>"['", "]"=>"']"));
-						eval('$val = $P'.$fNameEval.';');
+						list($fName, $val) = GetFieldEextraVal($PEXTRASETTINGS, 'INDEX_LOAD_VALUE');
 						?>
 						<input type="text" name="<?=$fName?>" value="<?=htmlspecialcharsbx($val)?>" size="3">
 					</td>
@@ -897,9 +858,9 @@ if(!is_array($arSFields)) $arSFields = array();
 ?>
 <script>
 var admKDASettingMessages = {
-	'CELL_VALUE': '<?echo htmlspecialcharsex(GetMessage("KIT_IX_SETTINGS_LANG_CELL_VALUE"));?>',
-	'RATE_USD': '<?echo htmlspecialcharsex(GetMessage("KIT_IX_SETTINGS_LANG_RATE_USD"));?>',
-	'RATE_EUR': '<?echo htmlspecialcharsex(GetMessage("KIT_IX_SETTINGS_LANG_RATE_EUR"));?>',
+	'CELL_VALUE': '<?echo htmlspecialcharsbx(GetMessage("KIT_IX_SETTINGS_LANG_CELL_VALUE"));?>',
+	'RATE_USD': '<?echo htmlspecialcharsbx(GetMessage("KIT_IX_SETTINGS_LANG_RATE_USD"));?>',
+	'RATE_EUR': '<?echo htmlspecialcharsbx(GetMessage("KIT_IX_SETTINGS_LANG_RATE_EUR"));?>',
 	'EXTRAFIELDS': <?echo CUtil::PhpToJSObject($arSFields)?>,
 	'AVAILABLE_TAGS': <?echo CUtil::PhpToJSObject($availableTags)?>
 };

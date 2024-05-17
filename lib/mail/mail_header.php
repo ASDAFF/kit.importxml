@@ -1,8 +1,4 @@
 <?php
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Localization\Loc;
@@ -16,9 +12,10 @@ class MailHeader
 	var $strHeader = "";
 	var $bMultipart = false;
 	var $content_type, $boundary, $charset, $filename, $MultipartType="mixed";
+	protected static $charsetTo = '';
 	public $content_id = '';
 
-	function ConvertHeader($encoding, $type, $str, $charset)
+	static function ConvertHeader($encoding, $type, $str, $charset)
 	{
 		if(strtoupper($type)=="B")
 			$str = base64_decode($str);
@@ -41,9 +38,10 @@ class MailHeader
 		}
 		else
 		{
+			self::$charsetTo = $charset_to;
 			$str = preg_replace_callback(
 				"'=\?(.*?)\?(B|Q)\?(.*?)\?='i",
-				create_function('$m', "return \Bitrix\KitImportxml\MailHeader::ConvertHeader(\$m[1], \$m[2], \$m[3], '".AddSlashes($charset_to)."');"),
+				array(__CLASS__, 'ConvertHeadersCharset'),
 				$str
 			);
 		}
@@ -162,5 +160,10 @@ class MailHeader
 	function GetHeader($type)
 	{
 		return $this->arHeader[strtoupper($type)];
+	}
+	
+	public static function ConvertHeadersCharset($m)
+	{
+		return self::ConvertHeader($m[1], $m[2], $m[3], AddSlashes(self::$charsetTo));
 	}
 }

@@ -1,8 +1,4 @@
 <?php
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 namespace Bitrix\KitImportxml\DataManager;
 
 use Bitrix\Main\Loader;
@@ -11,11 +7,15 @@ Loc::loadMessages(__FILE__);
 
 class Product
 {
+	protected static $moduleId = 'kit.importxml';
 	protected $ie = null;
 	protected $logger = null;
 	protected $pricer = null;
 	protected $params = null;
 	protected $saveProductWithOffers = null;
+	protected $storeProductD7 = false;
+	protected $priceCalcProps = array();
+	protected $priceCalcFieldNames = array();
 	
 	public function __construct($ie=false)
 	{
@@ -24,6 +24,7 @@ class Product
 		$this->pricer = $this->ie->pricer;
 		$this->params = $this->ie->params;
 		$this->saveProductWithOffers = $this->ie->saveProductWithOffers;
+		$this->storeProductD7 = (bool)class_exists('\Bitrix\Catalog\StoreProductTable');
 	}
 	
 	public function GetOfferParentId()
@@ -61,7 +62,7 @@ class Product
 		return $this->ie->ApplyMargins($val, $fieldKey);
 	}
 	
-	public function SaveProduct($ID, $IBLOCK_ID, $arProduct, $arPrices, $arStores, $parentID=false)
+	public function SaveProduct($ID, $IBLOCK_ID, $arProduct, $arPrices, $arStores, $parentID=false, $arOldData=array())
 	{
 		if(!is_array($arProduct))
 		{
@@ -92,6 +93,9 @@ class Product
 		if(!isset($arProduct['QUANTITY_TRACE']) && $this->params['QUANTITY_TRACE']=='Y') $arProduct['QUANTITY_TRACE'] = 'Y';
 		if(isset($arProduct['VAT_INCLUDED'])) $arProduct['VAT_INCLUDED'] = $this->GetBoolValue($arProduct['VAT_INCLUDED']);
 		if(isset($arProduct['WEIGHT'])) $arProduct['WEIGHT'] = $this->GetFloatVal($arProduct['WEIGHT'], 2);
+		if(isset($arProduct['WIDTH'])) $arProduct['WIDTH'] = $this->GetFloatVal($arProduct['WIDTH'], 2);
+		if(isset($arProduct['LENGTH'])) $arProduct['LENGTH'] = $this->GetFloatVal($arProduct['LENGTH'], 2);
+		if(isset($arProduct['HEIGHT'])) $arProduct['HEIGHT'] = $this->GetFloatVal($arProduct['HEIGHT'], 2);
 		if(isset($arProduct['PURCHASING_PRICE']) || isset($arProduct['PURCHASING_CURRENCY']))
 		{
 			if(!isset($arProduct['PURCHASING_CURRENCY']) || (isset($arProduct['PURCHASING_CURRENCY']) && !trim($arProduct['PURCHASING_CURRENCY'])))
@@ -108,50 +112,30 @@ class Product
 			$arProduct['PURCHASING_PRICE'] = $this->GetFloatVal($arProduct['PURCHASING_PRICE'], 2);
 		}
 		
+		$measureRatio = null;
 		if(isset($arProduct['MEASURE_RATIO']))
 		{
-			$arProductMeasureRatio = array(
-				'RATIO' => $arProduct['MEASURE_RATIO'],
-				'PRODUCT_ID' => $ID,
-				'IS_DEFAULT' => 'Y'
-			);
+			$measureRatio = $arProduct['MEASURE_RATIO'];
+			if(is_array($measureRatio)) $measureRatio = array_shift($measureRatio);
 			unset($arProduct['MEASURE_RATIO']);
-			$dbRes = \CCatalogMeasureRatio::getList(array(), array('PRODUCT_ID' => $arProductMeasureRatio['PRODUCT_ID'], 'IS_DEFAULT'=>''), false, false, array_merge(array('ID'), array_keys($arProductMeasureRatio)));
-			$cntRes = $dbRes->SelectedRowsCount();
-			while(($cntRes > 1) && ($arRatio = $dbRes->Fetch()))
-			{
-				\CCatalogMeasureRatio::delete($arRatio['ID']);
-				$cntRes--;
-			}
-			if($arRatio = $dbRes->Fetch())
-			{
-				foreach($arRatio as $k=>$v)
-				{
-					if($v==$arProductMeasureRatio[$k])
-					{
-						unset($arProductMeasureRatio[$k]);
-					}
-				}
-				if(!empty($arProductMeasureRatio))
-				{
-					\CCatalogMeasureRatio::update($arRatio['ID'], $arProductMeasureRatio);
-				}
-			}
-			else
-			{
-				\CCatalogMeasureRatio::add($arProductMeasureRatio);
-			}
+		}
+		
+		if(isset($arProduct['MEASURE']))
+		{
+			$arProduct['MEASURE'] = $this->ie->GetMeasureByStr($arProduct['MEASURE']);
 		}
 		
 		if(isset($arProduct['BARCODE']))
 		{
 			if(!is_array($arProduct['BARCODE'])) $arProduct['BARCODE'] = array_map('trim', explode($this->params['ELEMENT_MULTIPLE_SEPARATOR'], $arProduct['BARCODE']));
-			$arProduct['BARCODE'] = array_unique($arProduct['BARCODE']);
+			$arProduct['BARCODE'] = array_diff(array_unique($arProduct['BARCODE']), array(''));
 			$dbRes = \CCatalogStoreBarCode::getList(array(), array('PRODUCT_ID' => $ID), false, false, array('ID', 'BARCODE'));
 			$arBarcodesDB = array();
+			$arBarcodesStat = array('OLD'=>array(), 'NEW'=>$arProduct['BARCODE']);
 			while($arr = $dbRes->Fetch())
 			{
-				if(in_array($arr['BARCODE'], $arProduct['BARCODE']))
+				$arBarcodesStat['OLD'][] = $arr['BARCODE'];
+				if(in_array((string)$arr['BARCODE'], $arProduct['BARCODE'], true))
 				{
 					unset($arProduct['BARCODE'][array_search($arr['BARCODE'], $arProduct['BARCODE'])]);
 				}
@@ -165,12 +149,16 @@ class Product
 			{
 				foreach($arBarcodesDB as $bid)
 				{
+					$barcode = '';
 					if(!empty($arProduct['BARCODE']))
 					{
-						$barcode = array_shift($arProduct['BARCODE']);
+						$barcode = trim(array_shift($arProduct['BARCODE']));
+					}
+					if(strlen($barcode) > 0)
+					{
 						\CCatalogStoreBarCode::Update($bid, array(
 							'BARCODE' => $barcode,
-							'STORE_ID' => 0,
+							'STORE_ID' => '0',
 							'ORDER_ID' => false
 						));
 					}
@@ -193,10 +181,16 @@ class Product
 				}
 			}
 			unset($arProduct['BARCODE']);
+			
+			if(count(array_diff($arBarcodesStat['OLD'], $arBarcodesStat['NEW'])) > 0 || count(array_diff($arBarcodesStat['NEW'], $arBarcodesStat['OLD'])) > 0)
+			{
+				$this->logger->AddElementChanges('ICAT_', array('BARCODE'=>implode(', ', $arBarcodesStat['NEW'])), array('BARCODE'=>implode(', ', $arBarcodesStat['OLD'])));
+			}
 		}
 		
 		if(isset($arProduct['VAT_ID']))
 		{
+			while(is_array($arProduct['VAT_ID'])) $arProduct['VAT_ID'] = reset($arProduct['VAT_ID']);
 			$vatName = ToLower($arProduct['VAT_ID']);
 			if(!isset($this->catalogVats)) $this->catalogVats = array();
 			if(!isset($this->catalogVats[$vatName]))
@@ -242,11 +236,25 @@ class Product
 			}
 		}
 		
+		$recalcQuantity = false;
+		$PARENT_IBLOCK_ID = 0;
+		if(($arOfferIblock = \Bitrix\KitImportxml\Utils::GetOfferIblockByOfferIblock($IBLOCK_ID)) && isset($arOfferIblock['IBLOCK_ID']) && $arOfferIblock['IBLOCK_ID'] > 0) $PARENT_IBLOCK_ID = $arOfferIblock['IBLOCK_ID'];
 		$productChange = $productExists = false;
 		//$dbRes = \CCatalogProduct::GetList(array(), array('ID'=>$ID), false, false, array_merge(array_keys($arProduct), array('TYPE', 'SUBSCRIBE')));
-		$dbRes = $this->GetList(array(), array('ID'=>$ID), false, false, array_merge(array_keys($arProduct), array('TYPE', 'QUANTITY', 'SUBSCRIBE', 'SUBSCRIBE_ORIG', 'QUANTITY_TRACE', 'QUANTITY_TRACE_ORIG', 'CAN_BUY_ZERO', 'CAN_BUY_ZERO_ORIG', 'NEGATIVE_AMOUNT_TRACE_ORIG')));
-		
-		while($arCProduct = $dbRes->Fetch())
+		$arOldProducts = array();
+		if(isset($arOldData['PRODUCT']) && is_array($arOldData['PRODUCT']))
+		{
+			$arOldProducts = $arOldData['PRODUCT'];
+		}
+		else
+		{
+			$dbRes = $this->GetList(array(), array('ID'=>$ID), false, false, array_merge(array_keys($arProduct), array('TYPE', 'QUANTITY', 'SUBSCRIBE', 'SUBSCRIBE_ORIG', 'QUANTITY_TRACE', 'QUANTITY_TRACE_ORIG', 'CAN_BUY_ZERO', 'CAN_BUY_ZERO_ORIG', 'NEGATIVE_AMOUNT_TRACE_ORIG')));
+			while($arCProduct = $dbRes->Fetch())
+			{
+				$arOldProducts[] = $arCProduct;
+			}
+		}
+		foreach($arOldProducts as $arCProduct)
 		{
 			$productExists = true;
 			$arCProduct['SUBSCRIBE'] = $arCProduct['SUBSCRIBE_ORIG'];
@@ -260,7 +268,16 @@ class Product
 				$arPrices = $arStores = array();
 				continue;
 			}
-			if(isset($arProduct['QUANTITY']) && ($this->params['QUANTITY_AS_SUM_STORE']=='Y' || $this->params['QUANTITY_AS_SUM_PROPERTIES'])) unset($arProduct['QUANTITY']);
+			if(isset($arProduct['QUANTITY']) && ($this->params['QUANTITY_AS_SUM_STORE']=='Y' || $this->params['QUANTITY_AS_SUM_PROPERTIES']))
+			{
+				$recalcQuantity = true;
+				unset($arProduct['QUANTITY']);
+			}
+			if(defined('\Bitrix\Catalog\ProductTable::TYPE_SET') && $arCProduct['TYPE']==\Bitrix\Catalog\ProductTable::TYPE_SET)
+			{
+				$recalcQuantity = false;
+				unset($arProduct['QUANTITY']);
+			}
 			if($this->params['ELEMENT_IMAGES_FORCE_UPDATE']!='Y')
 			{
 				foreach($arProduct as $k=>$v)
@@ -281,6 +298,7 @@ class Product
 				{
 					if(!isset($arProduct[$key])) $arProduct[$key] = (isset($arCProduct[$key.'_ORIG']) ? $arCProduct[$key.'_ORIG'] : $arCProduct[$key]);
 				}
+				if($PARENT_IBLOCK_ID > 0 && defined('\Bitrix\Catalog\ProductTable::TYPE_PRODUCT') && $arProduct['TYPE']==\Bitrix\Catalog\ProductTable::TYPE_PRODUCT) unset($arProduct['TYPE']);
 				//\CCatalogProduct::Update($arCProduct['ID'], $arProduct);
 				$this->Update($arCProduct['ID'], $IBLOCK_ID, $arProduct);
 				$productChange = true;
@@ -294,26 +312,34 @@ class Product
 			$this->Add($arProduct, $IBLOCK_ID);
 			$this->logger->AddElementChanges('ICAT_', $arProduct);
 			$productChange = true;
+			if(!isset($measureRatio)) $measureRatio = 1;
+		}
+		
+		if(isset($measureRatio))
+		{
+			$this->SetMeasureRatio($ID, $measureRatio);
 		}
 		
 		if(!empty($arPrices))
 		{
-			$this->pricer->SavePrice($ID, $arPrices, $isOffer);
+			$arOldPrices = (isset($arOldData['PRICES']) && is_array($arOldData['PRICES']) ? $arOldData['PRICES'] : false);
+			$this->pricer->SavePrice($ID, $arPrices, $isOffer, $arOldPrices);
 		}
 		
-		if(!empty($arStores))
+		if(!empty($arStores) || $recalcQuantity)
 		{
-			$this->SaveStore($ID, $IBLOCK_ID, $arStores);
+			$arOldStores = (isset($arOldData['STORES']) && is_array($arOldData['STORES']) ? $arOldData['STORES'] : false);
+			$this->SaveStore($ID, $IBLOCK_ID, $arStores, $arOldStores);
 		}
 		
 		if(!empty($arSet))
 		{
-			$this->SaveCatalogSet($ID, $arSet, \CCatalogProductSet::TYPE_GROUP);
+			$this->SaveCatalogSet($ID, $arSet, \CCatalogProductSet::TYPE_GROUP, $isOffer);
 		}
 		
 		if(!empty($arSet2))
 		{
-			$this->SaveCatalogSet($ID, $arSet2, \CCatalogProductSet::TYPE_SET);
+			$this->SaveCatalogSet($ID, $arSet2, \CCatalogProductSet::TYPE_SET, $isOffer);
 		}
 		
 		/*Update offer parent*/
@@ -327,14 +353,67 @@ class Product
 		/*/Update offer parent*/
 	}
 	
-	public function SaveStore($ID, $IBLOCK_ID, $arStores)
+	public function SetMeasureRatio($ID, $ratio)
+	{
+		$arProductMeasureRatio = array(
+			'RATIO' => $ratio,
+			'PRODUCT_ID' => $ID,
+			'IS_DEFAULT' => 'Y'
+		);
+		$dbRes = \CCatalogMeasureRatio::getList(array(), array('PRODUCT_ID' => $arProductMeasureRatio['PRODUCT_ID'], 'IS_DEFAULT'=>''), false, false, array_merge(array('ID'), array_keys($arProductMeasureRatio)));
+		$cntRes = $dbRes->SelectedRowsCount();
+		while(($cntRes > 1) && ($arRatio = $dbRes->Fetch()))
+		{
+			\CCatalogMeasureRatio::delete($arRatio['ID']);
+			$cntRes--;
+		}
+		if($arRatio = $dbRes->Fetch())
+		{
+			foreach($arRatio as $k=>$v)
+			{
+				if($v==$arProductMeasureRatio[$k])
+				{
+					unset($arProductMeasureRatio[$k]);
+				}
+			}
+			if(!empty($arProductMeasureRatio))
+			{
+				\CCatalogMeasureRatio::update($arRatio['ID'], $arProductMeasureRatio);
+			}
+		}
+		else
+		{
+			\CCatalogMeasureRatio::add($arProductMeasureRatio);
+		}
+	}
+	
+	public function SaveStore($ID, $IBLOCK_ID, $arStores, $arOldStores=false)
 	{
 		$isChanges = false;
 		foreach($arStores as $sid=>$arFieldsStore)
 		{
-			if(isset($arFieldsStore['AMOUNT'])) $arFieldsStore['AMOUNT'] = $this->GetFloatVal($arFieldsStore['AMOUNT']);
-			$dbRes = \CCatalogStoreProduct::GetList(array(), array('PRODUCT_ID'=>$ID, 'STORE_ID'=>$sid), false, false, array_merge(array('ID'), (is_array($arFieldsStore) ? array_keys($arFieldsStore) : array())));
-			while($arPrice = $dbRes->Fetch())
+			if(array_key_exists('AMOUNT', $arFieldsStore))
+			{
+				$amount = $arFieldsStore['AMOUNT'];
+				if(is_array($amount)) $amount = current($amount);
+				if(strlen(trim($amount))==0 || $amount==='-')
+				{
+					$arFieldsStore['AMOUNT'] = '-';
+				}
+				else $arFieldsStore['AMOUNT'] = $this->GetFloatVal($arFieldsStore['AMOUNT']);
+			}
+			
+			$arStoreData = array();
+			if(is_array($arOldStores) && isset($arOldStores[$sid]) && count($arOldStores[$sid]) > 0)
+			{
+				$arStoreData = $arOldStores[$sid];
+			}
+			else
+			{
+				$dbRes = \CCatalogStoreProduct::GetList(array(), array('PRODUCT_ID'=>$ID, 'STORE_ID'=>$sid), false, false, array_merge(array('ID'), (is_array($arFieldsStore) ? array_keys($arFieldsStore) : array())));
+				while($arPrice = $dbRes->Fetch()) $arStoreData[] = $arPrice;
+			}
+			foreach($arStoreData as $arPrice)
 			{
 				/*Delete unchanged data*/
 				if($this->params['ELEMENT_IMAGES_FORCE_UPDATE']!='Y')
@@ -352,25 +431,33 @@ class Product
 				{
 					$this->logger->AddElementChanges("ICAT_STORE".$sid."_", $arFieldsStore, $arPrice);
 					$arFieldsStore['PRODUCT_ID'] = $ID;
-					\CCatalogStoreProduct::Update($arPrice["ID"], $arFieldsStore);
+					if($arFieldsStore['AMOUNT']==='-') 
+					{
+						if($this->storeProductD7) \Bitrix\Catalog\StoreProductTable::Delete($arPrice["ID"]);
+						else \CCatalogStoreProduct::Delete($arPrice["ID"]);
+					}
+					else 
+					{
+						if($this->storeProductD7) \Bitrix\Catalog\StoreProductTable::Update($arPrice["ID"], $arFieldsStore);
+						else \CCatalogStoreProduct::Update($arPrice["ID"], $arFieldsStore);
+					}
 					$isChanges = true;
 				}
 			}
 			
-			if($dbRes->SelectedRowsCount()==0)
+			if(count($arStoreData)==0 && $arFieldsStore['AMOUNT']!=='-')
 			{
 				$arFieldsStore['PRODUCT_ID'] = $ID;
 				$arFieldsStore['STORE_ID'] = $sid;
-				\CCatalogStoreProduct::Add($arFieldsStore);
+				if($this->storeProductD7) \Bitrix\Catalog\StoreProductTable::Add($arFieldsStore);
+				else \CCatalogStoreProduct::Add($arFieldsStore);
 				$this->logger->AddElementChanges("ICAT_STORE".$sid."_", $arFieldsStore);
 				$isChanges = true;
 			}
 		}
-		
-		if(1 || $isChanges) $this->SetProductQuantity($ID, $IBLOCK_ID);
 	}
 	
-	public function SaveCatalogSet($ID, $arSet, $setType)
+	public function SaveCatalogSet($ID, $arSet, $setType, $isOffer=false)
 	{
 		if($setType==\CCatalogProductSet::TYPE_GROUP) $fieldPrefix = 'ICAT_SET_';
 		else $fieldPrefix = 'ICAT_SET2_';
@@ -378,7 +465,7 @@ class Product
 		$arItems = array();
 		foreach($arSet as $k=>$v)
 		{
-			$fieldSettings = $this->GetFieldSettings($fieldPrefix.$k);
+			$fieldSettings = $this->GetFieldSettings(($isOffer ? 'OFFER_' : '').$fieldPrefix.$k);
 			$sep = $this->params['ELEMENT_MULTIPLE_SEPARATOR'];
 			if($fieldSettings['CHANGE_MULTIPLE_SEPARATOR']=='Y') $sep = $fieldSettings['MULTIPLE_SEPARATOR'];
 			if(is_array($v)) $arVals = $v;
@@ -440,8 +527,8 @@ class Product
 				continue;
 			}
 			if(!isset($arItems[$k]['QUANTITY'])) $arItems[$k]['QUANTITY'] = 1;
-			$arItems[$k]['QUANTITY'] = (int)$arItems[$k]['QUANTITY'];
-			if($arItems[$k]['QUANTITY'] < 1) $arItems[$k]['QUANTITY'] = 1;
+			$arItems[$k]['QUANTITY'] = $this->GetFloatVal($arItems[$k]['QUANTITY']);
+			if($arItems[$k]['QUANTITY'] <= 0) $arItems[$k]['QUANTITY'] = 1;
 			
 			$key = (isset($arItemIds[$arItems[$k]['ITEM_ID']]) ? $arItemIds[$arItems[$k]['ITEM_ID']] : false);
 			if(!isset($arItems[$k]['ITEM_ID']) || $key!==false)
@@ -528,18 +615,40 @@ class Product
 	{
 		$asSumStore = (bool)($this->params['QUANTITY_AS_SUM_STORE']=='Y' && class_exists('\Bitrix\Catalog\StoreProductTable'));
 		$asSumProps = (bool)($this->params['QUANTITY_AS_SUM_PROPERTIES']=='Y' && $IBLOCK_ID > 0);
-		if(!$asSumStore && !$asSumProps) return;
+		$calcPrice = (bool)($this->params['CALCULATE_PRICE']=='Y' && $IBLOCK_ID > 0);
+		if($calcPrice)
+		{
+			$arCalcParams = unserialize(\Bitrix\Main\Config\Option::get('iblock', 'KDA_IBLOCK'.$IBLOCK_ID.'_PRICEQNT_CONFORMITY'));
+			if(!isset($arCalcParams['MAP']) || !is_array($arCalcParams['MAP']) || empty($arCalcParams['MAP']) || !isset($arCalcParams['PARAMS']) || !is_array($arCalcParams['PARAMS']) || empty($arCalcParams['PARAMS'])) $calcPrice = false;
+		}
+		if(!$asSumStore && !$asSumProps && !$calcPrice) return;
+		
+		foreach(GetModuleEvents(static::$moduleId, "OnBeforeSetProductQuantity", true) as $arEvent)
+			ExecuteModuleEventEx($arEvent, array($ID));
 		
 		//$arCProduct = \CCatalogProduct::GetList(array(), array('ID'=>$ID), false, false, array('ID', 'QUANTITY', 'TYPE', 'SUBSCRIBE'))->Fetch();
-		$arCProduct = $this->GetList(array(), array('ID'=>$ID), false, false, array('ID', 'QUANTITY', 'TYPE', 'SUBSCRIBE', 'SUBSCRIBE_ORIG', 'QUANTITY_RESERVED'))->Fetch();
-		if($arCProduct && (defined('\Bitrix\Catalog\ProductTable::TYPE_SKU') && $arCProduct['TYPE']==\Bitrix\Catalog\ProductTable::TYPE_SKU && $this->saveProductWithOffers===false)) return;
+		$arCProduct = $this->GetList(array(), array('ID'=>$ID), false, false, array('ID', 'QUANTITY', 'PURCHASING_PRICE', 'TYPE', 'SUBSCRIBE', 'SUBSCRIBE_ORIG', 'QUANTITY_TRACE', 'QUANTITY_TRACE_ORIG', 'CAN_BUY_ZERO', 'CAN_BUY_ZERO_ORIG', 'QUANTITY_RESERVED'))->Fetch();
+		$canChangeQuantity = true;
+		if($arCProduct && defined('\Bitrix\Catalog\ProductTable::TYPE_SKU'))
+		{
+			if($arCProduct['TYPE']==\Bitrix\Catalog\ProductTable::TYPE_SKU && $this->saveProductWithOffers===false) return;
+			if($arCProduct['TYPE']==\Bitrix\Catalog\ProductTable::TYPE_SET) $canChangeQuantity = false;
+		}
 			
 		$quantity = 0;
 		if($asSumStore)
 		{
-			if($arRes = \Bitrix\Catalog\StoreProductTable::getList(array('filter'=>array('PRODUCT_ID'=>$ID),'group'=>array('PRODUCT_ID'), 'runtime'=>array(new \Bitrix\Main\Entity\ExpressionField('SUM', 'SUM(AMOUNT)')), 'select'=>array('SUM')))->Fetch())
+			$arFilter = array('PRODUCT_ID'=>$ID);
+			if(isset($this->params['ELEMENT_STORES_FOR_QUANTITY']) && is_array($this->params['ELEMENT_STORES_FOR_QUANTITY']) && count($this->params['ELEMENT_STORES_FOR_QUANTITY']) > 0)
 			{
-				$quantity = (float)$arRes['SUM'];
+				if(!isset($this->params['ELEMENT_STORES_MODE_FOR_QUANTITY']) || $this->params['ELEMENT_STORES_MODE_FOR_QUANTITY']=='INC') $arFilter['STORE_ID'] = $this->params['ELEMENT_STORES_FOR_QUANTITY'];
+				elseif(isset($this->params['ELEMENT_STORES_MODE_FOR_QUANTITY']) && $this->params['ELEMENT_STORES_MODE_FOR_QUANTITY']=='EXC') $arFilter['!STORE_ID'] = $this->params['ELEMENT_STORES_FOR_QUANTITY'];
+				else $arFilter['STORE.ACTIVE'] = 'Y';
+			}
+			else $arFilter['STORE.ACTIVE'] = 'Y';
+			if($arRes = \Bitrix\Catalog\StoreProductTable::getList(array('filter'=>$arFilter,'group'=>array('PRODUCT_ID'), 'runtime'=>array(new \Bitrix\Main\Entity\ExpressionField('SUM', 'SUM(AMOUNT)')), 'select'=>array('SUM')))->Fetch())
+			{
+				$quantity = $this->GetFloatVal($arRes['SUM']);
 			}
 		}
 		if($asSumProps)
@@ -550,25 +659,167 @@ class Product
 			$arPropKeys = array();
 			foreach($arProps as $propKey)
 			{
-				if(strpos($propKey, 'IP_PROP')==0) $arPropKeys[] = substr($propKey, 7);
+				if(strpos($propKey, 'IP_PROP')===0) $arPropKeys[] = substr($propKey, 7);
 			}
 			$dbRes = \CIBlockElement::GetProperty($IBLOCK_ID, $ID, array(), Array("ID"=>$arPropKeys));
 			while($arr = $dbRes->Fetch())
 			{
-				if(in_array($arr['ID'], $arPropKeys)) $quantity += (float)$arr['VALUE'];
+				if(in_array($arr['ID'], $arPropKeys)) $quantity += $this->GetFloatVal($arr['VALUE']);
+			}
+		}
+		
+		if($calcPrice)
+		{
+			$arCalcParams2 = array();
+			$j = 0;
+			while((($jk = ($j > 0 ? '_'.$j : '')) || true) && ($jp = 'PARAMS'.$jk) && ($jm = 'MAP'.$jk) && array_key_exists($jp, $arCalcParams))
+			{
+				$arCalcParams2[$j] = array('MAP'=>$arCalcParams[$jm], 'PARAMS'=>$arCalcParams[$jp]);
+				$j++;
+			}
+			
+			$quantity = 0;
+			foreach($arCalcParams2 as $arCalcParams)
+			{
+				$arFields = array();
+				$arPropKeys = array();
+				$arStoreKeys = array();
+				$arPriceKeys = array();
+				foreach($arCalcParams['MAP'] as $arMap)
+				{
+					if(strpos($arMap['price'], 'IP_PROP')===0) $arPropKeys[] = substr($arMap['price'], 7);
+					if(strpos($arMap['quantity'], 'IP_PROP')===0) $arPropKeys[] = substr($arMap['quantity'], 7);
+					if(strpos($arMap['quantity'], 'ICAT_STORE')===0) $arStoreKeys[] = substr($arMap['quantity'], 10);
+					if(strpos($arMap['price'], 'ICAT_PRICE')===0) $arPriceKeys[] = substr($arMap['price'], 10);
+				}
+				if(count($arPropKeys) > 0)
+				{
+					$dbRes = \CIBlockElement::GetProperty($IBLOCK_ID, $ID, array(), Array("ID"=>$arPropKeys));
+					while($arr = $dbRes->Fetch())
+					{
+						if(preg_match('/\d+.*\-/', $arr['VALUE']))
+						{
+							list($arr['VALUE'], $arFields['IP_PROP'.$arr['ID'].'|DISCOUNT']) = explode('-', $arr['VALUE'], 2);
+						}
+						$arFields['IP_PROP'.$arr['ID']] = $this->GetFloatVal($arr['VALUE']);
+					}
+				}
+				if(count($arStoreKeys) > 0)
+				{
+					if(!isset($this->useStoreReserved))
+					{
+						$arStoreProductMap = \Bitrix\Catalog\StoreProductTable::getMap();
+						$this->useStoreReserved = (bool)isset($arStoreProductMap['QUANTITY_RESERVED']);
+					}
+					$arSelect = array('STORE_ID', 'AMOUNT');
+					if($this->useStoreReserved) $arSelect[] = 'QUANTITY_RESERVED';
+					$dbRes = \Bitrix\Catalog\StoreProductTable::GetList(array('filter'=>array('PRODUCT_ID'=>$ID, 'STORE_ID'=>$arStoreKeys), 'select'=>$arSelect));
+					while($arr = $dbRes->Fetch())
+					{
+						$arFields['ICAT_STORE'.$arr['STORE_ID']] = $this->GetFloatVal($arr['AMOUNT']) - ($this->useStoreReserved ? $this->GetFloatVal($arr['QUANTITY_RESERVED']) : 0);
+					}
+				}
+				if(count($arPriceKeys) > 0)
+				{
+					$dbRes = \Bitrix\Catalog\PriceTable::GetList(array('filter'=>array('PRODUCT_ID'=>$ID, 'CATALOG_GROUP_ID'=>$arPriceKeys), 'select'=>array('CATALOG_GROUP_ID', 'PRICE')));
+					while($arr = $dbRes->Fetch())
+					{
+						$arFields['ICAT_PRICE'.$arr['CATALOG_GROUP_ID']] = $this->GetFloatVal($arr['PRICE']);
+					}
+				}
+				
+				$price = '';
+				$priceField = '';
+				$discount = false;
+				foreach($arCalcParams['MAP'] as $arMap)
+				{
+					$curPrice = false;
+					if(isset($arFields[$arMap['price']]))
+					{
+						$curPrice = $this->GetFloatVal($arFields[$arMap['price']]);
+						if($curPrice > 0)
+						{
+							$extra = 0;
+							if(isset($arMap['extra'])) $extra = $this->GetFloatVal($arMap['extra']);
+							if($extra!==0)
+							{
+								$curPrice = $curPrice * (1 + $extra/100);
+							}
+						}
+					}
+					if($curPrice > 0
+						&& ($arCalcParams['PARAMS']['ONLY_AVAILABLE']=='N' || (isset($arFields[$arMap['quantity']]) && $arFields[$arMap['quantity']] > 0))
+						&& ((float)$price<=0 || ($arCalcParams['PARAMS']['PRICE_CALC']=='MIN' && $curPrice < $price) || ($arCalcParams['PARAMS']['PRICE_CALC']=='MAX' && $curPrice > (float)$price)))
+					{
+						$price = $curPrice;
+						$priceField = $arMap['price'];
+						if($arCalcParams['PARAMS']['QUANTITY_CALC']=='FROM_PRICE') $quantity = $arFields[$arMap['quantity']];
+						if(array_key_exists($arMap['price'].'|DISCOUNT', $arFields))
+						{
+							$discount = $arFields[$arMap['price'].'|DISCOUNT'];
+						}
+					}
+					if($arCalcParams['PARAMS']['QUANTITY_CALC']=='SUM') $quantity += $arFields[$arMap['quantity']];
+					elseif($arCalcParams['PARAMS']['QUANTITY_CALC']=='NONE') $canChangeQuantity = false;
+				}
+				
+				if(strlen($price) > 0)
+				{
+					if($arCalcParams['PARAMS']['PRICE_ROUND'])
+					{
+						$ratio = (float)$arCalcParams['PARAMS']['PRICE_ROUND_DIGIT'];
+						if(!$ratio) $ratio = 1;
+						$price = $price/$ratio;
+						if($arCalcParams['PARAMS']['PRICE_ROUND']=='MATH') $price = round($price);
+						elseif($arCalcParams['PARAMS']['PRICE_ROUND']=='UP') $price = ceil($price);
+						elseif($arCalcParams['PARAMS']['PRICE_ROUND']=='DOWN') $price = floor($price);
+						$price = $price*$ratio;
+					}
+					if($price <= 0) $price = 0;
+				}
+				if(empty($arCalcParams['PARAMS']['PRICE_EMPTY_ACTION'])) $arCalcParams['PARAMS']['PRICE_EMPTY_ACTION'] = 'DELETE';
+				if(strlen($price) > 0 || $arCalcParams['PARAMS']['PRICE_EMPTY_ACTION']=='DELETE')
+				{
+					if($arCalcParams['PARAMS']['PRICE_TYPE']=='PURCHASING_PRICE')
+					{
+						if($this->params['ELEMENT_IMAGES_FORCE_UPDATE']=='Y' || $arCProduct['PURCHASING_PRICE']!=$price)
+						{
+							$this->Update($ID, $IBLOCK_ID, array('PURCHASING_PRICE'=>$price));
+							$this->logger->AddElementChanges('ICAT_', array('PURCHASING_PRICE'=>$price), array('PURCHASING_PRICE'=>$arCProduct['PURCHASING_PRICE']));
+						}
+					}
+					elseif($arCalcParams['PARAMS']['PRICE_TYPE'] > 0)
+					{
+						$this->pricer->SavePrice($ID, array($arCalcParams['PARAMS']['PRICE_TYPE']=>array('PRICE'=>$price)));
+						$this->SaveFieldCalcPrice($ID, $IBLOCK_ID, $arCalcParams['PARAMS']['PRICE_TYPE'], $priceField);
+					}
+				}
+				
+				if($discount!==false)
+				{
+					$arFieldsProductDiscount = array('VALUE'=>$this->GetFloatVal($discount));
+					$discount = trim($discount);
+					$arFieldsProductDiscount['VALUE_TYPE'] = (strpos($discount, '%') ? 'P' : 'S');
+					if($arFieldsProductDiscount['VALUE_TYPE']=='S' && $discount==$price)
+					{
+						$arFieldsProductDiscount['VALUE'] = 0;
+					}
+					$this->ie->SaveDiscount($ID, $IBLOCK_ID, $arFieldsProductDiscount);
+				}
 			}
 		}
 		
 		if($arCProduct)
 		{
 			if(isset($arCProduct['QUANTITY_RESERVED']) && $arCProduct['QUANTITY_RESERVED'] > 0) $quantity -= (int)$arCProduct['QUANTITY_RESERVED'];
-			if($arCProduct['QUANTITY']==$quantity) return;
+			if($arCProduct['QUANTITY']==$quantity || !$canChangeQuantity) return;
 			$arProduct = array('QUANTITY' => $quantity);
 			$this->logger->AddElementChanges('ICAT_', $arProduct, $arCProduct);
 			foreach(array('SUBSCRIBE', 'QUANTITY_TRACE', 'CAN_BUY_ZERO', 'QUANTITY', 'TYPE') as $key)
 			{
 				if(!isset($arProduct[$key])) $arProduct[$key] = (isset($arCProduct[$key.'_ORIG']) ? $arCProduct[$key.'_ORIG'] : $arCProduct[$key]);
 			}
+			$this->CheckProductType($arProduct);
 			//\CCatalogProduct::Update($arCProduct['ID'], $arProduct);
 			$this->Update($arCProduct['ID'], $IBLOCK_ID, $arProduct);
 		}
@@ -578,10 +829,7 @@ class Product
 				'ID' => $ID,
 				'QUANTITY' => $quantity
 			);
-			if($this->GetOfferParentId() && defined('\Bitrix\Catalog\ProductTable::TYPE_OFFER'))
-			{
-				$arProduct['TYPE'] = \Bitrix\Catalog\ProductTable::TYPE_OFFER;
-			}
+			$this->CheckProductType($arProduct);
 			$this->GetDefaultProductFields($arProduct, $IBLOCK_ID);
 			//\CCatalogProduct::Add($arProduct);
 			$this->Add($arProduct, $IBLOCK_ID);
@@ -592,6 +840,108 @@ class Product
 		{
 			\Bitrix\Catalog\Product\Sku::updateAvailable($this->GetOfferParentId());
 		}
+	}
+	
+	public function SaveFieldCalcPrice($ID, $IBLOCK_ID, $priceType, $priceField)
+	{
+		if(!class_exists('\Bitrix\Iblock\PropertyTable')) return;
+		if(!array_key_exists($priceType, $this->priceCalcProps))
+		{
+			$this->priceCalcProps[$priceType] = 0;
+			if($arProp = \Bitrix\Iblock\PropertyTable::getList(array('filter'=>array('=IBLOCK_ID'=>$IBLOCK_ID, '=CODE'=>'KIT_IMPORT_CALC_PRICE_TYPE_'.$priceType), 'select'=>array('ID')))->Fetch())
+			{
+				$this->priceCalcProps[$priceType] = $arProp['ID'];
+			}
+		}
+		
+		if(($propId = $this->priceCalcProps[$priceType]) > 0)
+		{
+			if(strlen($priceField) > 0)
+			{
+				if(!array_key_exists($priceField, $this->priceCalcFieldNames))
+				{
+					$this->priceCalcFieldNames[$priceField] = '';
+					if(strpos($priceField, 'IP_PROP')===0)
+					{
+						if($arProp = \Bitrix\Iblock\PropertyTable::getList(array('filter'=>array('=ID'=>(int)substr($priceField, 7)), 'select'=>array('ID', 'NAME')))->Fetch())
+						{
+							$this->priceCalcFieldNames[$priceField] = $arProp['NAME'].' ['.$arProp['ID'].']';
+						}
+					}
+					elseif(strpos($priceField, 'ICAT_PRICE')===0)
+					{
+						if(class_exists('\Bitrix\Catalog\GroupTable') && ($arPriceType = \Bitrix\Catalog\GroupTable::getList(array('filter'=>array('=ID'=>(int)substr($priceField, 10)), 'select'=>array('ID', 'NAME', 'LANG_NAME'=>'CURRENT_LANG.NAME')))->Fetch()))
+						{
+							$this->priceCalcFieldNames[$priceField] = ($arPriceType['LANG_NAME'] ? $arPriceType['LANG_NAME'] : $arPriceType['NAME']).' ['.$arPriceType['ID'].']';
+						}
+					}
+				}
+				$priceField = $this->priceCalcFieldNames[$priceField];
+			}
+			$this->ie->SaveProperties($ID, $IBLOCK_ID, array($propId=>$priceField));
+		}
+	}
+	
+	public function CheckProductType(&$arProduct)
+	{
+		if(isset($arProduct['TYPE']) && strlen($arProduct['TYPE']) > 0) return;
+		if($this->GetOfferParentId() && defined('\Bitrix\Catalog\ProductTable::TYPE_OFFER'))
+		{
+			$arProduct['TYPE'] = \Bitrix\Catalog\ProductTable::TYPE_OFFER;
+		}
+		elseif(defined('\Bitrix\Catalog\ProductTable::TYPE_PRODUCT'))
+		{
+			$arProduct['TYPE'] = \Bitrix\Catalog\ProductTable::TYPE_PRODUCT;
+		}
+	}
+	
+	public function GetProductQuantity($ID, $IBLOCK_ID)
+	{
+		$quantity = 0;
+		if($arProduct = $this->GetList(array(), array('ID'=>$ID), false, false, array('ID', 'QUANTITY', 'TYPE'))->Fetch())
+		{
+			if(defined('\Bitrix\Catalog\ProductTable::TYPE_SKU') && $arProduct['TYPE']==\Bitrix\Catalog\ProductTable::TYPE_SKU && $this->saveProductWithOffers===false)
+			{
+				$arOfferIblock = $this->ie->GetCachedOfferIblock($IBLOCK_ID);
+				$OFFERS_IBLOCK_ID = $arOfferIblock['OFFERS_IBLOCK_ID'];
+				$OFFERS_PROPERTY_ID = $arOfferIblock['OFFERS_PROPERTY_ID'];
+				if($OFFERS_IBLOCK_ID && $OFFERS_PROPERTY_ID && ($arOffer = \CIblockElement::GetList(array('CATALOG_QUANTITY'=>'DESC'), array('IBLOCK_ID'=>$OFFERS_IBLOCK_ID, 'PROPERTY_'.$OFFERS_PROPERTY_ID=>$ID, 'ACTIVE'=>'Y'), false, array('nTopCount'=>1), array('CATALOG_QUANTITY'))->Fetch()))
+				{
+					$quantity = (float)$arOffer['CATALOG_QUANTITY'];
+				}
+			}
+			else
+			{
+				$quantity = (float)$arProduct['QUANTITY'];
+			}
+		}
+		return $quantity;
+	}
+	
+	public function GetProductPrice($ID, $IBLOCK_ID)
+	{
+		$price = 0;
+		if($arProduct = $this->GetList(array(), array('ID'=>$ID), false, false, array('ID', 'QUANTITY', 'TYPE'))->Fetch())
+		{
+			if(defined('\Bitrix\Catalog\ProductTable::TYPE_SKU') && $arProduct['TYPE']==\Bitrix\Catalog\ProductTable::TYPE_SKU && $this->saveProductWithOffers===false)
+			{
+				$arOfferIblock = $this->ie->GetCachedOfferIblock($IBLOCK_ID);
+				$OFFERS_IBLOCK_ID = $arOfferIblock['OFFERS_IBLOCK_ID'];
+				$OFFERS_PROPERTY_ID = $arOfferIblock['OFFERS_PROPERTY_ID'];
+				if($OFFERS_IBLOCK_ID && $OFFERS_PROPERTY_ID && ($arOffer = \CIblockElement::GetList(array('CATALOG_QUANTITY'=>'DESC'), array('IBLOCK_ID'=>$OFFERS_IBLOCK_ID, 'PROPERTY_'.$OFFERS_PROPERTY_ID=>$ID, 'ACTIVE'=>'Y', '>PRICE'=>'0'), false, array('nTopCount'=>1), array('ID'))->Fetch()))
+				{
+					$price = 1;
+				}
+			}
+			else
+			{
+				if($arPrice = $this->pricer->GetList(array(), array('PRODUCT_ID'=>$ID, '>PRICE'=>'0'), false, false, array('ID', 'PRICE', 'CATALOG_GROUP_ID'))->Fetch())
+				{
+					$price = (float)$arPrice['PRICE'];
+				}
+			}
+		}
+		return $price;
 	}
 	
 	public function GetList($arOrder = array(), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())

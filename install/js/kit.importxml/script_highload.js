@@ -1,7 +1,3 @@
-/*
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 var kitIXModuleName = 'kit.importxml';
 var kitIXModuleFilePrefix = 'kit_import_xml';
 var EIXPreview = {
@@ -427,7 +423,7 @@ var EIXPreview = {
 		
 		var dialogParams = {
 			'title':BX.message("KIT_IX_POPUP_FIELD_SETTINGS_TITLE") + ' "' + title + '" {'+index+'}',
-			'content_url':'/bitrix/admin/'+kitIXModuleFilePrefix+'_field_settings_hl.php?field='+val+'&field_name='+name+'&index='+index+'&PROFILE_ID='+form.PROFILE_ID.value,
+			'content_url':'/bitrix/admin/'+kitIXModuleFilePrefix+'_field_settings_hl.php?lang='+BX.message('LANGUAGE_ID')+'&field='+val+'&field_name='+name+'&index='+index+'&PROFILE_ID='+form.PROFILE_ID.value,
 			'width':'900',
 			'height':'400',
 			'resizable':true,
@@ -532,6 +528,7 @@ var EProfile = {
 		{
 			$('#new_profile_name').css('display', 'none');
 		}*/
+		$('form#dataload input[name="submit_btn"], form#dataload input[name="saveConfigButton"]').prop('disabled', true);
 		var id = (typeof select == 'object' ? select.value : select);
 		var query = window.location.search.replace(/PROFILE_ID=[^&]*&?/, '');
 		if(query.length < 2) query = '?';
@@ -568,6 +565,8 @@ var EProfile = {
 		var select = $('select#PROFILE_ID');
 		var option = select[0].options[select[0].selectedIndex];
 		var name = option.innerHTML;
+		var prefix = '['+option.value+'] ';
+		if(name.indexOf(prefix)==0) name = name.substr(prefix.length);
 		
 		var tr = $('#new_profile_name');
 		var input = $('input[type=text]', tr);
@@ -592,7 +591,7 @@ var EProfile = {
 		if(value.length==0) return false;
 		
 		tr.css('display', 'none');
-		option.innerHTML = value;
+		option.innerHTML = '['+id+'] '+value;
 		
 		$.post(window.location.href, {'MODE': 'AJAX', 'ID': id, 'NAME': value, 'ACTION': 'RENAME_PROFILE'}, function(data){});
 	},
@@ -601,9 +600,9 @@ var EProfile = {
 	{
 		var dialog = new BX.CAdminDialog({
 			'title':BX.message("KIT_IX_POPUP_CRON_TITLE"),
-			'content_url':'/bitrix/admin/'+kitIXModuleFilePrefix+'_cron_settings.php?suffix=highload',
+			'content_url':'/bitrix/admin/'+kitIXModuleFilePrefix+'_cron_settings.php?lang='+BX.message('LANGUAGE_ID')+'&suffix=highload',
 			'width':'800',
-			'height':'350',
+			'height':'400',
 			'resizable':true});
 			
 		dialog.SetButtons([
@@ -621,15 +620,70 @@ var EProfile = {
 				}
 			})*/
 		]);
+		
+		BX.addCustomEvent(dialog, 'onWindowRegister', function(){
+			$('input[type=checkbox]', this.DIV).each(function(){
+				BX.adminFormTools.modifyCheckbox(this);
+			});
+			if(typeof $('select.kit-chosen-multi').chosen == 'function')
+			{
+				$('select.kit-chosen-multi').chosen({search_contains: true, placeholder_text: BX.message("KIT_IX_CRON_CHOOSE_PROFILE")});
+			}
+		});
 			
 		dialog.Show();
 	},
 	
 	SaveCron: function(btn)
 	{
+		var obj = this;
 		var form = $(btn).closest('form');
-		$.post(form[0].getAttribute('action'), form.serialize()+'&subaction='+btn.name, function(data){
+		var action = form[0].getAttribute('action');
+		$.post(action, form.serialize()+'&subaction='+btn.name, function(data){
 			$('#kit-ix-cron-result').html(data);
+			obj.UpdateCronRecords(action);
+			if($('input[name="recordkey"]', form).val().length > 0)
+			{
+				$('input[name="recordkey"]', form).val('');
+				var addBtn = $('input[name="add"]', form);
+				addBtn.val(addBtn.attr('data-name-add'));
+				$('select[name="PROFILE_ID[]"]', form).val('').trigger('chosen:updated').trigger('change');
+				$('select[name="agent_period_type"]', form).val('daily').trigger('chosen:updated').trigger('change');
+			}
+		});
+	},
+	
+	EditCronRecord: function(btn, key)
+	{
+		$('#kit-ix-cron-result').html('');
+		btn = $(btn);
+		var obj = this;
+		var form = btn.closest('form');
+		$('select[name="PROFILE_ID[]"]', form).val(btn.attr('data-profiles').split(',')).trigger('chosen:updated').trigger('change');
+		$('select[name="agent_period_type"]', form).val('expert').trigger('chosen:updated').trigger('change');
+		$('input[name="agent_period_expert"]', form).val(btn.attr('data-time'));
+		$('input[name="agent_php_path"]', form).val(btn.attr('data-phppath'));
+		$('input[name="recordkey"]', form).val(key);
+		var addBtn = $('input[name="add"]', form);
+		addBtn.val(addBtn.attr('data-name-change'));
+		form.closest('.bx-core-adm-dialog-content').animate({scrollTop: 0}, 500);
+	},
+	
+	DeleteFromCron: function(btn, key)
+	{
+		var obj = this;
+		var form = $(btn).closest('form');
+		var action = form[0].getAttribute('action');
+		$.post(action, 'action=deleterecord&key='+encodeURIComponent(key), function(data){
+			$('#kit-ix-cron-result').html('');
+			obj.UpdateCronRecords(action);
+		});
+	},
+	
+	UpdateCronRecords: function(action)
+	{
+		$.get(action, function(data){
+			$('#kit-ix-cron-records_wrap').html($(data).find('#kit-ix-cron-records_wrap').html());
 		});
 	},
 	
@@ -717,7 +771,7 @@ var EProfile = {
 		
 		var dialogParams = {
 			'title':BX.message(input.attr('id').indexOf('OFFER_')==0 ? "KIT_IX_POPUP_MISSINGOFFER_FIELDS_TITLE" : "KIT_IX_POPUP_MISSINGELEM_FIELDS_TITLE"),
-			'content_url':'/bitrix/admin/'+kitIXModuleFilePrefix+'_missignelem_fields.php?IBLOCK_ID='+iblockId+'&INPUT_ID='+input.attr('id')+'&OLDDEFAULTS='+input.val(),
+			'content_url':'/bitrix/admin/'+kitIXModuleFilePrefix+'_missignelem_fields.php?lang='+BX.message('LANGUAGE_ID')+'&IBLOCK_ID='+iblockId+'&INPUT_ID='+input.attr('id')+'&OLDDEFAULTS='+input.val(),
 			'width':'800',
 			'height':'400',
 			'resizable':true
@@ -763,7 +817,7 @@ var EProfile = {
 		}
 		var dialog = new BX.CAdminDialog({
 			'title':BX.message("KIT_IX_POPUP_SOURCE_EMAIL"),
-			'content_url':'/bitrix/admin/'+kitIXModuleFilePrefix+'_source_email.php?PROFILE_ID='+pid,
+			'content_url':'/bitrix/admin/'+kitIXModuleFilePrefix+'_source_email.php?lang='+BX.message('LANGUAGE_ID')+'&PROFILE_ID='+pid,
 			'content_post': post,
 			'width':'900',
 			'height':'450',
@@ -803,7 +857,7 @@ var EProfile = {
 			success: function(data){
 				eval('var res = '+data+';');
 				if(res.result=='success') $('#connect_result').html('<div class="success">'+BX.message("KIT_IX_SOURCE_EMAIL_SUCCESS")+'</div>');
-				else $('#connect_result').html('<div class="fail">'+BX.message("KIT_IX_SOURCE_EMAIL_FAIL")+'</div>');
+				else $('#connect_result').html('<div class="fail">'+BX.message("KIT_IX_SOURCE_EMAIL_FAIL")+'</div><div class="fail_note">'+BX.message("KIT_IX_SOURCE_EMAIL_FAIL_NOTE")+'</div>');
 				
 				if(res.folders)
 				{
@@ -837,7 +891,7 @@ var EProfile = {
 		}
 		var dialog = new BX.CAdminDialog({
 			'title':BX.message("KIT_IX_POPUP_SOURCE_LINKAUTH"),
-			'content_url':'/bitrix/admin/'+kitIXModuleFilePrefix+'_source_linkauth.php?PROFILE_ID='+pid,
+			'content_url':'/bitrix/admin/'+kitIXModuleFilePrefix+'_source_linkauth.php?lang='+BX.message('LANGUAGE_ID')+'&PROFILE_ID='+pid,
 			'content_post': post,
 			'width':'900',
 			'height':'450',
@@ -946,6 +1000,55 @@ var EProfile = {
 			},
 			timeout: 8000
 		});
+	},
+	
+	OpenMissignElementFilter: function(link)
+	{
+		var obj = this;
+		var form = $(link).closest('form');
+		var hlblockId = $('select[name="SETTINGS_DEFAULT[HIGHLOADBLOCK_ID]"]', form).val();
+		
+		var dialogParams = {
+			'title':BX.message("KIT_IX_POPUP_MISSINGELEM_FILTER_TITLE"),
+			'content_url':'/bitrix/admin/'+kitIXModuleFilePrefix+'_missignelem_filter_hl.php?lang='+BX.message('LANGUAGE_ID')+'&HIGHLOADBLOCK_ID='+hlblockId+'&PROFILE_ID='+$('#PROFILE_ID').val(),
+			'content_post': {OLDFILTER: $('#ELEMENT_MISSING_FILTER').val()},
+			'width':'800',
+			'height':'400',
+			'resizable':true
+		};
+		var dialog = new BX.CAdminDialog(dialogParams);
+			
+		dialog.SetButtons([
+			dialog.btnCancel,
+			new BX.CWindowButton(
+			{
+				title: BX.message('JS_CORE_WINDOW_SAVE'),
+				id: 'savebtn',
+				name: 'savebtn',
+				className: BX.browser.IsIE() && BX.browser.IsDoctype() && !BX.browser.IsIE10() ? '' : 'adm-btn-save',
+				action: function () {
+					$('#kit-ix-filter').find('tr[id*="_filter_row_"]:hidden').find('input,select,textarea').val('').trigger('change');
+					$.post('/bitrix/admin/'+kitIXModuleFilePrefix+'_missignelem_filter_hl.php?lang='+BX.message('LANGUAGE_ID'), $('#kit-ix-filter').serialize(), function(data){
+						$('#ELEMENT_MISSING_FILTER').val($.trim(data));
+						BX.WindowManager.Get().Close();
+					});
+				}
+			})
+		]);
+		
+		BX.addCustomEvent(dialog, 'onWindowRegister', function(){
+			setTimeout(function(){
+				$('.find_form_inner select[name*="find_el_vtype_"]').bind('change', function(){
+					var div = $(this.parentNode).next();
+					if(this.value.length > 0 && this.value.indexOf('empty')!=-1) div.hide();
+					else div.show();
+				}).trigger('change');
+			}, 500);
+		});
+			
+		dialog.Show();
+		
+		return false;
 	}
 }
 
@@ -978,7 +1081,7 @@ var EImport = {
 		var obj = this;
 		$.ajax({
 			type: "GET",
-			url: '/upload/tmp/'+kitIXModuleName+'/'+this.pid+'.txt?hash='+(new Date()).getTime(),
+			url: '/upload/tmp/'+kitIXModuleName+'/'+this.pid+'_highload.txt?hash='+(new Date()).getTime(),
 			success: function(data){
 				var finish = false;
 				if(data && data.substr(0, 1)=='{' && data.substr(data.length-1)=='}')
@@ -1102,7 +1205,15 @@ var EImport = {
 				obj.errorStatus = false;
 				obj.OnLoad(data);
 			},
-			error: function(){
+			error: function(data){
+				if(data && data.responseText)
+				{
+					if(data.responseText.indexOf("[Error]")!=-1 || data.responseText.indexOf("[ErrorException]")!=-1 || data.responseText.indexOf("Query Error")!=-1)
+					{
+						$('#block_error').show();
+						$('#res_error').append('<div>'+data.responseText+'</div>');
+					}
+				}
 				obj.errorStatus = true;
 				$('#block_error_import').show();
 				var timeBlock = document.getElementById('kit_ix_auto_continue_time');
@@ -1187,6 +1298,11 @@ var EImport = {
 		if(data.indexOf(returnLabel)!=-1)
 		{
 			data = $.trim(data.substr(data.indexOf(returnLabel) + returnLabel.length));
+			var returnLabel2 = returnLabel.replace('<!--', '<!--/');
+			if(data.indexOf(returnLabel2)!=-1)
+			{
+				data = $.trim(data.substr(0, data.indexOf(returnLabel2)));
+			}
 		}
 		if(data.indexOf('{')!=0)
 		{
@@ -1264,7 +1380,8 @@ var ESettings = {
 		else
 		{
 			var div2 = div.clone(true);
-			$('select, input', div2).val('');
+			$('input', div2).val('');
+			$('select', div2).prop('selectedIndex', 0);
 			$(link).before(div2);
 		}
 	},
@@ -1278,7 +1395,8 @@ var ESettings = {
 		}
 		else
 		{
-			$('select, input', divs).val('');
+			$('input', divs).val('');
+			$('select', divs).prop('selectedIndex', 0);
 			divs.hide();
 		}
 	},
@@ -1388,7 +1506,8 @@ var ESettings = {
 		else
 		{
 			var div = prevDiv.clone();
-			$('select, input', div).not('.choose_val').val('');
+			$('input', div).not('.choose_val').val('');
+			$('select', div).prop('selectedIndex', 0);
 			$(link).before(div);
 		}
 		ESettings.BindConversionEvents();
@@ -1403,7 +1522,8 @@ var ESettings = {
 		}
 		else
 		{
-			$('select, input', div).not('.choose_val').val('');
+			$('input', div).not('.choose_val').val('');
+			$('select', div).prop('selectedIndex', 0);
 			div.hide();
 		}
 	},
@@ -1447,6 +1567,13 @@ var ESettings = {
 			}
 		}
 		BX.adminShowMenu(btn, arLines, '');
+	},
+	
+	AddProfileDescription: function(link)
+	{
+		var tr = $(link).closest('tr');
+		tr.hide();
+		tr.next('tr').show();
 	},
 	
 	ShowPHPExpression: function(link)
@@ -1527,7 +1654,7 @@ var EHelper = {
 	{
 		var dialog = new BX.CAdminDialog({
 			'title':BX.message("KIT_IX_POPUP_HELP_TITLE"),
-			'content_url':'/bitrix/admin/'+kitIXModuleFilePrefix+'_popup_help.php',
+			'content_url':'/bitrix/admin/'+kitIXModuleFilePrefix+'_popup_help.php?lang='+BX.message('LANGUAGE_ID'),
 			'width':'900',
 			'height':'450',
 			'resizable':true});
@@ -1574,9 +1701,9 @@ var EHelper = {
 $(document).ready(function(){
 	/*Bug fix with excess jquery*/
 	var anySelect = $('select:eq(0)');
-	if(typeof anySelect.chosen != 'function')
+	if(typeof anySelect.chosen!='function')
 	{
-		var jQuerySrc = $('script[src^="/bitrix/js/main/jquery/"]').attr('src');
+		var jQuerySrc = $('script[src*="/bitrix/js/main/jquery/"]').attr('src');
 		if(jQuerySrc)
 		{
 			$.getScript(jQuerySrc, function(){

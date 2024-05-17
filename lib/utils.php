@@ -1,8 +1,4 @@
 <?php
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Loader;
@@ -16,33 +12,101 @@ class Utils {
 	protected static $cpSpecCharLetters = null;
 	protected static $arAgents = array();
 	protected static $countAgents = 0;
+	protected static $offerIblocks = array();
+	protected static $offerIblockProps = array();
+	protected static $parentIblocks = array();
+	protected static $lastCookies = array();
+	protected static $lastUAgent = '';
+	protected static $lastFileHash = '';
+	protected static $apiPageParams = array('PAGE'=>'API_PAGE([+\-]\d+)?', 'OFFSET'=>'API_OFFSET_(\d+)');
+	protected static $jsCounter = 0;
+	protected static $apiPage = 1;
+	protected static $eLinkedIblocks = array();
+	
+	public static function GetModuleId()
+	{
+		return self::$moduleId;
+	}
 	
 	public static function GetOfferIblock($IBLOCK_ID, $retarray=false)
 	{
-		if(!$IBLOCK_ID || !Loader::includeModule('catalog')) return false;
-		$dbRes = \CCatalog::GetList(array(), array('IBLOCK_ID'=>$IBLOCK_ID));
-		$arFields = $dbRes->Fetch();
-		if(!$arFields['OFFERS_IBLOCK_ID'])
+		if(!$IBLOCK_ID) return false;
+		$arFields = array();
+		if(!isset(self::$offerIblocks[$IBLOCK_ID]))
 		{
-			$dbRes = \CCatalog::GetList(array(), array('PRODUCT_IBLOCK_ID'=>$IBLOCK_ID));
-			if($arFields2 = $dbRes->Fetch())
+			if(!Loader::includeModule('catalog'))
+			{
+				$arRels = unserialize(\COption::GetOptionString(static::$moduleId, 'CATALOG_RELS'));
+				if(!is_array($arRels)) $arRels = array();
+				foreach($arRels as $arRel)
+				{
+					if($arRel['IBLOCK_ID']==$IBLOCK_ID)
+					{
+						$arIblock = \CIblock::GetById($IBLOCK_ID)->Fetch();
+						$arFields = Array(
+							'IBLOCK_ID' => $arRel['IBLOCK_ID'],
+							'YANDEX_EXPORT' => 'N',
+							'SUBSCRIPTION' => 'N',
+							'VAT_ID' => 0,
+							'PRODUCT_IBLOCK_ID' => 0,
+							'SKU_PROPERTY_ID' => 0,
+							'OFFERS_PROPERTY_ID' => $arRel['OFFERS_PROP_ID'],
+							'OFFERS_IBLOCK_ID' => $arRel['OFFERS_IBLOCK_ID'],
+							'ID' => $arRel['IBLOCK_ID'],
+							'IBLOCK_TYPE_ID' => $arIblock['IBLOCK_TYPE_ID'],
+							'IBLOCK_ACTIVE' => $arIblock['ACTIVE'],
+							'LID' => $arIblock['LID'],
+							'NAME' => $arIblock['NAME']
+						);
+					}
+				}
+			}
+			elseif(is_callable(array('\CCatalogSku', 'GetInfoByIBlock')) && defined('\CCatalogSku::TYPE_FULL') && defined('\CCatalogSku::TYPE_PRODUCT') && ($arCatalog = \CCatalogSku::GetInfoByIBlock($IBLOCK_ID)) && in_array($arCatalog['CATALOG_TYPE'], array(\CCatalogSku::TYPE_FULL, \CCatalogSku::TYPE_PRODUCT)) && $arCatalog['PRODUCT_IBLOCK_ID'] > 0)
 			{
 				$arFields = Array(
-					'IBLOCK_ID' => $arFields2['PRODUCT_IBLOCK_ID'],
-					'YANDEX_EXPORT' => $arFields2['YANDEX_EXPORT'],
-					'SUBSCRIPTION' => $arFields2['SUBSCRIPTION'],
-					'VAT_ID' => $arFields2['VAT_ID'],
+					'IBLOCK_ID' => $arCatalog['PRODUCT_IBLOCK_ID'],
+					'YANDEX_EXPORT' => $arCatalog['YANDEX_EXPORT'],
+					'SUBSCRIPTION' => $arCatalog['SUBSCRIPTION'],
+					'VAT_ID' => $arCatalog['VAT_ID'],
 					'PRODUCT_IBLOCK_ID' => 0,
 					'SKU_PROPERTY_ID' => 0,
-					'OFFERS_PROPERTY_ID' => $arFields2['SKU_PROPERTY_ID'],
-					'OFFERS_IBLOCK_ID' => $arFields2['IBLOCK_ID'],
-					'ID' => $arFields2['IBLOCK_ID'],
-					'IBLOCK_TYPE_ID' => $arFields2['IBLOCK_TYPE_ID'],
-					'IBLOCK_ACTIVE' => $arFields2['IBLOCK_ACTIVE'],
-					'LID' => $arFields2['LID'],
-					'NAME' => $arFields2['NAME']
+					'OFFERS_PROPERTY_ID' => $arCatalog['SKU_PROPERTY_ID'],
+					'OFFERS_IBLOCK_ID' => $arCatalog['IBLOCK_ID'],
+					'ID' => $arCatalog['PRODUCT_IBLOCK_ID']
 				);
 			}
+			else
+			{
+				$dbRes = \CCatalog::GetList(array(), array('IBLOCK_ID'=>$IBLOCK_ID));
+				$arFields = $dbRes->Fetch();
+				if(!$arFields['OFFERS_IBLOCK_ID'])
+				{
+					$dbRes = \CCatalog::GetList(array(), array('PRODUCT_IBLOCK_ID'=>$IBLOCK_ID));
+					if($arFields2 = $dbRes->Fetch())
+					{
+						$arFields = Array(
+							'IBLOCK_ID' => $arFields2['PRODUCT_IBLOCK_ID'],
+							'YANDEX_EXPORT' => $arFields2['YANDEX_EXPORT'],
+							'SUBSCRIPTION' => $arFields2['SUBSCRIPTION'],
+							'VAT_ID' => $arFields2['VAT_ID'],
+							'PRODUCT_IBLOCK_ID' => 0,
+							'SKU_PROPERTY_ID' => 0,
+							'OFFERS_PROPERTY_ID' => $arFields2['SKU_PROPERTY_ID'],
+							'OFFERS_IBLOCK_ID' => $arFields2['IBLOCK_ID'],
+							'ID' => $arFields2['IBLOCK_ID'],
+							'IBLOCK_TYPE_ID' => $arFields2['IBLOCK_TYPE_ID'],
+							'IBLOCK_ACTIVE' => $arFields2['IBLOCK_ACTIVE'],
+							'LID' => $arFields2['LID'],
+							'NAME' => $arFields2['NAME']
+						);
+					}
+				}
+			}
+			self::$offerIblocks[$IBLOCK_ID] = $arFields;
+		}
+		else
+		{
+			$arFields = self::$offerIblocks[$IBLOCK_ID];
 		}
 		if($arFields['OFFERS_IBLOCK_ID'])
 		{
@@ -50,6 +114,75 @@ class Utils {
 			else return $arFields['OFFERS_IBLOCK_ID'];
 		}
 		return false;
+	}
+	
+	public static function GetOfferIblockByOfferIblock($IBLOCK_ID)
+	{
+		if(!$IBLOCK_ID) return false;
+		if(!isset(self::$offerIblockProps[$IBLOCK_ID]))
+		{
+			self::$offerIblockProps[$IBLOCK_ID] = array();
+			if(Loader::includeModule('catalog'))
+			{
+				$dbRes = \CCatalog::GetList(array(), array('IBLOCK_ID'=>$IBLOCK_ID));
+				if($arCatalog = $dbRes->Fetch())
+				{
+					self::$offerIblockProps[$IBLOCK_ID] = array(
+						'IBLOCK_ID' => $arCatalog['PRODUCT_IBLOCK_ID'],
+						'OFFERS_IBLOCK_ID' => $arCatalog['IBLOCK_ID'],
+						'OFFERS_PROPERTY_ID' => $arCatalog['SKU_PROPERTY_ID']
+					);
+				}
+			}
+		}
+		return self::$offerIblockProps[$IBLOCK_ID];
+	}
+	
+	public static function GetParentIblock($IBLOCK_ID, $retarray=false)
+	{
+		if(!$IBLOCK_ID || !Loader::includeModule('catalog')) return false;
+		if(!isset(self::$parentIblocks[$IBLOCK_ID]))
+		{
+			$dbRes = \CCatalog::GetList(array(), array('IBLOCK_ID'=>$IBLOCK_ID));
+			$arFields = $dbRes->Fetch();
+			self::$parentIblocks[$IBLOCK_ID] = $arFields;
+		}
+		else
+		{
+			$arFields = self::$parentIblocks[$IBLOCK_ID];
+		}
+		if($arFields['PRODUCT_IBLOCK_ID'])
+		{
+			if($retarray) return $arFields;
+			else return $arFields['PRODUCT_IBLOCK_ID'];
+		}
+		return false;
+	}
+	
+	public static function GetXmlReaderClassByFile($fn)
+	{
+		$xmlReader = (class_exists('\XMLReader') ? '\XMLReader' : '\Bitrix\KitImportxml\XMLReader');
+		//$xmlReader = '\Bitrix\KitImportxml\XMLReader';
+		if(file_exists($fn) && ($c = file_get_contents($fn, false, null, 0, 8192)) && preg_match('/<\w:/', $c))
+		{
+			$xmlReader = '\XMLReader';
+		}
+		return $xmlReader;
+	}
+	
+	public static function GetXmlReaderObject($fn)
+	{
+		$className = self::GetXmlReaderClassByFile($fn);
+		if(defined('PHP_VERSION_ID') && PHP_VERSION_ID>=80000 && $className=='\XMLReader' && is_callable(array($className, 'open')))
+		{
+			$xml = $className::open($fn);
+		}
+		else
+		{
+			$xml = new $className();
+			$xml->open($fn);
+		}
+		return $xml;
 	}
 	
 	public static function GetFileName($fn)
@@ -148,11 +281,12 @@ class Utils {
 		return $arFile;
 	}
 	
-	public static function SaveFile($arFile, $strSavePath, $bForceMD5=false, $bSkipExt=false)
+	public static function SaveFile($arFile, $strSavePath=false, $bForceMD5=false, $bSkipExt=false)
 	{
+		if($strSavePath===false) $strSavePath = static::$moduleId;
 		$oProfile = \Bitrix\KitImportxml\Profile::getInstance();
 		$isUtf = (bool)(defined("BX_UTF") && BX_UTF);
-		if(\CUtil::DetectUTF8($arFile["name"]))
+		if(self::detectUtf8($arFile["name"]))
 		{
 			if(!$isUtf) $arFile["name"] = \Bitrix\Main\Text\Encoding::convertEncoding($arFile["name"], 'utf-8', LANG_CHARSET);
 		}
@@ -193,7 +327,7 @@ class Utils {
 				$file = new \Bitrix\Main\IO\File(\Bitrix\Main\IO\Path::convertPhysicalToLogical($arFile["tmp_name"]));
 				$arFile["size"] = $file->getSize();
 			}
-			catch(IO\IoException $e)
+			catch(\Bitrix\Main\IO\IoException $e)
 			{
 				$arFile["size"] = 0;
 			}
@@ -372,11 +506,11 @@ class Utils {
 					$buffer .= $str;
 				}
 				$pos1 = $pos2 = $pos3 = 0;
-				if(preg_match('/<\?xml[^>]*>/Uis', $buffer, $m)){$pos1 = strpos($buffer, $m[0])+strlen($m[0]);}
-				if(preg_match('/<!DOCTYPE[^>]*>/Uis', $buffer, $m)){$pos2 = strpos($buffer, $m[0])+strlen($m[0]);}
-				if(preg_match('/<[^\?!][^>]*>/Uis', $buffer, $m)){$pos3 = strpos($buffer, $m[0])+strlen($m[0]);}
+				if(preg_match('/<\?xml[^>]*>/Uis', $buffer, $m)){$pos1 = mb_strpos($buffer, $m[0])+mb_strlen($m[0]);}
+				if(preg_match('/<!DOCTYPE[^>]*>/Uis', $buffer, $m)){$pos2 = mb_strpos($buffer, $m[0])+mb_strlen($m[0]);}
+				if(preg_match('/<[^\?!][^>]*>/Uis', $buffer, $m)){$pos3 = mb_strpos($buffer, $m[0])+mb_strlen($m[0]);}
 				$maxPos = max($pos1, $pos2, $pos3);
-				$buffer = substr($buffer, 0, $maxPos);
+				$buffer = mb_substr($buffer, 0, $maxPos);
 				if(function_exists('mb_strlen')) $maxPos = mb_strlen($buffer, 'CP1251');
 				fseek($handle, $maxPos);
 				
@@ -405,16 +539,16 @@ class Utils {
 					try{				
 						$contents = preg_replace('/%[A-F0-9]{2}/', '', $contents);
 						$fileEncoding = 'utf-8';
-						if(!\CUtil::DetectUTF8($contents) && (!function_exists('iconv') || iconv('CP1251', 'CP1251', $contents)==$contents))
+						if(!self::detectUtf8($contents) && (!function_exists('iconv') || iconv('CP1251', 'CP1251', $contents)==$contents))
 						{
 							$fileEncoding = 'windows-1251';
 						}
-						if(in_array($encoding, array('windows-1251', 'utf-8')) && $encoding!=$fileEncoding)
+						if(in_array($encoding, array('windows-1251', 'utf-8', 'utf-16')) && $encoding!=$fileEncoding)
 						{
 							$buffer = preg_replace('/(<\?xml[^>]*encoding=[\'"])([^\'"]*)([\'"][^>]*\?>)/is', '$1'.$fileEncoding.'$3', $buffer);
 							$updateFile = true;
 						}
-					}catch(Exception $ex){}
+					}catch(\Exception $ex){}
 				}
 				
 				if(preg_match('/<\?xml[^>]*version=[\'"]([^\'"]*)[\'"][^>]*\?>/is', $buffer, $m))
@@ -423,6 +557,16 @@ class Utils {
 					if($version!='1.0')
 					{
 						$buffer = preg_replace('/(<\?xml[^>]*version=)([\'"][^\'"]*[\'"])([^>]*\?>)/is', '$1"1.0"$3', $buffer);
+						$updateFile = true;
+					}
+				}
+				
+				if(preg_match('/<\?xml[^>]*standalone=[\'"]([^\'"]*)[\'"][^>]*\?>/is', $buffer, $m))
+				{
+					$standalone = ToLower($m[1]);
+					if($standalone!='yes' && $standalone!='no')
+					{
+						$buffer = preg_replace('/(<\?xml[^>]*)(standalone=[\'"][^\'"]*[\'"])([^>]*\?>)/is', '$1$3', $buffer);
 						$updateFile = true;
 					}
 				}
@@ -438,7 +582,7 @@ class Utils {
 					$buffer = ltrim($buffer);
 					$updateFile = true;
 				}
-				
+
 				if($oProfile->GetParam('AUTO_FIX_XML_ERRORS')=='Y')
 				{
 					$updateFile = true;
@@ -446,14 +590,19 @@ class Utils {
 				
 				if($updateFile)
 				{
+					$bNumTags = (bool)($oProfile->GetParam('AUTO_FIX_XML_NUMTAGS')=='Y');
+					$bNamespaces = (bool)($oProfile->GetParam('AUTO_FIX_XML_NAMESPACES')=='Y');
+					$tags = $oProfile->GetParam('AUTO_FIX_XML_CDATA');
+					$arTags = array_diff(array_unique(array_map('trim', explode(',', $tags))), array(''));
+					
 					$tmpFile = $strPhysicalFileNameX.'.tmp';
 					$handle2 = fopen($tmpFile, 'a');
+					if($bNamespaces) self::ReplaceNS($buffer);
 					fwrite($handle2, $buffer);
 					if($oProfile->GetParam('AUTO_FIX_XML_ERRORS')=='Y')
 					{
-						$bNumTags = (bool)($oProfile->GetParam('AUTO_FIX_XML_NUMTAGS')=='Y');
-						$tags = $oProfile->GetParam('AUTO_FIX_XML_CDATA');
-						$arTags = array_diff(array_unique(array_map('trim', explode(',', $tags))), array(''));
+						$fileEncoding = 'utf-8';
+						if(preg_match('/<\?xml[^>]*encoding=[\'"]([^\'"]*)[\'"]/is', $buffer, $m) && in_array(ToLower($m[1]), array('windows-1251', 'cp1251'))) $fileEncoding = 'cp1251';
 						$bufferSize = 65536;
 						$bufferEnd = '';
 						while(!feof($handle)) 
@@ -463,17 +612,21 @@ class Utils {
 							{
 								$buffer2 .= fgets($handle, $bufferSize);
 							}
+							if($fileEncoding=='cp1251' && function_exists('iconv'))
+							{
+								$buffer2 = iconv('CP1251', 'CP1251//IGNORE', $buffer2);
+							}
 							$bufferEnd = '';
 							if($pos!==false && !feof($handle))
 							{
 								if(substr($buffer2, $pos, 1)!=='<' && function_exists('mb_strrpos'))
 								{
 									$encoding = self::getSiteEncoding();
-									$pos = mb_strrpos($buffer2, '<', $encoding);
+									$pos = mb_strrpos($buffer2, '<', 0, $encoding);
 									if(mb_substr($buffer2, $pos, 1, $encoding)!=='<')
 									{
 										$encoding = ($encoding=='utf-8' ? 'windows-1251' : 'utf-8');
-										$pos = mb_strrpos($buffer2, '<', $encoding);
+										$pos = mb_strrpos($buffer2, '<', 0, $encoding);
 									}
 									$bufferEnd = mb_substr($buffer2, $pos, 2000000000, $encoding);
 									$buffer2 = mb_substr($buffer2, 0, $pos, $encoding);
@@ -485,16 +638,18 @@ class Utils {
 								}
 							}
 
-							$buffer2 = preg_replace('/[\x00-\x04]/', '', $buffer2);
-							$buffer2 = preg_replace('/&(?!(amp;|quot;|#039;|lt;|gt;))/', '&amp;', $buffer2);
+							$buffer2 = preg_replace('/[\x00-\x08\x0b-\x0c\x0e-\x1f]/', '', $buffer2);
+							$buffer2 = preg_replace('/&(?!(amp;|quot;|#039;|lt;|gt;|#x[\dA-F]+;))/', '&amp;', $buffer2);
 							if($bNumTags)
 							{
-								$buffer2 = preg_replace('/(<\/?[^\s>]*[^\s>\d\_\-])[\_\-]*\d+(\s[^>]*>|>)/is', '$1$2', $buffer2);
+								$buffer2 = preg_replace_callback('/(<[^\s>\/]*[^\s>\d\_\-][\_\-]*\d+[^>\s\/]*)(\s[^>]*>|>|\/>)/is', array('\Bitrix\KitImportxml\Utils', 'AddTagName'), $buffer2);
+								$buffer2 = preg_replace('/(<\/?[^\s>]*[^\s>\d\_\-])[\_\-]*\d+[^>\s]*(\s[^>]*>|>)/is', '$1$2', $buffer2);
 							}
+							if($bNamespaces) self::ReplaceNS($buffer2);
 							foreach($arTags as $tag)
 							{
-								$buffer2 = preg_replace('/(<'.$tag.'[^>]*>)\s+(\S|$)/is', '$1$2', $buffer2);
-								$buffer2 = preg_replace('/(<'.$tag.'[^>]*>)(?!<\!\[CDATA\[)/Uis', '$1<![CDATA[', $buffer2);
+								$buffer2 = preg_replace('/(<'.$tag.'(\s[^>]*>|>))\s+(\S|$)/is', '$1$3', $buffer2);
+								$buffer2 = preg_replace('/(<'.$tag.'(\s[^>]*>|>))(?!<\!\[CDATA\[)/Uis', '$1<![CDATA[', $buffer2);
 								$buffer2 = preg_replace('/(^|\S)\s+(<\/'.$tag.'>)/is', '$1$2', $buffer2);
 								$buffer2 = preg_replace('/(?<!\]\]\>)(<\/'.$tag.'>)/Uis', ']]>$1', $buffer2);
 							}
@@ -559,7 +714,45 @@ class Utils {
 		));
 
 		\CFile::CleanCache($NEW_IMAGE_ID);
+		
+		if($arFile["del_old"]=='Y' && strpos($strSavePath, static::$moduleId)===0 && isset($arFile["external_id"]) && strlen($arFile["external_id"]) > 0)
+		{
+			self::DeleteFilesByExtId($arFile["external_id"], $NEW_IMAGE_ID);
+		}
+		
 		return $NEW_IMAGE_ID;
+	}
+	
+	public static function ReplaceNS(&$buffer)
+	{
+		$buffer = preg_replace('/(<\/?)[^\s>]+:([^>]*>)/is', '$1$2', $buffer);
+		$pattern = '/(<[^>]+\s*)xmlns(:[^\s=>]*)?\s*=\s*"[^"]*"(\s[^>]*>|>)/is';
+		while(preg_match($pattern, $buffer))
+		{
+			$buffer = preg_replace($pattern, '$1$3', $buffer);
+		}
+		$pattern = '/(<[^>]+\s+)[^\s=>]+:([^\s=>]+\s*=\s*"[^"]*"(\s[^>]*>|>))/is';
+		while(preg_match($pattern, $buffer))
+		{
+			$buffer = preg_replace($pattern, '$1$2', $buffer);
+		}
+	}
+	
+	public static function AddTagName($m)
+	{
+		return $m[1].' _tagName_="'.trim($m[1], '<>').'" '.$m[2];
+	}
+	
+	public static function DeleteFilesByExtId($extId, $id='')
+	{
+		$dbRes = \CFile::GetList(array(), array('EXTERNAL_ID'=>$extId));
+		while($arr = $dbRes->Fetch())
+		{
+			if($arr['ID']!=$id)
+			{
+				\CFile::Delete($arr['ID']);
+			}
+		}
 	}
 	
 	public static function CopyFile($FILE_ID, $bRegister = true, $newPath = "")
@@ -615,7 +808,7 @@ class Utils {
 				}
 
 				$zr["FILE_NAME"] = bx_basename($strNewFile);
-				$zr["SUBDIR"] = substr($strNewFile, strlen($strDirName)+1, -(strlen(bx_basename($strNewFile)) + 1));
+				$zr["SUBDIR"] = mb_substr($strNewFile, mb_strlen($strDirName)+1, -(mb_strlen(bx_basename($strNewFile)) + 1));
 
 				if(strlen($newPath))
 					CheckDirPath($strNewFile);
@@ -666,7 +859,7 @@ class Utils {
 		return 0;
 	}
 	
-	protected function transformName($name, $bForceMD5 = false, $bSkipExt = false)
+	public static function transformName($name, $bForceMD5 = false, $bSkipExt = false)
 	{
 		//safe filename without path
 		$fileName = GetFileName($name);
@@ -693,7 +886,7 @@ class Utils {
 		//.jpe is not image type on many systems
 		if($bSkipExt == false && strtolower(GetFileExtension($fileName)) == "jpe")
 		{
-			$fileName = substr($fileName, 0, -4).".jpg";
+			$fileName = mb_substr($fileName, 0, -4).".jpg";
 		}
 
 		//double extension vulnerability
@@ -708,7 +901,7 @@ class Utils {
 		return $fileName;
 	}
 
-	protected function validateFile($strFileName, $arFile)
+	protected static function validateFile($strFileName, $arFile)
 	{
 		if($strFileName == '')
 			return Loc::getMessage("FILE_BAD_FILENAME");
@@ -738,22 +931,38 @@ class Utils {
 		return "";
 	}
 	
-	function GetFilesByExt($path, $arExt=array())
+	public static function GetFilesByExt($path, $arExt=array(), $checkSubdirs=true)
 	{
+		$limit = 100;
 		$arFiles = array();
-		$arDirFiles = array_diff(scandir($path), array('.', '..'));
-		foreach($arDirFiles as $file)
+		$arDirs = array();
+		if(file_exists($path) && ($dh = opendir($path))) 
 		{
-			if(is_file($path.$file) && (empty($arExt) || preg_match('/\.('.implode('|', $arExt).')$/i', ToLower($file))))
+			if(substr($path, -1)!=='/') $path = $path.'/';
+			while(($file = readdir($dh)) !== false) 
 			{
-				$arFiles[] = $path.$file;
+				if($file=='.' || $file=='..') continue;
+				if(is_file($path.$file) && (empty($arExt) || preg_match('/\.('.implode('|', $arExt).')$/i', ToLower($file)) || (($arFileData=getimagesize($path.$file)) && preg_match('/\/('.implode('|', $arExt).')$/i', ToLower($arFileData['mime'])))))
+				{
+					$arFiles[] = $path.$file;
+					if(count($arFiles) > $limit) return array();
+				}
+				elseif(is_dir($path.$file))
+				{
+					$arDirs[] = $file;
+				}
 			}
+			closedir($dh);
 		}
-		foreach($arDirFiles as $file)
+		sort($arFiles);
+
+		//if(!empty($arFiles)) return $arFiles;
+		if($checkSubdirs===true || $checkSubdirs>0)
 		{
-			if(is_dir($path.$file))
+			foreach($arDirs as $file)
 			{
-				$arFiles = array_merge($arFiles, self::GetFilesByExt($path.$file.'/', $arExt));
+				$arFiles = array_merge($arFiles, self::GetFilesByExt($path.$file.'/', $arExt, ($checkSubdirs===true ? $checkSubdirs : $checkSubdirs -1)));
+				if(count($arFiles) > $limit) return array();
 			}
 		}
 		return $arFiles;
@@ -784,10 +993,10 @@ class Utils {
 		$arDirFiles = array_diff(scandir($path), array('.', '..'));
 		foreach($arDirFiles as $file)
 		{
-			if(preg_match('/[^A-Za-z0-9_\-]/', $file))
+			if(preg_match('/[^A-Za-z0-9_\-\.\s\[\]\(\)]/', $file) && ($fileSystemEncoding!='utf-8' || !preg_match('/\p{Cyrillic}/u', $file)))
 			{
 				$newfile = \Bitrix\Main\Text\Encoding::convertEncoding($file, $fileSystemEncoding, "cp866");
-				$isUtf8 = \CUtil::DetectUTF8($newfile);
+				$isUtf8 = self::detectUtf8($newfile);
 				if($isUtf8 && $fileSystemEncoding!='utf-8')
 				{
 					$newfile = \Bitrix\Main\Text\Encoding::convertEncoding($newfile, 'utf-8', $fileSystemEncoding);
@@ -796,6 +1005,7 @@ class Utils {
 				{
 					$newfile = \Bitrix\Main\Text\Encoding::convertEncoding($newfile, 'windows-1251', $fileSystemEncoding);
 				}
+				$newfile = str_replace('?', '', $newfile);
 				$res = rename($path.$file, $path.$newfile);
 				$file = $newfile;
 			}
@@ -807,9 +1017,24 @@ class Utils {
 	}
 	
 	public static function GetDateFormat($m)
-	{
+	{		
 		$format = str_replace('_', ' ', $m[1]);
-		return ToLower(\CIBlockFormatProperties::DateFormat($format, time()));
+		$time = time();
+		if(preg_match_all('/([jdmyY])([\-+][1-9]\d*)/', $format, $m2))
+		{
+			foreach($m2[1] as $k=>$key)
+			{
+				if($key=='j' || $key=='d') $time = mktime((int)date('h', $time), (int)date('i', $time), (int)date('s', $time), (int)date('n', $time), (int)date('j', $time) + (int)$m2[2][$k], (int)date('Y', $time));
+				elseif($key=='m') $time = mktime((int)date('h', $time), (int)date('i', $time), (int)date('s', $time), (int)date('n', $time) + (int)$m2[2][$k], (int)date('j', $time), (int)date('Y', $time));
+				elseif($key=='y' || $key=='Y') $time = mktime((int)date('h', $time), (int)date('i', $time), (int)date('s', $time), (int)date('n', $time), (int)date('j', $time), (int)date('Y', $time) + (int)$m2[2][$k]);
+				$format = str_replace($m2[0][$k], $key, $format);
+			}
+		}
+		if(Loader::includeModule("iblock"))
+		{
+			return ToLower(\CIBlockFormatProperties::DateFormat($format, $time));
+		}
+		else return date($format, $time);
 	}
 	
 	public static function MergeCookie(&$arCookies, $arNewCookies)
@@ -839,19 +1064,21 @@ class Utils {
 			}
 			else
 			{
+				if($newLoc=='.') $newLoc = '';
 				$dir = preg_replace('/[\/]+/', '/', preg_replace('/(^|\/)[^\/]*$/', '', $arUrl['path']).'/');
 				$location = $arUrl['scheme'].'://'.$arUrl['host'].$dir.$newLoc;
 			}
 		}
 	}
 	
-	public static function MakeFileArray($path, $maxTime = 0)
+	public static function MakeFileArray($path, $maxTime = 0, $arCookies = array())
 	{
-		$arExt = array('xml', 'yml', 'json');
+		$isLoop = !empty($arCookies);
+		$arExt = array('xml', 'yml', 'json', 'txt');
 		if(is_array($path))
 		{
 			$arFile = $path;
-			$temp_path = \CFile::GetTempName('', \Bitrix\Main\IO\Path::convertLogicalToPhysical($arFile["name"]));
+			$temp_path = \Bitrix\Main\IO\Path::convertLogicalToPhysical(\CFile::GetTempName('', $arFile["name"]));
 			CheckDirPath($temp_path);
 			if(!copy($arFile["tmp_name"], $temp_path)
 				&& !move_uploaded_file($arFile["tmp_name"], $temp_path))
@@ -862,10 +1089,8 @@ class Utils {
 		}
 		else
 		{
-			$path = trim($path);
-			
-			$arCookies = array();
-			$arHeaders = array('User-Agent' => 'BitrixSM HttpClient class');
+			$path = $pathOrig = trim($path);
+			$arHeaders = array('User-Agent' => self::GetUserAgent());
 			if(preg_match('/^\{.*\}$/s', $path))
 			{
 				$arParams = \CUtil::JsObjectToPhp($path);
@@ -878,32 +1103,46 @@ class Utils {
 					if(ToLower($contentType)=='application/json')
 					{
 						if(function_exists('json_encode')) $arParams['VARS'] = json_encode($arParams['VARS']);
-						else $arParams['VARS'] = '{'.implode(',', array_map(create_function('$k,$v', 'return "\"".addcslashes($k, "\"")."\":\"".addcslashes($v, "\"")."\"";'), array_keys($arParams['VARS']), array_values($arParams['VARS']))).'}';
+						else $arParams['VARS'] = '{'.implode(',', array_map(array(__CLASS__, 'Vars2Json'), array_keys($arParams['VARS']), array_values($arParams['VARS']))).'}';
 					}
 				}
 				if(isset($arParams['FILELINK']))
 				{
 					$path = $arParams['FILELINK'];
-					
+
 					if(!empty($arParams['VARS']) && $arParams['PAGEAUTH'])
 					{
+						$arUrl = parse_url($arParams['PAGEAUTH']);
+						$className = self::GetVendorClassName($arUrl['host']);
+						if(is_callable(array($className, 'GetDownloadFile')) && ($arDFile = call_user_func(array($className, 'GetDownloadFile'), $arParams, $maxTime)))
+						{
+							return self::MakeFileArray($arDFile['tmp_name'], $maxTime);
+						}
+						elseif(is_callable(array($className, 'GetParamsForDownload')) && $className::GetParamsForDownload($arParams, $arHeaders))
+						{
+							
+						}
+						elseif(is_callable(array($className, 'GetDownloadPath')) && $className::GetDownloadPath($path, $arParams, $arHeaders, $arCookies))
+						{
+							
+						}
+						
 						$redirectCount = 0;
-						$location = $arParams['PAGEAUTH'];
+						$location = trim($arParams['PAGEAUTH']);
 						while(strlen($location)>0 && $redirectCount<=5)
 						{
-							$client = new \Bitrix\Main\Web\HttpClient(array('disableSslVerification'=>true, 'redirect'=>false));
-							$client->setCookies($arCookies);
-							foreach($arHeaders as $hk=>$hv) $client->setHeader($hk, $hv);
+							$client = self::GetHttpClient(array('disableSslVerification'=>true, 'redirect'=>false), $arHeaders, $arCookies, $location);
 							$res = $client->get($location);
 							static::MergeCookie($arCookies, $client->getCookies()->toArray());
 							$arHeaders['Referer'] = $location;
 							$location = $client->getHeaders()->get("Location");
 							$status = $client->getStatus();
+							$ctype = $client->getHeaders()->get("Content-Type");
 							if(!in_array($status, array(301, 302, 303))) $location = '';
 							$redirectCount++;
 						}
 						$needEncoding = $siteEncoding = self::getSiteEncoding();
-						if(preg_match('/charset=(.*)(;|$)/', $client->getHeaders()->get("Content-Type"), $m) && strlen(trim($m[1])) > 0)
+						if(preg_match('/charset=(.*)(;|$)/', $ctype, $m) && strlen(trim($m[1])) > 0)
 						{
 							$needEncoding = ToLower(trim($m[1]));
 						}
@@ -925,19 +1164,35 @@ class Utils {
 						}
 						
 						$redirectCount = 0;
-						$location = ($arParams['POSTPAGEAUTH'] ? $arParams['POSTPAGEAUTH'] : $arParams['PAGEAUTH']);
-						while(strlen($location)>0 && $redirectCount<=5)
+						$location = trim($arParams['POSTPAGEAUTH'] ? $arParams['POSTPAGEAUTH'] : $arParams['PAGEAUTH']);
+						
+						if(in_array($status, array(400, 405)) && array_key_exists('client_secret', $arParams['VARS']))
 						{
 							$client = new \Bitrix\Main\Web\HttpClient(array('disableSslVerification'=>true, 'redirect'=>false));
-							$client->setCookies($arCookies);
-							foreach($arHeaders as $hk=>$hv) $client->setHeader($hk, $hv);
+							$res = trim($client->post($location, array('grant_type'=>'password')));
+							if(strpos($res, '{')===0 && ($arAnswer = \CUtil::JsObjectToPhp($res)) && is_array($arAnswer) && 
+								((array_key_exists('error', $arAnswer) && !empty($arAnswer['error']))
+								|| (array_key_exists('message', $arAnswer) && !empty($arAnswer['message']))))
+							{
+								if(!array_key_exists('grant_type', $arParams['VARS']) || strlen($arParams['VARS']['grant_type'])==0) $arParams['VARS']['grant_type'] = 'password';
+								$client = new \Bitrix\Main\Web\HttpClient(array('disableSslVerification'=>true, 'redirect'=>false));
+								$arAnswer = \CUtil::JsObjectToPhp(trim($client->post($location, $arParams['VARS'])));
+								if(is_array($arAnswer) && isset($arAnswer['token_type']) && isset($arAnswer['access_token']))
+								{
+									$arHeaders['Authorization'] = $arAnswer['token_type'].' '.$arAnswer['access_token'];
+									$location = '';
+								}
+							}
+						}
+
+						while(strlen($location)>0 && $redirectCount<=5)
+						{
+							$client = self::GetHttpClient(array('disableSslVerification'=>true, 'redirect'=>false), $arHeaders, $arCookies, $location);
 							$res = $client->post($location, $arParams['VARS']);
 							$status = $client->getStatus();
 							if($status==404)
 							{
-								$client = new \Bitrix\Main\Web\HttpClient(array('disableSslVerification'=>true, 'redirect'=>false));
-								$client->setCookies($arCookies);
-								foreach($arHeaders as $hk=>$hv) $client->setHeader($hk, $hv);
+								$client = self::GetHttpClient(array('disableSslVerification'=>true, 'redirect'=>false), $arHeaders, $arCookies, $location);
 								$res = $client->get($location);
 								$status = $client->getStatus();
 							}
@@ -956,12 +1211,10 @@ class Utils {
 						$val = '';
 						if($path)
 						{
-							$client = new \Bitrix\Main\Web\HttpClient(array('disableSslVerification'=>true));
-							$client->setCookies($arCookies);
-							foreach($arHeaders as $hk=>$hv) $client->setHeader($hk, $hv);
+							$client = self::GetHttpClient(array('disableSslVerification'=>true), $arHeaders, $arCookies, $path);
 							$val = $client->get($path);
 						}
-						$res = self::ExecuteFilterExpression($val, $handler, '');
+						$res = self::ExecuteFilterExpression($val, $handler, '', $arCookies, $arHeaders, $arParams);
 						if(is_array($res))
 						{
 							if(isset($res['PATH'])) $path = $res['PATH'];
@@ -974,8 +1227,30 @@ class Utils {
 					}
 				}
 			}
+			else
+			{
+				$arUrl = parse_url($path);
+				$className = self::GetVendorClassName($arUrl['host']);
+				if(is_callable(array($className, 'GetDownloadFile')) && ($arDFile = call_user_func(array($className, 'GetDownloadFile'), array('FILELINK'=>$path), $maxTime)))
+				{
+					return self::MakeFileArray($arDFile['tmp_name'], $maxTime);
+				}
+				if(is_callable(array($className, 'GetDownloadPath')) && $className::GetDownloadPath($path, $arParams, $arHeaders, $arCookies))
+				{
+					
+				}
+			}
 			
+			if(self::PathContianApiPages($path))
+			{
+				$path = self::PathReplaceApiPages($path);
+			}
 			$path = preg_replace_callback('/\{DATE_(\S*)\}/', array('\Bitrix\KitImportxml\Utils', 'GetDateFormat'), $path);
+			if(preg_match('/\{MAX_TIME=(\d+)\}/', $path, $m))
+			{
+				$maxTime = $m[1];
+				$path = str_replace($m[0], '', $path);
+			}
 			if(!$maxTime) $maxTime = min(intval(ini_get('max_execution_time')) - 5, 1800);
 			if(ini_get('max_execution_time')==='0') $maxTime = 300;
 			elseif($maxTime<=0) $maxTime = 50;
@@ -984,8 +1259,18 @@ class Utils {
 			{
 				$arFile = $cloud->MakeFileArray($service, $path);
 			}
-			elseif(($maxTime > 15 || !empty($arCookies)) && preg_match("#^(http[s]?)://#", $path) && class_exists('\Bitrix\Main\Web\HttpClient'))
+			elseif(($maxTime > 5 || !empty($arCookies)) && class_exists('\Bitrix\Main\Web\HttpClient')
+					 && (
+						preg_match("#^(http[s]?)://#", $path)
+						||
+						(preg_match('#^(ftp[s]?)://#', $path) && !function_exists('ftp_connect'))
+						))
 			{
+				if(preg_match('/^(https?:\/\/)([^:]*):(.*)@(.*\/.*)$/is', $path, $m))
+				{
+					$arHeaders['Authorization'] = 'Basic '.base64_encode($m[2].':'.$m[3]);
+					$path = $m[1].$m[4];
+				}
 				$path = rawurldecode($path);
 				$arUrl = parse_url($path);
 				//Cyrillic domain
@@ -996,7 +1281,7 @@ class Utils {
 					{
 						$idn = new \idna_convert();
 						$oldHost = $arUrl['host'];
-						if(!\CUtil::DetectUTF8($oldHost)) $oldHost = \Bitrix\KitImportxml\Utils::Win1251Utf8($oldHost);
+						if(!self::detectUtf8($oldHost)) $oldHost = \Bitrix\KitImportxml\Utils::Win1251Utf8($oldHost);
 						$path = str_replace($arUrl['host'], $idn->encode($oldHost), $path);
 					}
 				}
@@ -1018,8 +1303,8 @@ class Utils {
 					$postBody = '';
 					if(isset($urlComponents['fragment']) && stripos($urlComponents['fragment'], 'postbody=')===0)
 					{
-						$path = substr($path, 0, -strlen($urlComponents['fragment'])-1);
-						$postBody = substr($urlComponents['fragment'], 9);
+						$path = mb_substr($path, 0, -mb_strlen($urlComponents['fragment'])-1);
+						$postBody = mb_substr($urlComponents['fragment'], 9);
 					}
 					if ($urlComponents && strlen($urlComponents["path"]) > 0) $baseName = bx_basename($urlComponents["path"]);
 					else $baseName = bx_basename($path);
@@ -1028,12 +1313,10 @@ class Utils {
 					$temp_path2 = \CFile::GetTempName('', $baseName);
 					$temp_path = \Bitrix\Main\IO\Path::convertLogicalToPhysical($temp_path2);
 					
-					if(!\CUtil::DetectUTF8($path)) $path = self::Win1251Utf8($path);
-					$path = preg_replace_callback('/[^:@\/?=&#]+/', create_function('$m', 'return rawurlencode($m[0]);'), $path);
+					if(!self::detectUtf8($path)) $path = self::Win1251Utf8($path);
+					$path = preg_replace_callback('/[^:@\/?=&#%!$,\-\.\+\{\}\[\]]+/', array(__CLASS__, 'UrlEncodeCallback'), $path);
 
-					$ob = new \Bitrix\Main\Web\HttpClient(array('socketTimeout'=>$maxTime, 'streamTimeout'=>$maxTime, 'disableSslVerification'=>true));
-					$ob->setCookies($arCookies);
-					foreach($arHeaders as $hk=>$hv) $ob->setHeader($hk, $hv);
+					$ob = self::GetHttpClient(array('socketTimeout'=>$maxTime, 'streamTimeout'=>$maxTime, 'disableSslVerification'=>true), $arHeaders, $arCookies, $path);
 					if(strlen($postBody) > 0)
 					{
 						if(strpos($postBody, '<?xml')!==false) $ob->setHeader('content-type', 'application/xml');
@@ -1048,21 +1331,35 @@ class Utils {
 					{
 						$dRes = $ob->download($path, $temp_path2);
 					}
-					if($dRes)
+					if(($dRes && $ob->getStatus()!=404) || in_array($ob->getStatus(), array(301, 302, 303)))
 					{
 						if($ob->getStatus()!=200)
 						{
-							$ob = new \Bitrix\Main\Web\HttpClient(array('socketTimeout'=>$maxTime, 'streamTimeout'=>$maxTime, 'disableSslVerification'=>true, 'redirect'=>false));
-							foreach($arHeaders as $hk=>$hv) $ob->setHeader($hk, $hv);
+							$ob = self::GetHttpClient(array('socketTimeout'=>$maxTime, 'streamTimeout'=>$maxTime, 'disableSslVerification'=>true, 'redirect'=>false), $arHeaders, array(), $path);
 							$ob->get($path);
-							if(in_array($ob->getStatus(), array(301, 302, 303)))
+							$loop = 0;
+							while(in_array($ob->getStatus(), array(301, 302, 303)) && ++$loop<=5)
 							{
+								self::GetNewLocation($path, $ob->getHeaders()->get('location'));
 								$arCookies = $ob->getCookies()->toArray();
-								$ob = new \Bitrix\Main\Web\HttpClient(array('socketTimeout'=>10, 'streamTimeout'=>10, 'disableSslVerification'=>true));
-								foreach($arHeaders as $hk=>$hv) $ob->setHeader($hk, $hv);
-								$ob->setCookies($arCookies);
+								$ob = self::GetHttpClient(array('socketTimeout'=>15, 'streamTimeout'=>15, 'disableSslVerification'=>true, 'redirect'=>false), $arHeaders, $arCookies, $path);
 								$ob->download($path, $temp_path2);
 							}
+						}
+
+						if(!$isLoop 
+							&& strpos($ob->getHeaders()->get("content-type"), 'text/html')!==false 
+							&& ($content = file_get_contents($temp_path2, false, null, 0, 4096))
+							&& (stripos($content, '<html>')!==false || stripos($content, '<script')!==false)
+							&& preg_match('/document\.cookie\s*=\s*["\']([^"\']+)["\']/Uis', $content, $cm))
+						{
+							$arNewCookies = array();
+							foreach(explode('&', $cm[1]) as $newCookie)
+							{
+								$arNewCookie = explode('=', $newCookie);
+								$arNewCookies[$arNewCookie[0]] = current(explode(';', $arNewCookie[1]));
+							}
+							return self::MakeFileArray($path, $maxTime, $arNewCookies);
 						}
 						
 						$i = 0;
@@ -1072,8 +1369,11 @@ class Utils {
 						$isXmlHeader = (bool)(stripos(trim($str), '<?xml')!==false);
 						$isJsonHeader = (bool)(in_array(substr(trim($str), 0, 1), array('[', '{')));
 
+						$realFileName = '';
 						$hcd = $ob->getHeaders()->get('content-disposition');
 						$hct = $ob->getHeaders()->get('content-type');
+						$hce = $ob->getHeaders()->get('content-encoding');
+						$ext = ToLower(self::GetFileExtension($temp_path));
 						if($hcd && stripos($hcd, 'filename=')!==false)
 						{
 							$hcdParts = preg_grep('/filename=/i', array_map('trim', explode(';', $hcd)));
@@ -1083,38 +1383,83 @@ class Utils {
 								$fn = end(explode('/', trim(end($hcdParts), '"\' ')));
 								if(strlen($fn) > 0 && strpos($temp_path, $fn)===false)
 								{
-									$old_temp_path = $temp_path;
+									if($hce=='gzip')
+									{
+										$arTmpFile = \CFile::MakeFileArray($temp_path);
+										if(in_array($arTmpFile['type'], array('application/gzip', 'application/x-gzip')) && !preg_match('/\.gz$/i', $fn))
+										{
+											$fn = $fn.'.gz';
+										}
+									}
+									$realFileName = $fn;
+									//function rename is problem for temp folder
+									/*$old_temp_path = $temp_path;
 									$temp_path = preg_replace('/\/[^\/]+$/', '/'.$fn, $old_temp_path);
-									rename($old_temp_path, $temp_path);
+									rename($old_temp_path, $temp_path);*/
 								}
 							}
 						}
-						elseif((ToLower(substr($temp_path, -4))=='.php' && strpos(ToLower($path), 'xml')!==false)
-							|| (stripos($hct, 'text/xml')!==false) || (stripos($hct, 'application/xml')!==false) || $isXmlHeader)
+						elseif(!in_array($ext, array('xml', 'yml')) &&
+							((strpos(ToLower($path), 'xml')!==false && !preg_match('/\.(zip|tag|gz|rar)/', ToLower($path)) && !$isJsonHeader) || (stripos($hct, 'text/xml')!==false) || (stripos($hct, 'application/xml')!==false) || $isXmlHeader))
 						{
-							$old_temp_path = $temp_path;
+							//function rename is problem for temp folder
+							/*$old_temp_path = $temp_path;
 							//$temp_path = $temp_path.'.xml';
 							$temp_path2 = \CFile::GetTempName('', bx_basename($temp_path2).'.xml');
 							$dir = \Bitrix\Main\IO\Path::getDirectory($temp_path2);
 							\Bitrix\Main\IO\Directory::createDirectory($dir);
 							$temp_path = \Bitrix\Main\IO\Path::convertLogicalToPhysical($temp_path2);
-							rename($old_temp_path, $temp_path);
+							rename($old_temp_path, $temp_path);*/
+							$realFileName = bx_basename($temp_path2).'.xml';
 						}
 						elseif((stripos($hct, 'application/json')!==false || $isJsonHeader) && !in_array(ToLower(self::GetFileExtension($temp_path)), array('xml', 'yml', 'json')))
 						{
-							$old_temp_path = $temp_path;
+							//function rename is problem for temp folder
+							/*$old_temp_path = $temp_path;
 							$temp_path2 = \CFile::GetTempName('', bx_basename($temp_path2).'.json');
 							$dir = \Bitrix\Main\IO\Path::getDirectory($temp_path2);
 							\Bitrix\Main\IO\Directory::createDirectory($dir);
 							$temp_path = \Bitrix\Main\IO\Path::convertLogicalToPhysical($temp_path2);
-							rename($old_temp_path, $temp_path);
+							rename($old_temp_path, $temp_path);*/
+							$realFileName = bx_basename($temp_path2).'.json';
+						}
+						elseif(($arMaskFile = self::GetFileByHttpMask($pathOrig, $arCookies, $arHeaders, $maxTime))!==false)
+						{
+							return $arMaskFile;
 						}
 						$arFile = \CFile::MakeFileArray($temp_path);
+						if(!$arFile) $arFile = \CFile::MakeFileArray(\Bitrix\Main\IO\Path::convertLogicalToPhysical($temp_path));
+						if(strlen($realFileName) > 0) $arFile['name'] = $realFileName;
+						
+						if(!in_array($ext, array('xml', 'yml')) && strpos($arFile["type"], 'xml')===false)
+						{
+							$c = file_get_contents($arFile['tmp_name'], false, null, 0, 1024);
+							if(strpos($c, "\xEF\xBB\xBF")===0) $c = substr($c, 3);
+							$c = ToLower(trim($c));
+							if(strpos($c, '<yml_catalog')===0)
+							{
+								$arFile["type"] = 'text/xml';
+								$arFile["name"] .= '.yml';
+							}
+						}
+					}
+					elseif(($arMaskFile = self::GetFileByHttpMask($pathOrig, $arCookies, $arHeaders, $maxTime))!==false)
+					{
+						return $arMaskFile;
+					}
+					elseif(($arFileTmp = \CFile::MakeFileArray($temp_path)) && $arFileTmp['size'] > 0 && strpos($arFileTmp['type'], 'xml')!==false && strpos(file_get_contents($arFileTmp['tmp_name'], false, null, 0, 4096), '<?xml')!==false)
+					{
+						$arFile = $arFileTmp;
 					}
 				}
 				elseif($temp_path)
 				{
 					$arFile = \CFile::MakeFileArray($temp_path);
+				}
+				
+				if(!$arFile && preg_match('#^(ftp[s]?)://#', $path))
+				{
+					$arFile = \CFile::MakeFileArray($path);
 				}
 				
 				if(strlen($arFile["type"])<=0)
@@ -1123,23 +1468,54 @@ class Utils {
 			elseif(preg_match('/ftp(s)?:\/\//', $path))
 			{
 				$sftp = new \Bitrix\KitImportxml\Sftp();
-				$arFile = $sftp->MakeFileArray($path, array('TIMEOUT'=>20));
+				$arFile = $sftp->MakeFileArray($path, array('TIMEOUT'=>max(20, $maxTime), 'FILE_TYPE'=>$arExt));
+				if(is_array($arFile) && $arFile['tmp_name'])
+				{
+					$handle = fopen($arFile['tmp_name'], 'r');
+					while(!($str = trim(fgets($handle, 1024))) && !feof($handle) && ++$i<10) {}
+					fclose($handle);
+					$isXmlHeader = (bool)(stripos(trim($str), '<?xml')!==false);
+					$isJsonHeader = (bool)(in_array(substr(trim($str), 0, 1), array('[', '{')));
+					$ext = ToLower(self::GetFileExtension($arFile['tmp_name']));
+					if(!in_array($ext, array('xml', 'yml')) &&
+							((stripos($arFile['type'], 'text/xml')!==false) || (stripos($arFile['type'], 'application/xml')!==false) || $isXmlHeader))
+					{
+						$arFile['name'] = $arFile['name'].'.xml';
+					}
+				}
 			}
 			else
 			{
-				$arFile = \CFile::MakeFileArray($path);
+				$page = $removeFiles = false;
+				if(preg_match('/#.*page=(\d+)/', $path, $m)) $page = $m[1];
+				if(preg_match('/#.*removefiles/', $path)) $removeFiles = true;
+				$path2 = preg_replace('/#.*$/', '', $path);
+				if(self::PathContainsMask($path2) && !file_exists($path2) && !file_exists($_SERVER['DOCUMENT_ROOT'].$path2))
+				{
+					$arTmpFiles = self::GetFilesByMask($path2, $page, $removeFiles);
+					if(count($arTmpFiles) > 0)
+					{
+						$path2 = current($arTmpFiles);
+					}
+				}
+				$arFile = \CFile::MakeFileArray($path2);
 			}
 		}
 		
 		$ext = ToLower(self::GetFileExtension($arFile['tmp_name']));
-		if(in_array($arFile['type'], array('application/zip', 'application/x-zip-compressed', 'application/gzip', 'application/x-gzip', 'application/rar', 'application/x-rar', 'application/x-rar-compressed', 'application/octet-stream')) && !in_array($ext, $arExt))
+		$ext2 = ToLower(self::GetFileExtension($arFile['name']));
+		if(strlen($ext) == 0 || in_array($ext2, $arExt)) $ext = $ext2;
+
+		if(in_array($arFile['type'], array('application/zip', 'application/x-zip-compressed', 'application/gzip', 'application/x-gzip', 'application/x-tar', 'application/rar', 'application/x-rar', 'application/x-rar-compressed', 'application/octet-stream')) && !in_array($ext, $arExt))
 		{
-			$tmpsubdir = dirname($arFile['tmp_name']).'/zip/';
-			CheckDirPath($tmpsubdir);	
-			if(substr($ext, -3)=='.gz' && $ext!='tar.gz' && function_exists('gzopen'))
+			$archiveFn = $arFile['tmp_name'];
+			$tmpsubdir = dirname($archiveFn).'/zip/';
+			if(file_exists($tmpsubdir)) self::DeleteDirFiles($tmpsubdir);
+			CheckDirPath($tmpsubdir);
+			if(mb_substr($ext, -3)=='.gz' && $ext!='tar.gz' && function_exists('gzopen'))
 			{
-				$handle1 = gzopen($arFile['tmp_name'], 'rb');
-				$handle2 = fopen($tmpsubdir.substr(basename($arFile['tmp_name']), 0, -3), 'wb');
+				$handle1 = gzopen($archiveFn, 'rb');
+				$handle2 = fopen($tmpsubdir.mb_substr(basename(ToLower(mb_substr($archiveFn, -3)=='.gz') ? $archiveFn : $arFile['name']), 0, -3), 'wb');
 				while(!gzeof($handle1)) {
 					fwrite($handle2, gzread($handle1, 4096));
 				}
@@ -1148,25 +1524,45 @@ class Utils {
 			}
 			elseif($ext=='rar' && class_exists('\RarArchive'))
 			{
-				$rar = \RarArchive::open($arFile['tmp_name']);
+				$rar = \RarArchive::open($archiveFn);
 				$entries = $rar->getEntries();
 				foreach($entries as $entry)
 				{
-					$entry->extract($tmpsubdir);
+					$entry->extract($tmpsubdir, $tmpsubdir.$entry->getName());
 				}
 				$rar->close();
+			}
+			elseif($ext=='zip' && filesize($archiveFn) > 5*1024*1024 && class_exists('\ZipArchive') && ($zipObj = new \ZipArchive) && $zipObj->open($archiveFn)===true && $zipObj->numFiles > 0)
+			{
+				$zipObj->extractTo($tmpsubdir);
+				for($i=0; $i<$zipObj->numFiles; $i++)
+				{
+					$zipPath = $zipObj->getNameIndex($i);
+					if(!file_exists($tmpsubdir.$zipPath))
+					{
+						CheckDirPath($tmpsubdir.$zipPath);
+						copy("zip://".$archiveFn."#".$zipPath, $tmpsubdir.$zipPath);
+					}
+				}
+				$zipObj->close();
 			}
 			else
 			{
 				$type = (in_array($ext, array('tar.gz', 'tgz')) ? 'TAR.GZ' : 'ZIP');
-				$zipObj = \CBXArchive::GetArchive($arFile['tmp_name'], $type);
+				$zipObj = \CBXArchive::GetArchive($archiveFn, $type);
 				$zipObj->Unpack($tmpsubdir);
+				if(count(array_diff(scandir($tmpsubdir), array('.', '..')))==0 && function_exists('exec'))
+				{
+					$command = 'unzip "'.$archiveFn.'" -d '.$tmpsubdir;
+					@exec($command);
+				}
+				elseif($arFile['type']=='application/zip') self::CorrectEncodingForExtractDir($tmpsubdir);
 			}
-			if($arFile['type']=='application/zip') self::CorrectEncodingForExtractDir($tmpsubdir);
+			
 			$arFile = array();
 			if(!is_array($path)) $urlComponents = parse_url($path);
 			else $urlComponents = array();
-			if(isset($urlComponents['fragment']) && strlen($urlComponents['fragment']) > 0)
+			if(isset($urlComponents['fragment']) && strlen($urlComponents['fragment']) > 0 && !preg_match('/page=(\d+)/', $urlComponents['fragment']))
 			{
 				$fn = $tmpsubdir.ltrim($urlComponents['fragment'], '/');
 				$arFiles = array($fn);
@@ -1178,7 +1574,17 @@ class Utils {
 			else
 			{
 				$arFiles = self::GetFilesByExt($tmpsubdir, $arExt);
+				if(count($arFiles) > 1)
+				{
+					$arNewFiles = array();
+					foreach($arExt as $ext)
+					{
+						$arNewFiles = array_merge($arNewFiles, preg_grep('/\.'.$ext.'$/i', $arFiles));
+					}
+					$arFiles = $arNewFiles;
+				}
 			}
+
 			if(count($arFiles) > 0)
 			{
 				$tmpfile = current($arFiles);
@@ -1188,25 +1594,411 @@ class Utils {
 				copy($tmpfile, $temp_path);
 				$arFile = \CFile::MakeFileArray($temp_path);
 			}
-			DeleteDirFilesEx(substr($tmpsubdir, strlen($_SERVER['DOCUMENT_ROOT'])));
+			self::DeleteDirFiles($tmpsubdir);
 		}
 		
-		self::CheckJsonFile($arFile);
+		self::CheckJsonFile($arFile, $hct);
+		static::$lastCookies = (is_array($arCookies) ? $arCookies : array());
+		static::$lastUAgent = (is_array($arHeaders) && isset($arHeaders['User-Agent']) ? $arHeaders['User-Agent'] : '');
+		static::$lastFileHash = (isset($arFile['tmp_name']) && file_exists($arFile['tmp_name']) ? md5_file($arFile['tmp_name']) : '');
 		return $arFile;
 	}
 	
-	public static function CheckJsonFile(&$arFile)
+	public static function GetFileByHttpMask($path, $arCookies, $arHeaders, $maxTime)
+	{
+		if(self::PathContainsMask(end(explode('/', current(explode('?', $path))))))
+		{
+			//http by mask
+			$path1 = current(explode('?', $path));
+			$path2 = preg_replace('/\/[^\/]+$/', '/', $path1);
+			$path3 = preg_replace('/^.*\/([^\/]+)$/', '$1', $path1);
+			$ob = new \Bitrix\Main\Web\HttpClient(array('socketTimeout'=>$maxTime, 'streamTimeout'=>$maxTime, 'disableSslVerification'=>true));
+			$ob->setCookies($arCookies);
+			foreach($arHeaders as $hk=>$hv) $ob->setHeader($hk, $hv);
+			$content = urldecode($ob->get($path2));
+			if(preg_match_all(self::GetPatternForRegexp('href="'.$path3.'"'), $content, $m))
+			{
+				$arFiles = array();
+				foreach($m[0] as $fn)
+				{
+					$arFiles[] = $path2.trim(substr($fn, 5), '"');
+				}
+				rsort($arFiles);
+				$path1 = current($arFiles);
+				return self::MakeFileArray($path1, $maxTime);
+			}
+		}
+		return false;
+	}
+	
+	public static function GetVendorClassName($host)
+	{
+		$host = ToLower(trim($host));
+		if(mb_strpos($host, 'www.')===0) $host = mb_substr($host, 4);
+		$fn = dirname(__FILE__).'/vendors/'.$host.'.php';
+		if(file_exists($fn)) include_once($fn);
+		$className = '\IX\\'.ToUpper(substr($host, 0, 1)).ToLower(str_replace(array('.', '-'), '', substr($host, 1)));
+		return $className;
+	}
+	
+	public static function DeleteDirFiles($tmpsubdir)
+	{
+		if(strpos($_SERVER['DOCUMENT_ROOT'], $tmpsubdir)===0)
+		{
+			DeleteDirFilesEx(substr($tmpsubdir, strlen($_SERVER['DOCUMENT_ROOT'])));
+		}
+		else
+		{
+			$tmpsubdir = rtrim($tmpsubdir, '/');
+			$arFiles = scandir($tmpsubdir);
+			foreach($arFiles as $file)
+			{
+				if(in_array($file, array('.', '..'))) continue;
+				if(is_dir($tmpsubdir.'/'.$file)) self::DeleteDirFiles($tmpsubdir.'/'.$file);
+				else unlink($tmpsubdir.'/'.$file);
+			}
+			rmdir($tmpsubdir);
+		}
+	}
+	
+	public static function SetLastFileParams(&$SETTINGS_DEFAULT)
+	{
+		$SETTINGS_DEFAULT["LAST_COOKIES"] = static::$lastCookies;
+		$SETTINGS_DEFAULT["LAST_UAGENT"] = static::$lastUAgent;
+		$SETTINGS_DEFAULT["FILE_HASH"] = static::$lastFileHash;
+	}
+	
+	public static function CheckJsonFile(&$arFile, $hct='')
 	{
 		$ext = ToLower(self::GetFileExtension($arFile['tmp_name']));
-		if($ext=='json')
+		$ext2 = ToLower(self::GetFileExtension($arFile['name']));
+		if($ext=='txt' || $ext2=='txt')
+		{
+			$handle = fopen($arFile['tmp_name'], 'r');
+			while(!($str = trim(fgets($handle, 1024))) && !feof($handle) && ++$i<10) {}
+			fclose($handle);
+			$isJsonHeader = (bool)(in_array(substr(trim($str), 0, 1), array('[', '{')));
+			if($isJsonHeader) $ext = 'json';
+		}
+		if($ext=='json' || $ext2=='json')
 		{
 			$tempPath = \CFile::GetTempName('', \Bitrix\Main\IO\Path::convertLogicalToPhysical($arFile['name']).'.xml');
 			$dir = \Bitrix\Main\IO\Path::getDirectory($tempPath);
 			\Bitrix\Main\IO\Directory::createDirectory($dir);
 			$j2x = new \Bitrix\KitImportxml\Json2Xml();
-			$j2x->Convert($arFile['tmp_name'], $tempPath);
+			$j2x->Convert($arFile['tmp_name'], $tempPath, $hct);
 			$arFile = \CFile::MakeFileArray($tempPath);
 		}
+	}
+	
+	public static function GetNextImportFile($path, $page, $oldFile='', $pid='')
+	{
+		$path = trim($path);
+		$arParams = array();
+		if(preg_match('/^\{.*\}$/s', $path))
+		{
+			$arParams = \CUtil::JsObjectToPhp($path);
+			if(isset($arParams['FILELINK']))
+			{
+				$path = $arParams['FILELINK'];
+			}
+		}
+		if(self::PathContianApiPages($path))
+		{
+			self::$apiPage = $page;
+			$path = self::PathReplaceApiPages($path, $page, $oldFile);
+			if(is_array($arParams) && isset($arParams['FILELINK']))
+			{
+				$arParams['FILELINK'] = $path;
+				$path = \CUtil::PHPToJSObject($arParams);
+			}
+			$loop = 0;
+			while($loop < 10 && !(($arFile = self::MakeFileArray($path)) && $arFile['name'])){$loop++;}
+			if($arFile['name'])
+			{
+				if(strpos($path, '/')!==0 && strlen($oldFile) > 0 && file_exists($_SERVER['DOCUMENT_ROOT'].$oldFile) && filesize($_SERVER['DOCUMENT_ROOT'].$oldFile)==filesize($arFile['tmp_name']) && md5_file($_SERVER['DOCUMENT_ROOT'].$oldFile)==md5_file($arFile['tmp_name'])) return false;
+				if(strpos($arFile['name'], '.')===false) $arFile['name'] .= '.xml';
+				if(strlen($pid) > 0) $arFile['external_id'] = 'kit_importxml_'.$pid;
+				$arFile['del_old'] = 'Y';
+				$loop = 0;
+				while($loop < 10 && !($fid = \Bitrix\KitImportxml\Utils::SaveFile($arFile, static::$moduleId))){$loop++;}
+				if($fid > 0) return $fid;
+				else return false;
+			}
+		}
+
+		return false;
+	}
+	
+	public static function PathContianApiPages($path)
+	{
+		foreach(self::$apiPageParams as $pName)
+		{
+			if(preg_match('/\{'.$pName.'\}/', $path)) return true;
+		}
+		return self::IsApiService($path);
+	}
+	
+	public static function IsApiService($path)
+	{
+		$arUrl = parse_url($path);
+		if(in_array($arUrl['host'], array('ads-api.ru', 'atekwater.ru'))
+			|| ($arUrl['host']=='b2b.hogart.ru' && (preg_match('/(scrollId|product\-scroll)/', $arUrl['query']) || stripos($arUrl['path'], 'product-scroll')!==false))
+			|| self::IsWsdl($path)) return true;
+		return false;
+	}
+	
+	public static function IsWsdl($path)
+	{
+		if(stripos($path, 'wsdl')!==false && class_exists('\SoapClient'))
+		{
+			$client = new \Bitrix\Main\Web\HttpClient(array('socketTimeout'=>15, 'disableSslVerification'=>true));
+			$client->setHeader('User-Agent', self::GetUserAgent());
+			$res = $client->get($path);
+			if(stripos($res, '<wsdl:definitions')!==false || stripos($res, '<definitions')!==false)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	public static function PathReplaceApiPages($path, $page=1, $oldFile='')
+	{
+		//$path = str_replace('{'.self::$apiPageParams['PAGE'].'}', $page, $path);
+		if(preg_match('/\{'.self::$apiPageParams['PAGE'].'\}/', $path, $m)){$path = str_replace($m[0], $page + (int)$m[1], $path);}
+		if(preg_match('/\{'.self::$apiPageParams['OFFSET'].'\}/', $path, $m)){$path = str_replace($m[0], ($page - 1)*(int)$m[1], $path);}
+		$arUrl = parse_url($path);
+		if($arUrl['host']=='ads-api.ru')
+		{
+			$arGet = array_combine(array_map(array(__CLASS__, 'GetValBeforeEq'), explode('&', $arUrl['query'])), array_map(array(__CLASS__, 'GetValAfterEq'), explode('&', $arUrl['query'])));
+			$arGet['sort'] = 'asc';
+			if($page > 1 && strlen($oldFile) > 0 && file_exists($_SERVER['DOCUMENT_ROOT'].$oldFile)) 
+			{
+				$arXml = simplexml_load_file($_SERVER['DOCUMENT_ROOT'].$oldFile);
+				$arTime = (is_callable(array($arXml, 'xpath')) ? $arXml->xpath('data/item/time') : false);
+				$time1 = $time2 = '';
+				if(is_array($arTime) && count($arTime) > 1)
+				{
+					$time1 = (string)array_shift($arTime);
+					$time2 = (string)array_pop($arTime);
+					$arGet['date1'] = $time2;
+				}
+				if($time1 == $time2 || strlen($time2)==0) return '';
+				sleep(5);
+			}
+			$arUrl['query'] = implode('&', array_map(array(__CLASS__, 'KeyEqVal'), array_keys($arGet), array_values($arGet)));
+			$path = $arUrl['scheme'].'://'.$arUrl['host'].$arUrl['path'].'?'.$arUrl['query'];
+		}
+		elseif($arUrl['host']=='b2b.hogart.ru')
+		{
+			if(preg_match('/(scrollId|product\-scroll)/', $arUrl['query']) || stripos($arUrl['path'], 'product-scroll')!==false)
+			{
+				$arGet = array_combine(array_map(array(__CLASS__, 'GetValBeforeEq'), explode('&', $arUrl['query'])), array_map(array(__CLASS__, 'GetValAfterEq'), explode('&', $arUrl['query'])));
+				if(strlen($oldFile) > 0 && file_exists($_SERVER['DOCUMENT_ROOT'].$oldFile)) 
+				{
+					$arXml = simplexml_load_file($_SERVER['DOCUMENT_ROOT'].$oldFile);
+					$scrollid = (is_object($arXml) && isset($arXml->scrollid) ? (string)$arXml->scrollid : false);
+					if(is_array($scrollid)) $scrollid = current($scrollid);
+					if($scrollid) $arGet['scrollId'] = $scrollid;
+				}
+				$arUrl['query'] = implode('&', array_map(array(__CLASS__, 'KeyEqVal'), array_keys($arGet), array_values($arGet)));
+				$path = $arUrl['scheme'].'://'.$arUrl['host'].$arUrl['path'].'?'.$arUrl['query'];
+			}
+			else
+			{
+				if(strlen($oldFile) > 0 && file_exists($_SERVER['DOCUMENT_ROOT'].$oldFile)) 
+				{
+					$arXml = simplexml_load_file($_SERVER['DOCUMENT_ROOT'].$oldFile);
+					$pageCount = false;
+					if(is_object($arXml))
+					{
+						if(isset($arXml->meta->pageCount)) $pageCount = (string)$arXml->meta->pageCount;
+						if(isset($arXml->meta->pagecount)) $pageCount = (string)$arXml->meta->pagecount;
+					}
+					if($pageCount && $page > $pageCount) return false;
+				}
+			}
+		}
+		elseif(self::IsWsdl($path))
+		{
+			if($page > 1) return '';
+			//$path = 'https://API_KEY|API_LOGIN:PASSWORD@api.merlion.com/re/mlservice3?wsdl#method(params)';
+			$wsdl_url = $arUrl['scheme'].'://'.$arUrl['host'].($arUrl['port'] ? ':'.$arUrl['port'] : '').$arUrl['path'].'?'.$arUrl['query'];
+			$arMethodParams = array();
+			$isParamNames = false;
+			/*if(preg_match('/\((.*)\)/Uis', $arUrl['fragment'], $m))
+			{
+				$arUrl['fragment'] = str_replace($m[0], '', $arUrl['fragment']);
+				foreach(explode(',', $m[1]) as $v)
+				{
+					$v = trim($v);
+					if(strpos($v, '=')!==false)
+					{
+						$arMethodParams[explode('=', $v)[0]] = explode('=', $v, 2)[1];
+						$isParamNames = true;
+					}
+					else $arMethodParams[] = $v;
+				}
+			}*/
+			if(preg_match('/\((.*)\)/Uis', $arUrl['fragment'], $m))
+			{
+				$arUrl['fragment'] = str_replace($m[0], '', $arUrl['fragment']);
+				$strParams = $m[1];
+				$arVars = array();
+				$j = 1;
+				while(preg_match_all('/\[([^\[\]]*)\]/', $strParams, $m2))
+				{
+					foreach($m2[1] as $k2=>$v2)
+					{
+						$tmpVars = array();
+						foreach(explode(',', $v2) as $v)
+						{
+							$v = trim($v);
+							if(strpos($v, '=')!==false)
+							{
+								list($k,$v) = explode('=', $v, 2);
+								if(preg_match('/^\$(\d+)$/', $v, $m3) && isset($arVars[$m3[1]])) $v = $arVars[$m3[1]];
+								$tmpVars[$k] = $v;
+							}
+							else 
+							{
+								if(preg_match('/^\$(\d+)$/', $v, $m3) && isset($arVars[$m3[1]])) $v = $arVars[$m3[1]];
+								$tmpVars[] = $v;
+							}
+						}
+						$arVars[$j] = $tmpVars;
+						$strParams = str_replace($m2[0][$k2], '$'.$j, $strParams);
+						$j++;
+					}
+				}
+				foreach(explode(',', $strParams) as $v)
+				{
+					$v = trim($v);
+					if(strpos($v, '=')!==false)
+					{
+						list($k,$v) = explode('=', $v, 2);
+						if(preg_match('/^\$(\d+)$/', $v, $m3) && isset($arVars[$m3[1]])) $v = $arVars[$m3[1]];
+						$arMethodParams[$k] = $v;
+						$isParamNames = true;
+					}
+					else 
+					{
+						if(preg_match('/^\$(\d+)$/', $v, $m3) && isset($arVars[$m3[1]])) $v = $arVars[$m3[1]];
+						$arMethodParams[] = $v;
+					}
+				}
+			}
+			//while(count($arMethodParams) > 0 && strlen($arMethodParams[count($arMethodParams)-1])==0) {unset($arMethodParams[count($arMethodParams)-1]);}
+			$params = array(
+				'login' => $arUrl['user'],
+				'password' => $arUrl['pass'],
+				'encoding' => self::getSiteEncoding(),
+				'features' => SOAP_SINGLE_ELEMENT_ARRAYS
+			);
+			$client = new \SoapClient($wsdl_url, $params);
+			$method = $arUrl['fragment'];
+			if(is_callable(array($client, $method)))
+			{
+				@ini_set('default_socket_timeout', '600');
+				$arFuncs = $client->__getFunctions();
+				$arTypes = $client->__getTypes();
+				if(count($arMethodParams) > 0 && ($arFunc = preg_grep('/\s+'.preg_quote($method).'\((\S+)\s+/', $arFuncs)) && (count($arFunc)>0) && ($func = current($arFunc)) && preg_match('/\s+'.preg_quote($method).'\((\S+)\s+/', $func, $m) && ($arType = preg_grep('/^struct\s+'.preg_quote($m[1]).'\s*\{/', $arTypes)) && (count($arType)>0)) $arMethodParams = (object)$arMethodParams;
+				//$arMethodParams = (object)$arMethodParams;
+				//$cat = $client->__soapCall($method, $arMethodParams);
+				if($isParamNames) $cat = call_user_func(array($client, $method), $arMethodParams);
+				else $cat = call_user_func_array(array($client, $method), $arMethodParams);
+				$xml = new \SimpleXMLElement('<data></data>');
+				self::Array2SimpleXML($xml, $cat);
+				$tempPath = self::GetNewFile(\Bitrix\Main\IO\Path::convertLogicalToPhysical($method));
+				$xml = $xml->asXML();
+				$xml = str_replace('<ID_PARENT>Order</ID_PARENT>', '', $xml);
+				file_put_contents($tempPath, $xml);
+				$path = $tempPath;
+			}
+		}
+		return $path;
+	}
+	
+	public static function Array2SimpleXML(&$xml_data, $data)
+	{
+		foreach($data as $key => $value)
+		{
+			if(is_object($value)) $value = (array)$value;
+			if(is_numeric($key)) $key = 'item';
+			if(is_array($value))
+			{
+				$subnode = $xml_data->addChild($key);
+				self::Array2SimpleXML($subnode, $value);
+			}
+			else
+			{
+				$value = preg_replace('/&(?!(amp;|quot;|#039;|lt;|gt;))/', '&amp;', $value);
+				$xml_data->addChild($key, htmlspecialcharsex($value));
+			}
+		}
+	}
+	
+	public static function PathContainsMask($path)
+	{
+		return (bool)((strpos($path, '*')!==false || (strpos($path, '{')!==false && strpos($path, '}')!==false)));
+	}
+	
+	public static function GetFilesByMask($mask, $page=false, $removeFiles=false)
+	{
+		$arFiles = array();
+		$prefix = (strpos($mask, $_SERVER['DOCUMENT_ROOT'])===0 ? '' : $_SERVER['DOCUMENT_ROOT']);
+		if(strpos($mask, '/*/')===false)
+		{
+			$arFiles = glob($prefix.$mask, GLOB_BRACE);
+		}
+		else
+		{
+			$i = 1;
+			while(empty($arFiles) && $i<8)
+			{
+				$arFiles = glob($prefix.str_replace('/*/', str_repeat('/*', $i).'/', $mask), GLOB_BRACE);
+				$i++;
+			}
+		}
+		if(empty($arFiles)) return array();
+		
+		usort($arFiles, array(__CLASS__, 'SortByFilemtime'));
+		if($page > 0)
+		{
+			if($removeFiles)
+			{
+				if($page > 1)
+				{
+					unlink(array_pop($arFiles));
+					$page = 1;
+				}
+				else
+				{
+					while(filesize($arFiles[count($arFiles)-1])==0)
+					{
+						unlink(array_pop($arFiles));
+					}
+				}
+			}
+			$arFiles = (array_key_exists(count($arFiles)-$page, $arFiles) ? array($arFiles[count($arFiles)-$page]): array());
+		}
+		
+		$arFiles = array_map(array(__CLASS__, 'RemoveDocRoot'), $arFiles);
+		return $arFiles;
+	}
+	
+	public static function GetPatternForRegexp($pattern)
+	{
+		$pattern = preg_quote($pattern, '/');
+		$pattern = preg_replace_callback('/\\\{([^\}]*)\\\}/', array(__CLASS__, 'GetPatternCallback'), $pattern);
+		$pattern = strtr($pattern, array('\*'=>'.*', '\?'=>'.'));
+		return '/'.$pattern.'/';
+	}
+	
+	public static function GetPatternCallback($m)
+	{
+		return "(".str_replace(",", "|", $m[1]).")";
 	}
 	
 	public static function GetNewFile($newName)
@@ -1229,8 +2021,9 @@ class Utils {
 	
 	public static function ReplaceFile($old_temp_path, $newName)
 	{
-		$temp_path = self::GetNewFile($newName);
-		copy($old_temp_path, $temp_path);
+		$temp_path = self::GetNewFile(\Bitrix\Main\IO\Path::convertLogicalToPhysical($newName));
+		if(file_exists($old_temp_path)) copy($old_temp_path, $temp_path);
+		elseif(file_exists(\Bitrix\Main\IO\Path::convertLogicalToPhysical($old_temp_path))) copy(\Bitrix\Main\IO\Path::convertLogicalToPhysical($old_temp_path), $temp_path);
 		self::RemoveOldFile($old_temp_path);
 		return $temp_path;
 	}
@@ -1272,10 +2065,17 @@ class Utils {
 		}
 		elseif($SETTINGS_DEFAULT["EMAIL_DATA_FILE"])
 		{
-			$arParams = \CUtil::JsObjectToPhp($SETTINGS_DEFAULT["EMAIL_DATA_FILE"]);
+			$json = $SETTINGS_DEFAULT["EMAIL_DATA_FILE"];
+			if(strlen($json) > 0 && strpos($json, '{')===false) $json = base64_decode($json);
+			$arParams = \CUtil::JsObjectToPhp($json);
+			if(!is_array($arParams)) $arParams = unserialize($json);
 			if(isset($arParams['EMAIL']))
 			{
 				$path = $arParams['EMAIL'];
+			}
+			if($SETTINGS_DEFAULT["URL_DATA_FILE"] && ($basename = bx_basename($SETTINGS_DEFAULT["URL_DATA_FILE"])))
+			{
+				$path = $basename.' <'.$path.'>';
 			}
 		}
 		return array('link'=>$link, 'path'=>$path);
@@ -1294,20 +2094,20 @@ class Utils {
 		$comment = 'KIT_IX_CHOOSE_FILE';
 		$commentBegin = '<!--'.$comment.'-->';
 		$commentEnd = '<!--/'.$comment.'-->';
-		$pos1 = strpos($content, $commentBegin);
-		$pos2 = strpos($content, $commentEnd);
+		$pos1 = mb_strpos($content, $commentBegin);
+		$pos2 = mb_strpos($content, $commentEnd);
 		if($pos1!==false && $pos2!==false)
 		{
-			$partContent = substr($content, $pos1, $pos2 + strlen($commentEnd) - $pos1);
+			$partContent = mb_substr($content, $pos1, $pos2 + mb_strlen($commentEnd) - $pos1);
 			if(preg_match_all('/<script[^>]*>.*<\/script>/Uis', $partContent, $m))
 			{
 				$arScripts = preg_grep('/BX\.file_input\((\{.*\'bx_file_data_file\'.*\})\)[;<]/Uis', $m[0]);
 				while(count($arScripts) > 1)
 				{
 					$script = array_pop($arScripts);
-					if($pos = strrpos($partContent, $script))
+					if($pos = mb_strrpos($partContent, $script))
 					{
-						$newPartContent = substr($partContent, 0, $pos).substr($partContent, $pos+strlen($script));
+						$newPartContent = mb_substr($partContent, 0, $pos).mb_substr($partContent, $pos+mb_strlen($script));
 						$content = str_replace($partContent, $newPartContent, $content);
 						$partContent = $newPartContent;
 					}
@@ -1317,7 +2117,7 @@ class Utils {
 			{
 				$json = $m[1];
 				$arConfig = \CUtil::JsObjectToPhp($json);
-				array_walk_recursive($arConfig, create_function('&$n, $k', 'if($n=="true"){$n=true;}elseif($n=="false"){$n=false;}'));
+				array_walk_recursive($arConfig, array(__CLASS__, 'ArrStringToBool'));
 				$arConfigEmail = array(
 					'TEXT' => Loc::getMessage("KIT_IX_FILE_SOURCE_EMAIL"),
 					'GLOBAL_ICON' => 'adm-menu-upload-email',
@@ -1339,24 +2139,31 @@ class Utils {
 		}
 	}
 	
-	public static function ExecuteFilterExpression($val, $expression, $altReturn = true)
+	public static function ExecuteFilterExpression($val, $expression, $altReturn = true, $arCookies=array(), $arHeaders=array(), $arParams=array())
 	{
+		foreach($arParams as $k=>$v)
+		{
+			${$k} = $v;
+		}
 		$expression = trim($expression);
 		try{				
 			if(stripos($expression, 'return')===0)
 			{
-				return eval($expression.';');
+				$command = $expression.';';
+				return eval($command);
 			}
 			elseif(preg_match('/\$val\s*=/', $expression))
 			{
-				eval($expression.';');
+				$command = $expression.';';
+				eval($command);
 				return $val;
 			}
 			else
 			{
-				return eval('return '.$expression.';');
+				$command = 'return '.$expression.';';
+				return eval($command);
 			}
-		}catch(Exception $ex){
+		}catch(\Exception $ex){
 			return $altReturn;
 		}
 	}
@@ -1416,11 +2223,13 @@ class Utils {
 			if ($arProp["ACTIVE"] == "Y")
 			{
 				$arProp["PROPERTY_USER_TYPE"] = ('' != $arProp["USER_TYPE"] ? \CIBlockProperty::GetUserType($arProp["USER_TYPE"]) : array());
+				$arProp['NAME'] = $arProp['NAME'].' ['.$arProp['CODE'].']';
 				$arProps[] = $arProp;
 			}
 		}
 		
 		?>
+		<script>var arClearHiddenFields = [];</script>
 		<!--<form method="GET" name="find_form" id="find_form" action="">-->
 		<div class="find_form_inner">
 		<?
@@ -1580,7 +2389,18 @@ class Utils {
 			</tr>
 			<tr>
 				<td><?=Loc::getMessage("KIT_IX_EL_A_EXTERNAL_ID")?>:</td>
-				<td><input type="text" name="<?echo $sf;?>[find_el_external_id]" value="<?echo htmlspecialcharsex($arFields['find_el_external_id'])?>" size="30"></td>
+				<td>
+					<select class="kit-ix-filter-chval" name="<?echo $sf;?>[find_el_vtype_external_id]">
+						<option value=""><?echo Loc::getMessage("KIT_IX_IS_VALUE")?></option>
+						<option value="contain"<?if($arFields["find_el_vtype_external_id"]=='contain'){echo ' selected';}?>><?echo Loc::getMessage("KIT_IX_VTYPE_CONTAIN")?></option>
+						<option value="not_contain"<?if($arFields["find_el_vtype_external_id"]=='not_contain'){echo ' selected';}?>><?echo Loc::getMessage("KIT_IX_VTYPE_NOT_CONTAIN")?></option>
+						<option value="begin_with"<?if($arFields["find_el_vtype_external_id"]=='begin_with'){echo ' selected';}?>><?echo Loc::getMessage("KIT_IX_VTYPE_BEGIN_WITH")?></option>
+						<option value="end_on"<?if($arFields["find_el_vtype_external_id"]=='end_on'){echo ' selected';}?>><?echo Loc::getMessage("KIT_IX_VTYPE_END_ON")?></option>
+						<option value="empty"<?if($arFields["find_el_vtype_external_id"]=='empty'){echo ' selected';}?>><?echo Loc::getMessage("KIT_IX_IS_EMPTY")?></option>
+						<option value="not_empty"<?if($arFields["find_el_vtype_external_id"]=='not_empty'){echo ' selected';}?>><?echo Loc::getMessage("KIT_IX_IS_NOT_EMPTY")?></option>
+					</select>
+					<input type="text" name="<?echo $sf;?>[find_el_external_id]" value="<?echo htmlspecialcharsex($arFields["find_el_external_id"])?>" size="30">
+				</td>
 			</tr>
 			<tr>
 				<td><?=Loc::getMessage("KIT_IX_EL_A_PREVIEW_PICTURE")?>:</td>
@@ -1734,7 +2554,16 @@ class Utils {
 						),
 					));
 				elseif($arProp["PROPERTY_TYPE"]=='S'):?>
-					<select class="kit-ix-filter-chval" name="<?echo $sf;?>[find_el_vtype_property_<?=$arProp["ID"]?>]"><option value=""><?echo Loc::getMessage("KIT_IX_IS_VALUE")?></option><option value="empty"<?if($arFields["find_el_vtype_property_".$arProp["ID"]]=='empty'){echo ' selected';}?>><?echo Loc::getMessage("KIT_IX_IS_EMPTY")?></option><option value="not_empty"<?if($arFields["find_el_vtype_property_".$arProp["ID"]]=='not_empty'){echo ' selected';}?>><?echo Loc::getMessage("KIT_IX_IS_NOT_EMPTY")?></option></select><input type="text" name="<?echo $sf;?>[find_el_property_<?=$arProp["ID"]?>]" value="<?echo htmlspecialcharsex($arFields["find_el_property_".$arProp["ID"]])?>" size="30">
+					<select class="kit-ix-filter-chval" name="<?echo $sf;?>[find_el_vtype_property_<?=$arProp["ID"]?>]">
+						<option value=""><?echo Loc::getMessage("KIT_IX_IS_VALUE")?></option>
+						<option value="contain"<?if($arFields["find_el_vtype_property_".$arProp["ID"]]=='contain'){echo ' selected';}?>><?echo Loc::getMessage("KIT_IX_VTYPE_CONTAIN")?></option>
+						<option value="not_contain"<?if($arFields["find_el_vtype_property_".$arProp["ID"]]=='not_contain'){echo ' selected';}?>><?echo Loc::getMessage("KIT_IX_VTYPE_NOT_CONTAIN")?></option>
+						<option value="begin_with"<?if($arFields["find_el_vtype_property_".$arProp["ID"]]=='begin_with'){echo ' selected';}?>><?echo Loc::getMessage("KIT_IX_VTYPE_BEGIN_WITH")?></option>
+						<option value="end_on"<?if($arFields["find_el_vtype_property_".$arProp["ID"]]=='end_on'){echo ' selected';}?>><?echo Loc::getMessage("KIT_IX_VTYPE_END_ON")?></option>
+						<option value="empty"<?if($arFields["find_el_vtype_property_".$arProp["ID"]]=='empty'){echo ' selected';}?>><?echo Loc::getMessage("KIT_IX_IS_EMPTY")?></option>
+						<option value="not_empty"<?if($arFields["find_el_vtype_property_".$arProp["ID"]]=='not_empty'){echo ' selected';}?>><?echo Loc::getMessage("KIT_IX_IS_NOT_EMPTY")?></option>
+					</select>
+					<input type="text" name="<?echo $sf;?>[find_el_property_<?=$arProp["ID"]?>]" value="<?echo htmlspecialcharsex($arFields["find_el_property_".$arProp["ID"]])?>" size="30">
 				<?elseif($arProp["PROPERTY_TYPE"]=='N' || $arProp["PROPERTY_TYPE"]=='E'):?>
 					<select class="kit-ix-filter-chval" name="<?echo $sf;?>[find_el_vtype_property_<?=$arProp["ID"]?>]"><option value=""><?echo Loc::getMessage("KIT_IX_IS_VALUE")?></option><option value="empty"<?if($arFields["find_el_vtype_property_".$arProp["ID"]]=='empty'){echo ' selected';}?>><?echo Loc::getMessage("KIT_IX_IS_EMPTY")?></option><option value="not_empty"<?if($arFields["find_el_vtype_property_".$arProp["ID"]]=='not_empty'){echo ' selected';}?>><?echo Loc::getMessage("KIT_IX_IS_NOT_EMPTY")?></option></select><input type="text" name="<?echo $sf;?>[find_el_property_<?=$arProp["ID"]?>]" value="<?echo htmlspecialcharsex($arFields["find_el_property_".$arProp["ID"]])?>" size="30">
 				<?elseif($arProp["PROPERTY_TYPE"]=='L'):?>
@@ -1755,6 +2584,27 @@ class Utils {
 				<?
 				elseif($arProp["PROPERTY_TYPE"]=='G'):
 					echo self::ShowGroupPropertyField2($sf.'[find_el_property_'.$arProp["ID"].']', $arProp, $arFields["find_el_property_".$arProp["ID"]]);
+				elseif(array_key_exists("GetPropertyFieldHtml", $arProp["PROPERTY_USER_TYPE"])):
+					$inputHTML = call_user_func_array($arProp["PROPERTY_USER_TYPE"]["GetPropertyFieldHtml"], array(
+						$arProp,
+						array(
+							"VALUE" => $arFields["find_el_property_".$arProp["ID"]],
+							"DESCRIPTION" => '',
+						),
+						array(
+							"VALUE" => "filter1_find_el_property_".$arProp["ID"],
+							"DESCRIPTION" => '',
+							"MODE"=>"iblock_element_admin",
+							"FORM_NAME"=>"filter_form"
+						),
+					));
+					$inputHTML = '<table style="margin: 0 0 5px 12px;"><tr id="tr_PROPERTY_'.$arProp["ID"].'"><td>'.$inputHTML.'</td></tr></table>';
+					//$inputHTML = '<span class="adm-select-wrap">'.$inputHTML.'</span>';
+					if(class_exists('\Bitrix\Main\Page\Asset') && class_exists('\Bitrix\Main\Page\AssetShowTargetType'))
+					{
+						$inputHTML = \Bitrix\Main\Page\Asset::getInstance()->GetJs(\Bitrix\Main\Page\AssetShowTargetType::TEMPLATE_PAGE).\Bitrix\Main\Page\Asset::getInstance()->GetCss(\Bitrix\Main\Page\AssetShowTargetType::TEMPLATE_PAGE).$inputHTML;
+					}
+					echo $inputHTML;
 				endif;
 				?>
 			</td>
@@ -1770,7 +2620,75 @@ class Utils {
 		$oFilter->End();
 		
 		?>
-		<script>var arClearHiddenFields = null;</script>
+		<!--</form>-->
+		</div>
+		<?
+	}
+	
+	public static function ShowFilterHighload($sTableID, $HLBL_ID, $FILTER)
+	{
+		global $APPLICATION, $USER_FIELD_MANAGER;
+		\CJSCore::Init('file_input');
+		$sf = 'FILTER';
+
+		$arFields = (is_array($FILTER) ? $FILTER : array());
+		$ufEntityId = 'HLBLOCK_'.$HLBL_ID;
+		?>
+		<script>var arClearHiddenFields = [];</script>
+		<!--<form method="GET" name="find_form" id="find_form" action="">-->
+		<div class="find_form_inner">
+		<?
+		$filterValues = array();
+		$arFindFields = array('ID');
+		
+		$USER_FIELD_MANAGER->AdminListAddFilterFields($ufEntityId, $filterFields);
+		//$USER_FIELD_MANAGER->AddFindFields($ufEntityId, $arFindFields);
+		$arUserFields = $USER_FIELD_MANAGER->GetUserFields($ufEntityId, 0, LANGUAGE_ID);
+		foreach($arUserFields as $FIELD_NAME=>$arUserField)
+		{
+			if(/*$arUserField["SHOW_FILTER"]!="N" &&*/ $arUserField["USER_TYPE"]["BASE_TYPE"]!="file")
+			{
+				$arFindFields[$FIELD_NAME] = (strlen(trim($arUserField['LIST_FILTER_LABEL'])) > 0 ? $arUserField['LIST_FILTER_LABEL'] : $FIELD_NAME);
+			}
+		}
+		
+		$oFilter = new \CAdminFilter($sTableID."_filter", $arFindFields);
+		
+		$oFilter->Begin();
+		
+		?>
+		<tr>
+			<td>ID</td>
+			<td><input type="text" name="<?echo $sf?>[find_ID]" size="47" value="<?echo htmlspecialcharsbx($arFields['find_ID'])?>"></td>
+		</tr>
+		<?
+		foreach($arUserFields as $FIELD_NAME=>$arUserField)
+		{
+			if(/*$arUserField["SHOW_FILTER"]!="N" &&*/ $arUserField["USER_TYPE"]["BASE_TYPE"]!="file")
+			{
+				if(in_array($arUserField["USER_TYPE_ID"], array('date', 'datetime')))
+				{
+					$GLOBALS[$sf."[find_".$FIELD_NAME."]_from"] = $arFields['find_'.$FIELD_NAME.'_from'];
+					$GLOBALS[$sf."[find_".$FIELD_NAME."]_to]"] = $arFields['find_'.$FIELD_NAME.'_to'];
+					$GLOBALS[$sf."[find_".$FIELD_NAME."]_from_FILTER_PERIOD"] = $arFields['find_'.$FIELD_NAME.'_from_FILTER_PERIOD'];
+					$GLOBALS[$sf."[find_".$FIELD_NAME."]_from_FILTER_DIRECTION"] = $arFields['find_'.$FIELD_NAME.'_from_FILTER_DIRECTION'];
+					$inputHTML = $USER_FIELD_MANAGER->GetFilterHTML($arUserField, $sf.'[find_'.$FIELD_NAME.']', $arFields['find_'.$FIELD_NAME]);
+				}
+				else
+				{
+					$inputHTML = $USER_FIELD_MANAGER->GetFilterHTML($arUserField, $sf.'[find_'.$FIELD_NAME.']', $arFields['find_'.$FIELD_NAME]);
+				}
+				echo $inputHTML;
+			}
+		}
+	
+		$oFilter->Buttons();
+		/*?><span class="adm-btn-wrap"><input type="submit"  class="adm-btn" name="set_filter" value="<? echo Loc::getMessage("admin_lib_filter_set_butt"); ?>" title="<? echo Loc::getMessage("admin_lib_filter_set_butt_title"); ?>" onClick="return EList.ApplyFilter(this);"></span>
+		<span class="adm-btn-wrap"><input type="submit"  class="adm-btn" name="del_filter" value="<? echo Loc::getMessage("admin_lib_filter_clear_butt"); ?>" title="<? echo Loc::getMessage("admin_lib_filter_clear_butt_title"); ?>" onClick="return EList.DeleteFilter(this);"></span>
+		<?*/
+		$oFilter->End();
+
+		?>
 		<!--</form>-->
 		</div>
 		<?
@@ -1806,6 +2724,13 @@ class Utils {
 		$arAddFilter = unserialize(base64_decode($arAddFilter));
 		if(!is_array($arFilter) || !is_array($arAddFilter)) return;
 		
+		if(count($arAddFilter) > 0 && count(preg_grep('/^find_/', array_keys($arAddFilter)))==0)
+		{
+			$eFilter = new \Bitrix\KitImportxml\Filter($arFilter['IBLOCK_ID']);
+			$eFilter->SetFilter($arFilter, $arAddFilter);
+			return;
+		}
+		
 		$dbrFProps = \CIBlockProperty::GetList(array(), array("IBLOCK_ID"=>$arFilter['IBLOCK_ID'],"CHECK_PERMISSIONS"=>"N"));
 		$arProps = array();
 		while ($arProp = $dbrFProps->GetNext())
@@ -1821,7 +2746,7 @@ class Utils {
 		{
 			if(count(array_diff($arAddFilter['find_section_section'], array('', '0' ,'-1'))) > 0)
 			{
-				$arFilter['SECTION_ID'] = array_diff($arAddFilter['find_section_section'], array('', '0' ,'-1'));
+				$arFilter['SECTION_ID'] = array_diff($arAddFilter['find_section_section'], array('', '-1'));
 			}
 			elseif(in_array('-1', $arAddFilter['find_section_section']))
 			{
@@ -1840,7 +2765,7 @@ class Utils {
 		if(strlen($arAddFilter['find_el_created_user_id']) > 0) $arFilter['CREATED_USER_ID'] = $arAddFilter['find_el_created_user_id'];
 		if(strlen($arAddFilter['find_el_active']) > 0) $arFilter['ACTIVE'] = $arAddFilter['find_el_active'];
 		if(strlen($arAddFilter['find_el_code']) > 0) $arFilter['?CODE'] = $arAddFilter['find_el_code'];
-		if(strlen($arAddFilter['find_el_external_id']) > 0) $arFilter['EXTERNAL_ID'] = $arAddFilter['find_el_external_id'];
+		self::AddFilterField($arFilter, $arAddFilter, 'EXTERNAL_ID', 'find_el_external_id', 'find_el_vtype_external_id');
 		if(strlen($arAddFilter['find_el_tags']) > 0) $arFilter['?TAGS'] = $arAddFilter['find_el_tags'];
 		if(strlen($arAddFilter['find_el_name']) > 0) $arFilter['?NAME'] = $arAddFilter['find_el_name'];
 		if(strlen($arAddFilter['find_el_intext']) > 0) $arFilter['?DETAIL_TEXT'] = $arAddFilter['find_el_intext'];
@@ -1860,7 +2785,7 @@ class Utils {
 		if(!empty($arAddFilter['find_el_date_active_from_to'])) $arFilter["<=DATE_ACTIVE_FROM"] = $arAddFilter['find_el_date_active_from_to'];
 		if(!empty($arAddFilter['find_el_date_active_to_from'])) $arFilter[">=DATE_ACTIVE_TO"] = $arAddFilter['find_el_date_active_to_from'];
 		if(!empty($arAddFilter['find_el_date_active_to_to'])) $arFilter["<=DATE_ACTIVE_TO"] = $arAddFilter['find_el_date_active_to_to'];
-		if (!empty($arAddFilter['find_el_catalog_type'])) $arFilter['CATALOG_TYPE'] = $arAddFilter['find_el_catalog_type'];
+		if (!empty($arAddFilter['find_el_catalog_type']) && (!is_array($arAddFilter['find_el_catalog_type']) || count(array_diff($arAddFilter['find_el_catalog_type'], array(''))) > 0)) $arFilter['CATALOG_TYPE'] = $arAddFilter['find_el_catalog_type'];
 		if (!empty($arAddFilter['find_el_catalog_available'])) $arFilter['CATALOG_AVAILABLE'] = $arAddFilter['find_el_catalog_available'];
 		if (!empty($arAddFilter['find_el_catalog_bundle'])) $arFilter['CATALOG_BUNDLE'] = $arAddFilter['find_el_catalog_bundle'];
 		if (strlen($arAddFilter['find_el_catalog_quantity']) > 0)
@@ -1870,7 +2795,7 @@ class Utils {
 		}
 		
 		$arStoreKeys = preg_grep('/^find_el_catalog_store\d+_/', array_keys($arAddFilter));
-		$arStoreKeys = array_unique(array_map(create_function('$n', 'return preg_replace("/^find_el_catalog_store(\d+)_.*$/", "$1", $n);'), $arStoreKeys));
+		$arStoreKeys = array_unique(array_map(array(__CLASS__, 'ReplaceCatalogStore'), $arStoreKeys));
 		if(!empty($arStoreKeys))
 		{
 			foreach($arStoreKeys as $storeKey)
@@ -1884,7 +2809,7 @@ class Utils {
 		}
 		
 		$arPriceKeys = preg_grep('/^find_el_catalog_price_\d+$/', array_keys($arAddFilter));
-		$arPriceKeys = array_unique(array_map(create_function('$n', 'return preg_replace("/^find_el_catalog_price_(\d+)$/", "$1", $n);'), $arPriceKeys));
+		$arPriceKeys = array_unique(array_map(array(__CLASS__, 'ReplaceCatalogPrice'), $arPriceKeys));
 		if(!empty($arPriceKeys))
 		{
 			foreach($arPriceKeys as $priceKey)
@@ -1923,6 +2848,10 @@ class Utils {
 					{
 						if($vtype=='empty') $arFilter["PROPERTY_".$arProp["ID"]] = false;
 						elseif($vtype=='not_empty') $arFilter["!PROPERTY_".$arProp["ID"]] = false;
+						elseif($vtype=='contain') $arFilter["%PROPERTY_".$arProp["ID"]] = $value;
+						elseif($vtype=='not_contain') $arFilter["!%PROPERTY_".$arProp["ID"]] = $value;
+						elseif($vtype=='begin_with') $arFilter["PROPERTY_".$arProp["ID"]] = (is_array($value) ? array_map(array(__CLASS__, 'GetFilterBeginWith'), $value) : $value.'%');
+						elseif($vtype=='end_on') $arFilter["PROPERTY_".$arProp["ID"]] = (is_array($value) ? array_map(array(__CLASS__, 'GetFilterEndOn'), $value) : '%'.$value);
 					}
 					elseif((is_array($value) && count($value)>0) || (!is_array($value) && strlen($value)))
 					{
@@ -1937,8 +2866,22 @@ class Utils {
 						if($arProp["PROPERTY_TYPE"]=='E' && $arProp["USER_TYPE"]=='')
 						{
 							$value = trim($value);
-							if(preg_match('/[,;\s\|]/', $value)) $arFilter["PROPERTY_".$arProp["ID"]] = array_diff(array_map('trim', preg_split('/[,;\s\|]/', $value)), array(''));
-							else $arFilter["=PROPERTY_".$arProp["ID"]] = $value;
+							if(preg_match('/[,;\s\|]/', $value))
+							{
+								$arFilter[] = array(
+									'LOGIC'=>'OR', 
+									array("=PROPERTY_".$arProp["ID"] => array_diff(array_map('trim', preg_split('/[,;\s\|]/', $value)), array(''))), 
+									array("=PROPERTY_".$arProp["ID"].".NAME" => array_diff(array_map('trim', preg_split('/[,;\|]/', $value)), array('')))
+								);
+							}
+							else 
+							{
+								$arFilter[] = array(
+									'LOGIC'=>'OR', 
+									array("=PROPERTY_".$arProp["ID"] => $value), 
+									array("=PROPERTY_".$arProp["ID"].".NAME" => $value)
+								);
+							}
 						}
 						else
 						{
@@ -1947,6 +2890,77 @@ class Utils {
 					}
 				}
 			}
+		}
+	}
+	
+	public static function AddFilterField(&$arFilter, $arAddFilter, $fieldName, $filterName, $filterVtypeName)
+	{
+		$value = $arAddFilter[$filterName];
+		$vtype = $arAddFilter[$filterVtypeName];
+		if(is_array($value)) $value = array_diff(array_map('trim', $value), array(''));
+		if($vtype=='empty') $arFilter[$fieldName] = false;
+		elseif($vtype=='not_empty') $arFilter["!".$fieldName] = false;
+		elseif((is_array($value) && !empty($value)) || strlen($value) > 0)
+		{
+			if($vtype=='contain') $arFilter["%".$fieldName] = $value;
+			elseif($vtype=='not_contain') $arFilter["!%".$fieldName] = $value;
+			elseif($vtype=='begin_with') $arFilter[$fieldName] = (is_array($value) ? array_map(array(__CLASS__, 'GetFilterBeginWith'), $value) : $value.'%');
+			elseif($vtype=='end_on') $arFilter[$fieldName] = (is_array($value) ? array_map(array(__CLASS__, 'GetFilterEndOn'), $value) : '%'.$value);
+			else $arFilter["=".$fieldName] = $value;
+		}
+	}
+	
+	public static function AddFilterHighload(&$arFilter, $arAddFilter, $HLBL_ID)
+	{
+		global $USER_FIELD_MANAGER;
+		$arAddFilter = unserialize(base64_decode($arAddFilter));
+		if(!is_array($arAddFilter)) return;
+		
+		$ufEntityId = 'HLBLOCK_'.$HLBL_ID;
+		$arUserFields = $USER_FIELD_MANAGER->GetUserFields($ufEntityId, 0, LANGUAGE_ID);
+		foreach($arUserFields as $FIELD_NAME=>$arUserField)
+		{
+			$key = 'find_'.$FIELD_NAME;
+			if(array_key_exists($key, $arAddFilter))
+			{
+				$val = $arAddFilter[$key];
+				$isVal = false;
+				if(is_array($val))
+				{
+					$val = array_diff(array_map('trim', $val), array(''));
+					if(!empty($val)) $isVal = true;
+				}
+				elseif(strlen(trim($val)) > 0) $isVal = true;
+
+				if(in_array($arUserField["USER_TYPE_ID"], array('date', 'datetime')))
+				{
+					self::AddDateFilter($arFilter, $arAddFilter, '>='.$FIELD_NAME, '<='.$FIELD_NAME, "find_".$FIELD_NAME);
+				}
+				elseif($isVal)
+				{
+					if($arUserField["SHOW_FILTER"]=="I")
+						$arFilter["=".$FIELD_NAME]=$val;
+					elseif($arUserField["SHOW_FILTER"]=="S")
+						$arFilter["%".$FIELD_NAME]=$val;
+					else
+						$arFilter[$FIELD_NAME]=$val;
+				}
+			}
+		}	
+	}
+	
+	public static function AddDateFilter(&$arFilter, $arAddFilter, $field1, $field2, $addField)
+	{
+		if($arAddFilter[$addField.'_from_FILTER_PERIOD']=='last_days'
+			&& isset($arAddFilter[$addField.'_from_FILTER_LAST_DAYS']) && strlen(trim($arAddFilter[$addField.'_from_FILTER_LAST_DAYS'])) > 0)
+		{
+			$days = (int)trim($arAddFilter[$addField.'_from_FILTER_LAST_DAYS']);
+			$arFilter[$field1] = $arAddFilter[$addField.'_from'] = ConvertTimeStamp(time()-$days*24*60*60, "FULL");
+		}
+		else
+		{
+			if(!empty($arAddFilter[$addField.'_from'])) $arFilter[$field1] = $arAddFilter[$addField.'_from'];
+			if(!empty($arAddFilter[$addField.'_to'])) $arFilter[$field2] = \CIBlock::isShortDate($arAddFilter[$addField.'_to'])? ConvertTimeStamp(AddTime(MakeTimeStamp($arAddFilter[$addField.'_to']), 1, "D"), "FULL"): $arAddFilter[$addField.'_to'];
 		}
 	}
 	
@@ -1965,8 +2979,160 @@ class Utils {
 		else return '';
 	}
 	
+	public static function ExportCsv($arResult)
+	{
+		require_once(dirname(__FILE__).'/PHPExcel/PHPExcel.php');
+		$objPHPExcel = new \KDAPHPExcel();
+		$arCols = range('A', 'Z');
+		
+		$row = 1;
+		$worksheet = $objPHPExcel->getActiveSheet();
+		foreach($arResult as $k=>$arFields)
+		{
+			$col = 0;
+			foreach($arFields as $k=>$field)
+			{
+				$worksheet->setCellValueExplicit($arCols[$col++].$row, self::GetCsvCellValue($field, 'UTF-8'));
+			}
+			$row++;
+		}
+		$objWriter = \KDAPHPExcel_IOFactory::createWriter($objPHPExcel, 'CSV');
+		$objWriter->setDelimiter(';');
+		$objWriter->setEnclosure('"');
+		$objWriter->setUseBOM(true);
+		
+		$tempPath = \CFile::GetTempName('', 'export.csv');
+		$dir = \Bitrix\Main\IO\Path::getDirectory($tempPath);
+		\Bitrix\Main\IO\Directory::createDirectory($dir);
+		$objWriter->save($tempPath);
+		
+		$GLOBALS['APPLICATION']->RestartBuffer();
+		ob_end_clean();
+		header("Content-type: text/csv");
+		header("Content-Disposition: attachment; filename=export.csv");
+		header("Pragma: no-cache");
+		header("Expires: 0");
+		readfile($tempPath);
+		die();
+	}
+	
+	public static function ImportCsv($file)
+	{
+		require_once(dirname(__FILE__).'/PHPExcel/PHPExcel.php');
+		$maxLine = 10000;
+		$arLines = array();
+		$objReader = \KDAPHPExcel_IOFactory::createReaderForFile($file);
+		$efile = $objReader->load($file);
+		foreach($efile->getWorksheetIterator() as $worksheet) 
+		{
+			$columns_count = max(\KDAPHPExcel_Cell::columnIndexFromString($worksheet->getHighestDataColumn()), $maxDrawCol);
+			$columns_count = min($columns_count, 5000);
+			$rows_count = $worksheet->getHighestDataRow();
+
+			for ($row = 0; ($row < $rows_count && count($arLines) < $maxLine); $row++) 
+			{
+				$arLine = array();
+				for($column = 0; $column < $columns_count; $column++) 
+				{
+					$val = $worksheet->getCellByColumnAndRow($column, $row+1);					
+					$valText = self::GetCalculatedValue($val);
+					$arLine[] = $valText;
+				}
+
+				if(count(array_diff($arLine, array(''))) > 0)
+				{
+					$arLines[] = $arLine;
+				}
+			}
+		}
+		return $arLines;
+	}
+	
+	public static function GetCsvCellValue($val, $encoding='CP1251')
+	{
+		if($encoding=='CP1251')
+		{
+			if(defined('BX_UTF') && BX_UTF)
+			{
+				$val = $GLOBALS['APPLICATION']->ConvertCharset($val, 'UTF-8', 'CP1251');
+			}
+		}
+		else
+		{
+			if(!defined('BX_UTF') || !BX_UTF)
+			{
+				$val = $GLOBALS['APPLICATION']->ConvertCharset($val, 'CP1251', 'UTF-8');
+			}
+		}
+		return $val;
+	}
+	
+	public static function GetCalculatedValue($val)
+	{
+		try{
+			$val = $val->getFormattedValue();
+		}catch(Exception $ex){}
+		return self::CorrectCalculatedValue($val);
+	}
+	
+	public static function CorrectCalculatedValue($val)
+	{
+		$val = str_ireplace('_x000D_', '', $val);
+		if((!defined('BX_UTF') || !BX_UTF) && self::detectUtf8($val))
+		{
+			if(function_exists('iconv'))
+			{
+				$newVal = iconv("UTF-8", "CP1251//IGNORE", $val);
+				if(strlen(trim($newVal))==0 && strlen(trim($val))>0)
+				{
+					$newVal2 = utf8win1251($val);
+					if(strpos(trim($newVal2), '?')!==0) $newVal = $newVal2;
+				}
+				$val = $newVal;
+			}
+			else $val = utf8win1251($val);
+		}
+		return $val;
+	}
+	
 	public static function RemoveTmpFiles($maxTime = 5, $suffix='')
 	{
+		/*Check cron settings*/
+		if(\Bitrix\Main\Config\Option::get(static::$moduleId, 'CRON_WO_MBSTRING', '')!='Y' && \Bitrix\KitImportxml\ClassManager::VersionGeqThen('main', '20.100.0'))
+		{
+			\Bitrix\Main\Config\Option::set(static::$moduleId, 'CRON_WO_MBSTRING', 'Y');
+			$arLines = array();
+			if(function_exists('exec')) @exec('crontab -l', $arLines);
+			if(is_array($arLines) && count($arLines) > 0)
+			{
+				$isChange = false;
+				foreach($arLines as $k=>$v)
+				{
+					if(strpos($v, static::$moduleId)!==false && preg_match('/\-d\s+mbstring.func_overload=\d+/', $v))
+					{
+						$v = preg_replace('/\-d\s+mbstring.func_overload=\d+/', '-d default_charset='.self::getSiteEncoding(), $v);
+						$v = preg_replace('/\s+\-d\s+mbstring.internal_encoding=\S+/', '', $v);
+						$arLines[$k] = $v;
+						$isChange = true;
+					}
+				}
+				if($isChange)
+				{
+					$cfg_data = implode("\n", $arLines);
+					$cfg_data = preg_replace("#\n{3,}#im", "\n\n", $cfg_data);
+					$cfg_data = trim($cfg_data, "\r\n ")."\n";
+					if(true /*file_exists($_SERVER["DOCUMENT_ROOT"]."/bitrix/crontab/crontab.cfg")*/)
+					{
+						CheckDirPath($_SERVER["DOCUMENT_ROOT"]."/bitrix/crontab/");
+						file_put_contents($_SERVER["DOCUMENT_ROOT"]."/bitrix/crontab/crontab.cfg", $cfg_data);
+					}
+					$command = "crontab ".$_SERVER["DOCUMENT_ROOT"]."/bitrix/crontab/crontab.cfg";
+					@exec($command);
+				}
+			}
+		}
+		/*/Check cron settings*/
+		
 		$oProfile = \Bitrix\KitImportxml\Profile::getInstance($suffix);
 		$timeBegin = time();
 		$docRoot = $_SERVER["DOCUMENT_ROOT"];
@@ -1985,7 +3151,7 @@ class Utils {
 						$arOldDirs[] = $file;
 					}
 				}
-				elseif(substr($file, -4)=='.txt')
+				elseif(mb_substr($file, -4)=='.txt')
 				{
 					$arParams = $oProfile->GetProfileParamsByFile($tmpDir.$file);
 					if(is_array($arParams) && isset($arParams['tmpdir']))
@@ -2010,7 +3176,7 @@ class Utils {
 		{
 			while(($file = readdir($dh)) !== false) 
 			{
-				if(!preg_match('/^[0-9a-f]{3}$/', $file)) continue;
+				if(!preg_match('/^[0-9a-z]{3}$/', $file) && !preg_match('/^[0-9a-z]{32}$/', $file)) continue;
 				$subdir = $tmpDir.$file;
 				if(is_dir($subdir))
 				{
@@ -2043,7 +3209,8 @@ class Utils {
 							closedir($dh2);
 							if($emptyDir)
 							{
-								unlink($subdir);
+								//unlink($subdir);
+								rmdir($subdir);
 							}
 						}
 						
@@ -2068,7 +3235,7 @@ class Utils {
 		{
 			fseek($handle, 0);
 			$contents = fread($handle, 262144);
-			if(!\CUtil::DetectUTF8($contents) && (!function_exists('iconv') || iconv('CP1251', 'CP1251', $contents)==$contents))
+			if(!self::detectUtf8($contents) && (!function_exists('iconv') || iconv('CP1251', 'CP1251', $contents)==$contents))
 			{
 				$encoding = 'windows-1251';
 			}
@@ -2088,9 +3255,327 @@ class Utils {
 		return $val;
 	}
 	
+	public static function GetELinkedIblock($arProp)
+	{
+		if(!array_key_exists($arProp['ID'], self::$eLinkedIblocks))
+		{
+			self::$eLinkedIblocks[$arProp['ID']] = false;
+			if($arProp['USER_TYPE'])
+			{
+				if($arProp['USER_TYPE']=='CitrusArealtyZhk')
+				{
+					if($arProp['IBLOCK_ID'] && ($arIblock = \CIblock::GetById($arProp['IBLOCK_ID'])->Fetch()) && ($arIblock2 = \CIBlock::GetList(array(), array('CODE'=>'complexes', 'SITE_ID'=>$arIblock['LID']))->Fetch()))
+					{
+						self::$eLinkedIblocks[$arProp['ID']] = $arIblock2['ID'];
+					}
+				}
+				elseif($arProp['USER_TYPE']=='CitrusArealtyHouse')
+				{
+					if($arProp['IBLOCK_ID'] && ($arIblock = \CIblock::GetById($arProp['IBLOCK_ID'])->Fetch()) && ($arIblock2 = \CIBlock::GetList(array(), array('CODE'=>'houses', 'SITE_ID'=>$arIblock['LID']))->Fetch()))
+					{
+						self::$eLinkedIblocks[$arProp['ID']] = $arIblock2['ID'];
+					}
+				}
+			}
+		}
+		return self::$eLinkedIblocks[$arProp['ID']];
+	}
+	
+	public static function GetCurUserID()
+	{
+		global $USER;
+		if($USER && is_callable(array($USER, 'GetID'))) return $USER->GetID();
+		else return 0;
+	}
+	
+	public static function Trim($str)
+	{
+		if(is_array($str))
+		{
+			foreach($str as $k=>$v)
+			{
+				$str[$k] = self::Trim($v);
+			}
+			return $str;
+		}
+		$str = trim($str);
+		$str = preg_replace('/(^(\xC2\xA0|\s)+|(\xC2\xA0|\s)+$)/s', '', $str);
+		return $str;
+	}
+	
+	public static function Translate($string, $langFrom, $langTo=false)
+	{
+		if(strlen(trim($string)) == 0) return $string;
+		if($apiKey = \Bitrix\Main\Config\Option::get(static::$moduleId, 'TRANSLATE_GOOGLE_KEY', ''))
+		{
+			if($langTo===false) $langTo = LANGUAGE_ID;
+			$client = new \Bitrix\Main\Web\HttpClient(array('socketTimeout'=>10, 'disableSslVerification'=>true));
+			$res = $client->post('https://translation.googleapis.com/language/translate/v2', array('q'=>$string, 'source'=>$langFrom, 'target'=>$langTo, 'format'=>"text", 'key'=>$apiKey));
+			$arRes = \CUtil::JSObjectToPhp($res);
+			if(isset($arRes['data']['translations'][0]['translatedText']))
+			{
+				$string = (is_array($arRes['data']['translations'][0]['translatedText']) ? implode('', $arRes['data']['translations'][0]['translatedText']) : $arRes['data']['translations'][0]['translatedText']);
+			}
+		}
+		elseif(($apiKey = \Bitrix\Main\Config\Option::get('main', 'translate_key_yandex', '')) ||
+			($apiKey = \Bitrix\Main\Config\Option::get(static::$moduleId, 'TRANSLATE_YANDEX_KEY', '')))
+		{
+			if($langTo===false) $langTo = LANGUAGE_ID;
+			$client = new \Bitrix\Main\Web\HttpClient(array('socketTimeout'=>10, 'disableSslVerification'=>true));
+			$client->setHeader('Content-Type', 'application/xml');
+			$res = $client->get('https://translate.yandex.net/api/v1.5/tr.json/translate?key='.$apiKey.'&lang='.$langFrom.'-'.$langTo.'&text='.urlencode($string));
+			$arRes = \CUtil::JSObjectToPhp($res);
+			if(array_key_exists('code', $arRes) && $arRes['code']==200 && array_key_exists('text', $arRes))
+			{
+				$string = (is_array($arRes['text']) ? implode('', $arRes['text']) : $arRes['text']);
+			}
+		}
+		return $string;
+	}
+	
+	public static function Str2Url($string, $arParams=array())
+	{
+		if(!is_array($arParams)) $arParams = array();
+		if($arParams['USE_GOOGLE']=='Y') $string = self::Translate($string, LANGUAGE_ID, 'en');
+		if($arParams['TRANSLITERATION']=='Y')
+		{
+			if(isset($arParams['TRANS_LEN'])) $arParams['max_len'] = $arParams['TRANS_LEN'];
+			if(isset($arParams['TRANS_CASE'])) $arParams['change_case'] = $arParams['TRANS_CASE'];
+			if(isset($arParams['TRANS_SPACE'])) $arParams['replace_space'] = $arParams['TRANS_SPACE'];
+			if(isset($arParams['TRANS_OTHER'])) $arParams['replace_other'] = $arParams['TRANS_OTHER'];
+			if(isset($arParams['TRANS_EAT']) && $arParams['TRANS_EAT']=='N') $arParams['delete_repeat_replace'] = false;
+		}
+		return \CUtil::translit($string, LANGUAGE_ID, $arParams);
+	}
+	
+	public static function DownloadTextTextByLink($val, $altVal='')
+	{
+		$client = new \Bitrix\Main\Web\HttpClient(array('socketTimeout'=>10, 'disableSslVerification'=>true));
+		$path = (strlen(trim($altVal)) > 0 ? trim($altVal) : trim($val));
+		if(strlen($path)==0) return '';
+		$arUrl = parse_url($path);
+		$res = trim($client->get($path));
+		if($client->getStatus()==404) $res = '';
+		$hct = ToLower($client->getHeaders()->get('content-type'));
+		$siteEncoding = $fileEncoding = self::getSiteEncoding();
+		if(strlen($res) > 0 && class_exists('\DOMDocument') && $arUrl['fragment'])
+		{
+			$res = self::GetHtmlDomVal($res, $arUrl['fragment']);
+		}
+		elseif(preg_match('/charset=(.+)(;|$)/Uis', $hct, $m))
+		{
+			$fileEncoding = ToLower(trim($m[1]));
+			if($siteEncoding!=$fileEncoding)
+			{
+				$res = \Bitrix\Main\Text\Encoding::convertEncoding($res, $fileEncoding, $siteEncoding);
+			}
+		}
+		else
+		{
+			if(self::detectUtf8($res))
+			{
+				if($siteEncoding!='utf-8') $res = \Bitrix\Main\Text\Encoding::convertEncoding($res, 'utf-8', $siteEncoding);
+			}
+			elseif($siteEncoding=='utf-8') $res = \Bitrix\Main\Text\Encoding::convertEncoding($res, 'cp1251', $siteEncoding);
+		}
+		return $res;
+	}
+	
+	public static function GetHtmlDomVal($html, $selector, $img=false, $multi=false)
+	{
+		$finalHtml = '';
+		if(strlen($html) > 0 && class_exists('\DOMDocument') && $selector)
+		{
+			if($multi && !$img) $multi = false;
+			/*Bom UTF-8*/
+			if(self::detectUtf8(substr($html, 0, 10000)) && (substr($html, 0, 3)!="\xEF\xBB\xBF"))
+			{
+				$html = "\xEF\xBB\xBF".$html;
+			}
+			/*/Bom UTF-8*/
+			$doc = new \DOMDocument();
+			$doc->preserveWhiteSpace = false;
+			$doc->formatOutput = true;
+			$doc->loadHTML($html);
+			$node = $doc;
+			$arNodes = array();
+			$arParts = preg_split('/\s+/', $selector);
+			$i = 0;
+			while(isset($arParts[$i]) && ($node instanceOf \DOMDocument || $node instanceOf \DOMElement))
+			{
+				$part = $arParts[$i];
+				$tagName = (preg_match('/^([^#\.\[]+)([#\.\[].*$|$)/', $part, $m) ? $m[1] : '');
+				$tagId = (preg_match('/^[^#]*#([^#\.\[]+)([#\.\[].*$|$)/', $part, $m) ? $m[1] : '');
+				$arClasses = array_diff(explode('.', (preg_match('/^[^\.]*\.([^#\[]+)([#\.\[].*$|$)/', $part, $m) ? $m[1] : '')), array(''));
+				$arAttributes = array_map(array(__CLASS__, 'StrKeyVal2Array'), (preg_match_all('/\[([^\]]+(=[^\]])?)\]/', $part, $m) ? $m[1] : array()));
+				if($tagName)
+				{
+					$nodes = $node->getElementsByTagName($tagName);
+					if($tagId || !empty($arClasses) || !empty($arAttributes))
+					{
+						$find = false;
+						$key = 0;
+						while((!$find || $multi) && $key<$nodes->length)
+						{
+							$node1 = $nodes->item($key);
+							$subfind = true;
+							if($tagId && $node1->getAttribute('id')!=$tagId) $subfind = false;
+							foreach($arClasses as $className)
+							{
+								if($className && !preg_match('/(^|\s)'.preg_quote($className, '/').'(\s|$)/is', $node1->getAttribute('class'))) $subfind = false;
+							}
+							foreach($arAttributes as $arAttr)
+							{
+								if(!$node1->hasAttribute($arAttr['k']) || (strlen($arAttr['v']) > 0 && $node1->getAttribute($arAttr['k'])!=$arAttr['v'])) $subfind = false;
+							}
+							$find = $subfind;
+							if($multi && $subfind) $arNodes[] = $nodes->item($key);
+							if(!$find || $multi) $key++;
+						}
+						if($find && !$multi) $node = $nodes->item($key);
+						else $node = null;
+					}
+					else
+					{
+						$node = $nodes->item(0);
+					}
+				}
+				$i++;
+			}
+			
+			if($img && $multi && count($arNodes) > 0)
+			{
+				$arLinks = array();
+				foreach($arNodes as $node)
+				{
+					if($node instanceOf \DOMElement)
+					{
+						$link = '';
+						if($node->hasAttribute('src')) $link = $node->getAttribute('src');
+						elseif($node->hasAttribute('href')) $link = $node->getAttribute('href');
+						$link = trim($link);
+						if(strlen($link) > 0) $arLinks[] = $link;
+					}
+				}
+				return $arLinks;
+			}
+			
+			if($node instanceOf \DOMElement)
+			{
+				$innerHTML = '';
+				if($img)
+				{
+					if($node->hasAttribute('src')) $innerHTML = $node->getAttribute('src');
+					elseif($node->hasAttribute('href')) $innerHTML = $node->getAttribute('href');
+				}
+				else
+				{
+					$children = $node->childNodes;
+					foreach($children as $child)
+					{
+						$innerHTML .= $child->ownerDocument->saveHTML($child);
+					}
+					if(strlen($innerHTML)==0 && $node->nodeValue) $innerHTML = $node->nodeValue;
+				}
+				$finalHtml = trim($innerHTML);
+			}
+			else
+			{
+				$finalHtml = '';
+			}
+			$siteEncoding = self::getSiteEncoding();
+			if($finalHtml && $siteEncoding!='utf-8')
+			{
+				$finalHtml = \Bitrix\Main\Text\Encoding::convertEncoding($res, 'utf-8', $siteEncoding);
+			}
+		}
+		return $finalHtml;
+	}
+	
+	public static function DownloadImagesFromText($val, $domain='')
+	{
+		$domain = trim($domain);
+		$imgDir = '/upload/kit_images/';
+		$arPatterns = array(
+			'/<img[^>]*\ssrc=["\']([^"\'<>]+)["\'][^>]*>/Uis',
+			'/<a[^>]*\shref=["\']([^"\'<>]+\.(jpg|jpeg|png|gif|svg|webp|bmp|pdf)(\?[^"\']*)?)["\'][^>]*>/Uis',
+		);
+		foreach($arPatterns as $k0=>$pattern)
+		{
+			if(preg_match_all($pattern, $val, $m))
+			{
+				foreach($m[1] as $k=>$img)
+				{
+					if(mb_strpos($img, '//')===0) $img = (($pos = mb_strpos($domain, '//'))!==false ? mb_substr($domain, 0, $pos) : 'http:').$img;
+					elseif(mb_strpos($img, '/')===0) $img = $domain.$img;
+					$imgName = md5($img).'.'.preg_replace('/[#\?].*$/', '', bx_basename(rawurldecode($img)));
+					$imgPathDir1 = $imgDir.mb_substr($imgName, 0, 3).'/';
+					$imgPathDir = $_SERVER['DOCUMENT_ROOT'].$imgPathDir1;
+					$imgPath1 = $imgPathDir1.$imgName;
+					$imgPath = $imgPathDir.$imgName;
+					$realFile = \Bitrix\Main\IO\Path::convertLogicalToPhysical($imgPath);
+					$removeTag = false;
+					if(!file_exists($realFile) || filesize($realFile)==0 || stripos(file_get_contents($realFile, false, null, 0, 100), '<html')!==false)
+					{
+						CheckDirPath($imgPathDir);
+						$ob = new \Bitrix\Main\Web\HttpClient(array('disableSslVerification'=>true, 'socketTimeout'=>15, 'streamTimeout'=>15));
+						$ob->setHeader('User-Agent', self::GetUserAgent());
+						$ob->download($img, $imgPath);
+						if($k0==0 && ($ob->getStatus()==404 || (!file_exists($realFile) || filesize($realFile)==0 || stripos(file_get_contents($realFile, false, null, 0, 100), '<html')!==false)))
+						{
+							if(file_exists($realFile)) unlink($realFile);
+							$removeTag = true;
+						}
+					}
+					$imgHtml = str_replace($m[1][$k], $imgPath1, $m[0][$k]);
+					if($removeTag) $val = str_replace($m[0][$k], '', $val);
+					else $val = str_replace($m[0][$k], $imgHtml, $val);
+				}
+			}
+		}
+		return $val;
+	}
+	
+	public static function PrepareJs()
+	{
+		$curFilename = end(explode('/', $_SERVER['SCRIPT_NAME']));
+		if(file_exists($_SERVER["DOCUMENT_ROOT"].BX_ROOT.'/modules/'.static::$moduleId.'/install/admin/'.$curFilename))
+		{
+			foreach(GetModuleEvents("main", "OnEndBufferContent", true) as $eventKey=>$arEvent)
+			{
+				if(!isset($arEvent['TO_MODULE_ID']) || $arEvent['TO_MODULE_ID']=='security')
+				{
+					RemoveEventHandler($arEvent['FROM_MODULE_ID'], $arEvent['MESSAGE_ID'], $eventKey);
+				}
+			}
+			AddEventHandler("main", "OnEndBufferContent", Array("\Bitrix\KitImportxml\Utils", "PrepareJsDirect"));
+		}
+	}
+	
+	public static function PrepareJsDirect(&$content)
+	{
+		static::$jsCounter = 0;
+		$content = preg_replace_callback('/<script[^>]+src="[^"]*\/js\/main\/jquery\/jquery\-[\d\.]+(\.min)+\.js[^"]*"[^>]*>\s*<\/script>/Uis', Array("\Bitrix\KitImportxml\Utils", "DeleteExcellJs"), $content);
+		$content = preg_replace('/<script[^>]+src="https?:\/\/code\.jquery\.com\/jquery-[\d\.]+\.(min\.)?js"[^>]*>\s*<\/script>/Uis', '', $content);
+	}
+	
+	public static function DeleteExcellJs($m)
+	{
+		if(static::$jsCounter++==0) return $m[0];
+		else return '';
+	}
+	
 	public static function ReplaceCpSpecChars($val, $toEncoding)
 	{
 		if(!in_array($toEncoding, array('windows-1251', 'cp1251'))) return $val;
+		if(is_array($val))
+		{
+			foreach($val as $k=>$v)
+			{
+				$val[$k] = self::ReplaceCpSpecChars($v, $toEncoding);
+			}
+			return $val;
+		}
 		$specChars = array('Ø'=>'&#216;', '™'=>'&#153;', '®'=>'&#174;', '©'=>'&#169;', 'Ö'=>'&#214;');
 		if(!isset(static::$cpSpecCharLetters))
 		{
@@ -2122,8 +3607,8 @@ class Utils {
 
 			if($letter!==false)
 			{
-				if($pos==0) $val = preg_replace('/'.substr($letter, 0, 1).'(?!'.substr($letter, 1, 1).')/', $code, $val);
-				elseif($pos==1) $val = preg_replace('/(?<!'.substr($letter, 0, 1).')'.substr($letter, 1, 1).'/', $code, $val);
+				if($pos==0) $val = preg_replace('/'.mb_substr($letter, 0, 1).'(?!'.mb_substr($letter, 1, 1).')/', $code, $val);
+				elseif($pos==1) $val = preg_replace('/(?<!'.mb_substr($letter, 0, 1).')'.mb_substr($letter, 1, 1).'/', $code, $val);
 			}
 			else
 			{
@@ -2131,6 +3616,22 @@ class Utils {
 			}
 		}
 		return $val;
+	}
+	
+	public static function GetIniAbsVal($param)
+	{
+		$val = ToUpper(ini_get($param));
+		if(substr($val, -1)=='K') $val = (float)$val*1024;
+		elseif(substr($val, -1)=='M') $val = (float)$val*1024*1024;
+		elseif(substr($val, -1)=='G') $val = (float)$val*1024*1024*1024;
+		else $val = (float)$val;
+		return $val;
+	}
+	
+	public static function getUtfModifier()
+	{
+		if(self::getSiteEncoding()=='utf-8') return 'u';
+		else return '';
 	}
 	
 	public static function getSiteEncoding()
@@ -2148,25 +3649,215 @@ class Utils {
 			else
 				$logicalEncoding = "windows-1251";
 
-			static::$siteEncoding = strtolower($logicalEncoding);
+			static::$siteEncoding = trim(strtolower($logicalEncoding));
 		}
 		return static::$siteEncoding;
 	}
 	
-	public function GetUserAgent()
+	public static function GetHttpClient($arParams=false, $arHeaders=array(), $arCookies=array(), $path='')
+	{
+		if(!is_array($arParams)) $arParams = array('disableSslVerification'=>true);
+		$arParams['useProxy'] = false;
+		$client = new \Bitrix\KitImportxml\HttpClient($arParams);
+		if(is_array($arCookies) && count($arCookies) > 0) $client->setCookies($arCookies);
+		if(!is_array($arHeaders)) $arHeaders = array();
+		$arHeadersOrig = $arHeaders;
+		$arHeaders = array();
+		if(!array_key_exists('Host', $arHeadersOrig) && strlen($path) > 0)
+		{
+			$arUrl = parse_url($path);
+			if(array_key_exists('host', $arUrl) && strlen($arUrl['host']) > 0)
+			{
+				$arHeaders['Host'] = $arUrl['host'];
+			}
+		}
+		else
+		{
+			$arHeaders['Host'] = $arHeadersOrig['Host'];
+			unset($arHeadersOrig['Host']);
+		}
+		foreach($arHeadersOrig as $hk=>$hv) $arHeaders[$hk] = $hv;
+		foreach($arHeaders as $hk=>$hv) $client->setHeader($hk, $hv);
+
+		return $client;
+	}
+	
+    public static function detectUtf8($string, $replaceHex = true)
+    {
+        //http://mail.nl.linux.org/linux-utf8/1999-09/msg00110.html
+
+        if ($replaceHex)
+        {
+            $string = preg_replace_callback(
+                "/(%)([\\dA-F]{2})/i",
+                function ($match) {
+                    return chr(hexdec($match[2]));
+                },
+                $string
+            );
+        }
+
+        //valid UTF-8 octet sequences
+        //0xxxxxxx
+        //110xxxxx 10xxxxxx
+        //1110xxxx 10xxxxxx 10xxxxxx
+        //11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+
+        $prevBits8and7 = 0;
+        $isUtf = 0;
+        foreach (unpack("C*", $string) as $byte)
+        {
+            $hiBits8and7 = $byte & 0xC0;
+            if ($hiBits8and7 == 0x80)
+            {
+                if ($prevBits8and7 == 0xC0)
+                {
+                    $isUtf++;
+                }
+                elseif (($prevBits8and7 & 0x80) == 0x00)
+                {
+                    $isUtf--;
+                }
+            }
+            elseif ($prevBits8and7 == 0xC0)
+            {
+                $isUtf--;
+            }
+            $prevBits8and7 = $hiBits8and7;
+        }
+        return ($isUtf > 0);
+    }
+	
+	public static function GetUserAgent()
 	{
 		if(empty(self::$arAgents))
 		{
 			self::$arAgents = array(
-				'Mozilla/5.0 (Windows NT 6.3; Win64; x64; rv:62.0) Gecko/20100101 Firefox/62.0',
-				'Mozilla/5.0 (Windows NT 6.3; Win64; x64; rv:61.0) Gecko/20100101 Firefox/61.0',
-				'Mozilla/5.0 (Windows NT 6.3; Win64; x64; rv:60.0) Gecko/20100101 Firefox/60.0',
-				'Mozilla/5.0 (Windows NT 6.2; Win64; x64; rv:56.0) Gecko/20100101 Firefox/56.0',
-				'Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:46.0) Gecko/20100101 Firefox/46.0',
+				'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/112.0',
+				'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/111.0',
+				'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/110.0',
+				'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/109.0',
+				'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:108.0) Gecko/20100101 Firefox/108.0',
+				'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:107.0) Gecko/20100101 Firefox/107.0',
 			);
 			self::$countAgents = count(self::$arAgents);
 		}
 		return self::$arAgents[rand(0, self::$countAgents - 1)];
+	}
+	
+	public static function GetFloatRoundVal($val)
+	{
+		if(($ar = explode('.', $val)) && count($ar)>1){$val = round($val, strlen($ar[1]));}
+		return $val;
+	}
+	
+	public static function WordWithNum($num, $word)
+	{
+		list($word1, $word2, $word3) = array_map('trim', explode(',', $word));
+		if($num%10==0 || $num%10>4 || ($num%100>10 && $num%100<20)) return $word3;
+		elseif($num%10==1) return $word1;
+		else return $word2;
+	}
+	
+	public static function ArrayUnique($val)
+	{
+		if(!is_array($val)) return $val;
+		$arVals = array();
+		foreach($val as $k=>$v)
+		{
+			$sv = (is_array($v) ? serialize($v) : (string)($v));
+			if(!in_array($sv, $arVals)) $arVals[] = $sv;
+			else unset($val[$k]);
+		}
+		return array_values($val);
+	}
+	
+	public static function UrlEncodeCallback($m)
+	{
+		return rawurlencode($m[0]);
+	}
+	
+	public static function SortByFilemtime($a, $b)
+	{
+		return filemtime($a)>filemtime($b) ? -1 : 1;
+	}
+	
+	public static function RemoveDocRoot($n)
+	{
+		return substr($n, strlen($_SERVER["DOCUMENT_ROOT"]));
+	}
+	
+	public static function ArrStringToBool(&$n, $k)
+	{
+		if($n=="true"){$n=true;}elseif($n=="false"){$n=false;}
+	}
+	
+	public static function ReplaceCatalogStore($n)
+	{
+		return preg_replace("/^find_el_catalog_store(\d+)_.*$/", "$1", $n);
+	}
+	
+	public static function ReplaceCatalogPrice($n)
+	{
+		return preg_replace("/^find_el_catalog_price_(\d+)$/", "$1", $n);
+	}
+	
+	public static function GetFilterBeginWith($n)
+	{
+		return $n."%";
+	}
+	
+	public static function GetFilterEndOn($n)
+	{
+		return "%".$n;
+	}
+	
+	public static function ArrayCombine($k, $v)
+	{
+		return array($k=>$v);
+	}
+	
+	public static function SetConvType0($c)
+	{
+		if(strlen(trim($c["CELL"]))==0) $c["CELL"] = '0';
+		$c["CONV_TYPE"]=0; return $c;
+	}
+	
+	public static function SetConvType1($c)
+	{
+		if(strlen(trim($c["CELL"]))==0) $c["CELL"] = '0';
+		$c["CONV_TYPE"]=1; return $c;
+	}
+	
+	public static function CompEmptyString($n)
+	{
+		return (is_string($n) && $n==false ? 1 : $n);
+	}
+	
+	public static function Vars2Json($k, $v)
+	{
+		return '"'.addcslashes($k, '"').'":"'.addcslashes($v, '"').'"';
+	}
+	
+	public static function GetValBeforeEq($n)
+	{
+		return current(explode("=", $n, 2));
+	}
+	
+	public static function GetValAfterEq($n)
+	{
+		return end(explode("=", $n, 2));
+	}
+	
+	public static function KeyEqVal($k, $v)
+	{
+		return $k."=".$v;
+	}
+	
+	public static function StrKeyVal2Array($n)
+	{
+		list($k, $v) = explode("=", $n, 2); 
+		return array("k"=>$k, "v"=>trim($v, ' "\''));
 	}
 }
 ?>

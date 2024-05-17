@@ -1,8 +1,4 @@
 <?php
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Localization\Loc;
@@ -16,7 +12,7 @@ class Extrasettings {
 	
 	public static function GetMarginTemplates(&$pfile)
 	{
-		$pdir = dirname(__FILE__).'/../../profiles/';
+		$pdir = dirname(__FILE__).'/../profiles/';
 		CheckDirPath($pdir);
 		$pfile = $pdir.'margins.txt';
 		if(file_exists($pfile)) $arTemplates = unserialize(file_get_contents($pfile));
@@ -60,17 +56,14 @@ class Extrasettings {
 	{
 		foreach($PEXTRASETTINGS as $k1=>$v1)
 		{
-			foreach($v1 as $k2=>$v2)
-			{
-				return $v2['MARGINS'];
-			}
+			return $v1['MARGINS'];
 		}
 	}
 	
-	public static function HandleParams(&$PEXTRASETTINGS, $arParams)
+	public static function HandleParams(&$PEXTRASETTINGS, $arParams, $checkCharset=true)
 	{
 		global $APPLICATION;
-		if(!defined('BX_UTF') || !BX_UTF)
+		if($checkCharset && (!defined('BX_UTF') || !BX_UTF))
 		{
 			$arParams = $APPLICATION->ConvertCharsetArray($arParams, "UTF-8", "Windows-1251");
 		}
@@ -93,6 +86,7 @@ class Extrasettings {
 							$margin = array(
 								'TYPE' => $v2['TYPE'][$k3],
 								'PERCENT' => floatval($v3),
+								'PERCENT_TYPE' => $v2['PERCENT_TYPE'][$k3],
 								'PRICE_FROM' => (strlen(trim($v2['PRICE_FROM'][$k3])) > 0 ? floatval($v2['PRICE_FROM'][$k3]) : false),
 								'PRICE_TO' => (strlen(trim($v2['PRICE_TO'][$k3])) > 0 ? floatval($v2['PRICE_TO'][$k3]) : false)
 							);
@@ -111,7 +105,7 @@ class Extrasettings {
 					{
 						if(strlen($v2['FROM'][$k3]) > 0 || strlen($v2['TO'][$k3]) > 0 
 							|| in_array($v2['CELL'][$k3], array('ELSE'))
-							|| in_array($v2['WHEN'][$k3], array('ANY'))
+							|| in_array($v2['WHEN'][$k3], array('ANY', 'EMPTY', 'NOT_EMPTY'))
 							|| in_array($v2['THEN'][$k3], array('NOT_LOAD', 'MATH_ROUND', 'TRANSLIT', 'STRIP_TAGS', 'CLEAR_TAGS')))
 						{
 							$arConversion = array(

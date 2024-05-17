@@ -1,8 +1,4 @@
 <?php
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Text\Encoding;
@@ -360,7 +356,22 @@ class Imap
 		$endCommand = '';
 		if($arCriterias['UNSEEN']=='Y') $command .= ' UNSEEN';
 		if($arCriterias['SINCE']) $command .= sprintf(' SINCE "%s"', $arCriterias['SINCE']);
-		if($this->SupportExtCriteria() && $arCriterias['FROM']) $command .= sprintf(' FROM "%s"', $arCriterias['FROM']);
+		//if($this->SupportExtCriteria() && $arCriterias['FROM']) $command .= sprintf(' FROM "%s"', $arCriterias['FROM']);
+		if($this->SupportExtCriteria() && $arCriterias['FROM']) 
+		{
+			if(strpos($arCriterias['FROM'], ',')!==false)
+			{
+				$arEmail = array_map('trim', explode(',', $arCriterias['FROM']));
+				$subcommand = '';
+				foreach($arEmail as $k=>$email)
+				{
+					if($k==0) $subcommand = sprintf('FROM "%s"', $email);
+					else $subcommand = 'OR '.$subcommand.sprintf(' FROM "%s"', $email);
+				}
+				$command .= ' '.$subcommand;
+			}
+			else $command .= sprintf(' FROM "%s"', $arCriterias['FROM']);
+		}
 		if($this->SupportExtCriteria() && $arCriterias['SUBJECT'])
 		{
 			if(!function_exists('mb_strlen'))
@@ -375,11 +386,24 @@ class Imap
 		}
 		if($this->SupportExtCriteria() && $arCriterias['BODY']) $command .= sprintf(' BODY "%s"', $arCriterias['BODY']);
 		
-		
 		$response = $this->executeCommand($command.$endCommand, $error);
 	
 		if ($error)
 		{
+			if($error == Imap::ERR_COMMAND_REJECTED && !isset($this->recSearch))
+			{
+				$this->recSearch = true;
+				$i = 0;
+				$res = false;
+				while($i < 20 && ($res = $this->getSearch($mailbox, $arCriterias, $error))===false)
+				{
+					usleep(100000);
+					$i++;
+				}
+				if($res!==false) return $res;
+				unset($this->recSearch);
+			}
+			
 			$error = $error == Imap::ERR_COMMAND_REJECTED ? null : $error;
 			$error = static::errorMessage(array(Imap::ERR_SEARCH, $error), $response);
 
@@ -390,7 +414,6 @@ class Imap
 		$regex = '/^ \* \x20 SEARCH ( (?: \x20 \d+ )* ) /ix';
 		foreach ($this->getUntaggedSearch(true) as $item)
 			$arUids = array_values(array_diff(array_map('intval', explode(' ', $item[1][1])), array(0)));
-
 		if(!$this->SupportExtCriteria() && (strlen($arCriterias['FROM']) > 0 || strlen($arCriterias['SUBJECT']) > 0))
 		{
 			$i = count($arUids) - 1;
@@ -399,9 +422,9 @@ class Imap
 				$uid = $arUids[$i];
 				$header = $this->getMessage($mailbox, $uid, 'HEADER', $error);
 				if($header!==false
-					&& (strlen($arCriterias['FROM'])==0 || strpos(ToLower($header->GetHeader('FROM')), ToLower($arCriterias['FROM']))!==false)
+					&& (strlen($arCriterias['FROM'])==0 || strpos(ToLower($header->GetHeader('FROM')), ToLower($arCriterias['FROM']))!==false || (strpos($arCriterias['FROM'], ',')!==false && ($arEmail = array_map('ToLower', array_map('trim', explode(',', $arCriterias['FROM'])))) && in_array(ToLower($header->GetHeader('FROM')), $arEmail)))
 					&& (strlen($arCriterias['SUBJECT'])==0 || strpos(ToLower($header->GetHeader('SUBJECT')), ToLower($arCriterias['SUBJECT']))!==false)
-					&& (strlen($arCriterias['FILENAME'])==0 || $this->getMessageFile($mailbox, $uid, $arCriterias['FILENAME'], array('xml', 'yml', 'zip'), $error)!==false))
+					&& (strlen($arCriterias['FILENAME'])==0 || $arCriterias['FILENAME_REGEXP']=='Y' || $this->getMessageFile($mailbox, $uid, $arCriterias, array('xml', 'yml', 'zip'), $error)!==false))
 				{
 					return array($uid);
 				}
@@ -488,7 +511,8 @@ class Imap
 		{
 			foreach ($list as $i => $item)
 			{
-				if (!preg_match('/ ( ^ | \x20 ) \x5c ( Noinferiors | HasNoChildren ) ( \x20 | $ ) /ix', $item['flags']))
+				//if (!preg_match('/ ( ^ | \x20 ) \x5c ( Noinferiors | HasNoChildren ) ( \x20 | $ ) /ix', $item['flags']))
+				if (!preg_match('/ ( ^ | \x20 ) \x5c ( HasNoChildren ) ( \x20 | $ ) /ix', $item['flags']))
 				{
 					$children = $this->listMailboxes(sprintf('%s%s*', $item['name'], $item['delim']), $error);
 
@@ -606,6 +630,18 @@ class Imap
 
 		return true;
 	}
+	
+	public function moveMessageToFolder($mailbox, $newMailbox, $id, &$error)
+	{
+		$error = null;
+		
+		if (!$this->select($mailbox, $error))
+			return false;
+		
+		$response = $this->executeCommand(sprintf('MOVE %u "%s"', $id, $newMailbox), $error);
+		if(stripos(trim($response), 'OK')===0) return true;
+		return false;
+	}
 
 	public function updateMessageFlags($mailbox, $id, $flags, &$error)
 	{
@@ -661,6 +697,13 @@ class Imap
 
 		if (!$this->select($mailbox, $error))
 			return false;
+		
+		$fullData = false;
+		if($section=='DATA')
+		{
+			$section=='TEXT';
+			$fullData = true;
+		}
 
 		if (!in_array(strtoupper($section), array('HEADER', 'TEXT')))
 			$section = '';
@@ -712,11 +755,22 @@ class Imap
 			list($header, $htmlBody, $textBody, $parts) = \Bitrix\KitImportxml\MailMessage::parseMessage($sbody, $this->options['encoding']);
 			return $header;
 		}
+		
+		if($fullData)
+		{
+			list($header, $htmlBody, $textBody, $parts) = \Bitrix\KitImportxml\MailMessage::parseMessage($sbody, $this->options['encoding']);
+			$htmlBody = (strlen($htmlBody) > 0 ? $htmlBody : $textBody);
+			if(strlen(trim($htmlBody))==0) $htmlBody = \Bitrix\Main\Text\Encoding::convertEncoding(base64_decode($sbody), $this->options['encoding'], \Bitrix\KitImportxml\Utils::getSiteEncoding());
+			return array(
+				'TEXT' => $htmlBody,
+				'DATE' => $header->GetHeader('DATE')
+			);
+		}
 
 		return $sbody;
 	}
 	 
-	public function getMessageFile($mailbox, $id, $filesubname, $arExtensions, &$error)
+	public function getMessageFile($mailbox, $id, $arCriterias, $arExtensions, &$error)
 	{
 		$error = null;
 
@@ -773,7 +827,11 @@ class Imap
 		$this->messageFiles = array();
 		foreach($parts as $part)
 		{			
-			if($part['FILENAME'] && (strlen($filesubname)==0 || strpos(ToLower($part['FILENAME']), ToLower($filesubname))!==false)
+			if($part['FILENAME'] && 
+				(strlen($arCriterias['FILENAME'])==0 || 
+					($arCriterias['FILENAME_REGEXP']!='Y' && strpos(ToLower($part['FILENAME']), ToLower($arCriterias['FILENAME']))!==false) ||
+					($arCriterias['FILENAME_REGEXP']=='Y' && preg_match('/'.ToLower($arCriterias['FILENAME']).'/i', ToLower($part['FILENAME'])))
+				)
 				&& in_array(ToLower(GetFileExtension($part['FILENAME'])), $arExtensions))
 			{
 				$part['DATE'] = $header->GetHeader('DATE');

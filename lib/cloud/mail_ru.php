@@ -1,8 +1,4 @@
 <?php
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 namespace Bitrix\KitImportxml\Cloud;
 
 class MailRu
@@ -41,7 +37,7 @@ class MailRu
 
     function login()
     {
-        $url = 'https://auth.mail.ru/cgi-bin/auth?lang=ru_RU&from=authpopup';
+        /*$url = 'https://auth.mail.ru/cgi-bin/auth?lang=ru_RU&from=authpopup';
 
         $postData = array(
             "page" => "https://cloud.mail.ru/?from=promo",
@@ -50,6 +46,21 @@ class MailRu
             "Login" => $this->user,
             "Password" => $this->pass,
             "new_auth_form" => "1"
+        );*/
+		
+		$this->Get('https://mail.ru/');
+		$url = 'https://auth.mail.ru/cgi-bin/auth';
+        $postData = array(
+			'username'=>$this->user,
+			'Login'=>$this->user,
+			'password'=>$this->pass,
+			'Password'=>$this->pass,
+			'saveauth'=>'1',
+			'new_auth_form'=>'1',
+			'FromAccount'=>'opener=octavius',
+			'allow_external'=>'1',
+			'twoSteps'=>'1',
+			'act_token'=>$this->cookies['act'],
         );
 
         if ($this->Post($url, $postData) !== 'error') {
@@ -65,7 +76,8 @@ class MailRu
 
     private function getToken()
     {
-        $url = 'https://cloud.mail.ru/?from=promo&from=authpopup';
+		//$url = 'https://cloud.mail.ru/?from=promo&from=authpopup';
+        $url = 'https://cloud.mail.ru/?from-page=promo';
 		
         $result = $this->Get($url);
         if ($result !== 'error') {
@@ -83,7 +95,7 @@ class MailRu
 				}
 			}
 			/*/New auth*/
-            if ($token == '' || $downloadToken == '') {				
+            if ($token == '' /*|| $downloadToken == ''*/) {			
 				return false;
             } else {
                 $this->token = $token;
@@ -128,7 +140,15 @@ class MailRu
 	
     function getZipLink($path, $name)
     {
-        $url = 'https://cloud.mail.ru/api/v2/zip';
+		$ob = new \Bitrix\Main\Web\HttpClient(array('socketTimeout'=>10, 'disableSslVerification'=>true));
+		$ob->setHeader('Content-Type', 'application/json;charset=utf-8');
+		$result = $ob->post('https://cloud.mail.ru/api/v3/zip/weblink', '{"weblink_list":["'.trim($path, '/').'"],"name":"'.$name.'"}');
+		$result = \CUtil::JsObjectToPhp($result);
+		if($result['key']) return $result['key'];
+		else return "error";
+		
+		//old version
+        /*$url = 'https://cloud.mail.ru/api/v2/zip';
 
         $postData = ''
                 . 'api=2'
@@ -147,26 +167,29 @@ class MailRu
             return $result['body'];
         } else {
             return "error";
-        }
+        }*/
     }
 	
     function getLinkByMask($path, $pattern)
     {
+		$pattern = rawurldecode($pattern);
 		$link = preg_replace('/^https?:\/\/cloud\.mail\.ru\/public\//i', '/', $path);
 		$url = 'https://cloud.mail.ru/api/v2/folder';
 
 		$postData = ''
 				. 'api=2'
 				. '&build=' . $this->build
-				. '&email=' . $this->user //. '%40mail.ru'
+				. '&email=' . urlencode($this->user) //. '%40mail.ru'
 				. '&token=' . $this->token
-				. '&x-email=' . $this->user //. '%40mail.ru'
+				. '&x-email=' . urlencode($this->user) //. '%40mail.ru'
 				. '&x-page-id=' . $this->x_page_id
 				. '&weblink=' . urlencode(trim($link, '/'))
 				. '&offset=' . 0
 				. '&limit=' . '9999';
 
-		$result = $this->Post($url, $postData);
+		//$result = $this->Post($url, $postData);
+		$result = $this->Get($url.'?'.$postData);
+
 		if ($result !== 'error') {
 			$result = \CUtil::JsObjectToPhp($result);
 			if(is_array($result['body']['list']))
@@ -181,6 +204,42 @@ class MailRu
 			}
 		}
 		return '';
+    }
+	
+	function getFolderFiles($path, $pattern=false)
+    {
+		$link = preg_replace('/^https?:\/\/cloud\.mail\.ru\/public\//i', '/', urldecode($path));
+		$url = 'https://cloud.mail.ru/api/v2/folder';
+		$arResult = array();
+
+		$postData = ''
+				. 'api=2'
+				. '&build=' . $this->build
+				. '&email=' . urlencode($this->user) //. '%40mail.ru'
+				. '&token=' . $this->token
+				. '&x-email=' . urlencode($this->user) //. '%40mail.ru'
+				. '&x-page-id=' . $this->x_page_id
+				. '&weblink=' . urlencode(trim($link, '/'))
+				. '&offset=' . 0
+				. '&limit=' . '9999';
+
+		//$result = $this->Post($url, $postData);
+		$result = $this->Get($url.'?'.$postData);
+
+		if ($result !== 'error') {
+			$result = \CUtil::JsObjectToPhp($result);
+			if(is_array($result['body']['list']))
+			{
+				foreach($result['body']['list'] as $arItem)
+				{
+					if($arItem['type']=='file' && ($pattern===false || fnmatch($pattern, $arItem['name'], GLOB_BRACE)))
+					{
+						$arResult[] = $arItem['weblink'];
+					}
+				}
+			}
+		}
+		return $arResult;
     }
 	
 	public function download(&$tmpPath, $path, $fragment='')
@@ -202,11 +261,12 @@ class MailRu
 				{
 					return true;
 				}
+				$link = $link2;
 			}
 			
 			//$zipLink = 'https://cloud.mail.ru'.$this->getZipLink($link, 'folder').'?key='.$this->downloadToken;
 			$zipLink = $this->getZipLink($link, 'folder').'?key='.$this->downloadToken;
-			$tmpPath = \Bitrix\KdaImportexcel\Cloud::GetTmpFilePath('folder.zip');
+			$tmpPath = \Bitrix\KitImportxml\Cloud::GetTmpFilePath('folder.zip');
 			if($this->DownloadFile($tmpPath, $zipLink))
 			{
 				return true;
@@ -215,21 +275,30 @@ class MailRu
 		return false;
 	}
 	
-	public function DownloadFile($tmpPath, $link)
+	public function DownloadFile(&$tmpPath, $link)
 	{
-		$client = new \Bitrix\Main\Web\HttpClient(array('socketTimeout'=>10, 'disableSslVerification'=>true));
+		$loc = $link;
+		$client = new \Bitrix\Main\Web\HttpClient(array('socketTimeout'=>10, 'disableSslVerification'=>true, 'redirect'=>false));
 		$client->setHeader('User-Agent', 'BitrixSM HttpClient class');
-		
-		if(is_callable(array($client, 'head')))
+		while(strlen($loc) > 0)
 		{
-			$headers = $client->head($link);
+			if(is_callable(array($client, 'head')))
+			{
+				$headers = $client->head($loc);
+			}
+			else
+			{
+				$client->get($loc);
+				$headers = $client->getHeaders();
+			}
+			if(in_array($client->getStatus(), array(301, 302)))
+			{
+				$loc = $link = $headers->get('location');
+			}
+			else $loc = '';
 		}
-		else
-		{
-			$client->get($link);
-			$headers = $client->getHeaders();
-		}
-		if($client->getStatus()==200)
+
+		if($client && $client->getStatus()==200)
 		{
 			$fn = '';
 			if($hcd = $headers->get('content-disposition'))
@@ -237,11 +306,21 @@ class MailRu
 				$arParts = preg_grep('/^filename=/i', array_map('trim', explode(';', $hcd)));
 				if(count($arParts) > 0)
 				{
-					$fn = urldecode(trim(substr(current($arParts), 9), ' "'));
+					$fn = trim(substr(current($arParts), 9), ' "');
+				}
+				else
+				{
+					$fn = end(explode('/', current(explode('?', $link))));
+				}
+				
+				if(strlen($fn) > 0)
+				{
+					$fn = urldecode($fn);
 					if((!defined('BX_UTF') || !BX_UTF) && \CUtil::DetectUTF8($fn))
 					{
 						$fn = \Bitrix\Main\Text\Encoding::convertEncoding($fn, 'UTF-8', 'CP1251');
 					}
+					$tmpPath = \Bitrix\KitImportxml\Cloud::GetTmpFilePath($fn);
 				}
 			}
 			if($client->download($link, $tmpPath))
@@ -298,7 +377,7 @@ class MailRu
 	{
 		$client = new \Bitrix\Main\Web\HttpClient(array('socketTimeout'=>10, 'disableSslVerification'=>true, 'redirect'=>$redirect));
 		$client->setHeader('User-Agent', 'BitrixSM HttpClient class');
-		$client->setHeader('Cookie', implode('; ', array_map(create_function('$k,$v', 'return $k."=".$v;'),array_keys($this->cookies), $this->cookies)));
+		$client->setHeader('Cookie', implode('; ', array_map(array(__CLASS__, 'GetCookiesStr'),array_keys($this->cookies), $this->cookies)));
 		//$client->setCookies($this->cookies);
 		return $client;
 	}
@@ -326,7 +405,7 @@ class MailRu
         $start = strpos($str, '"x-page-id": "');
         if ($start > 0) {
             $start = $start + 14;
-            $str_out = substr($str, $start, 11);
+            $str_out = substr($str, $start, strpos(substr($str, $start), '"'));
             return $str_out;
         } else {
             return '';
@@ -352,7 +431,12 @@ class MailRu
 
     private static function GetUploadUrlFromText($str)
     {
-        $start = strpos($str, 'mail.ru/upload/"');
+        if(preg_match('/"public_upload":[^\]]*"url":[^\]]*"([^"]*)"/Uis', $str, $m)) {
+            return $m[1];
+        } else {
+            return '';
+        }
+        /*$start = strpos($str, 'mail.ru/upload/"');
         if ($start > 0) {
             $start1 = $start - 50;
             $end1 = $start + 15;
@@ -364,7 +448,7 @@ class MailRu
             return $str_out;
         } else {
             return '';
-        }
+        }*/
     }
 	
     private static function GetWeblinkGetFromText($str)
@@ -375,4 +459,9 @@ class MailRu
             return '';
         }
     }
+	
+	public static function GetCookiesStr($k, $v)
+	{
+		return $k."=".$v;
+	}
 }

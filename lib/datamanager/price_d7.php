@@ -1,8 +1,4 @@
 <?php
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 namespace Bitrix\KitImportxml\DataManager;
 
 use Bitrix\Main\Loader;
@@ -22,7 +18,7 @@ class PriceD7 extends Price
 	public function GetList($arOrder = array(), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
 	{
 		$arParams = array();
-		if(!empty($arOrder)) $arParams['order'] = $arParams;
+		if(!empty($arOrder)) $arParams['order'] = $arOrder;
 		if(!empty($arFilter)) $arParams['filter'] = $arFilter;
 		if(is_array($arGroupBy) && !empty($arGroupBy)) $arParams['group'] = $arGroupBy;
 		if(is_array($arNavStartParams) && !empty($arNavStartParams))
@@ -31,6 +27,20 @@ class PriceD7 extends Price
 		}
 		if(!empty($arSelectFields)) $arParams['select'] = array_intersect($arSelectFields, $this->priceFields);
 		return \Bitrix\Catalog\Model\Price::getList($arParams);
+	}
+	
+	public function CheckExceptions($ex, $last=true)
+	{
+		if(is_callable(array('\Bitrix\Main\Diag\ExceptionHandlerFormatter', 'format')) && ($errorText = \Bitrix\Main\Diag\ExceptionHandlerFormatter::format($ex)))
+		{
+			if(!$last && mb_strpos($errorText, 'Deadlock found when trying to get lock')!==false)
+			{
+				return 'iteration';
+			}
+			else throw new \Exception($errorText);
+		}
+		else throw new \Exception($ex->getMessage());
+		return false;
 	}
 	
 	public function Add($arFields, $boolRecalc = false)
@@ -58,16 +68,34 @@ class PriceD7 extends Price
 		{
 			if(!in_array($k, $this->priceFields)) unset($arFields[$k]);
 		}
+		if(isset($arFields['EXTRA_ID']) && (int)$arFields['EXTRA_ID'] <= 0) $arFields['EXTRA_ID'] = null;
 		if(isset($arFields['EXTRA_ID']) && isset($arFields['CURRENCY'])) unset($arFields['CURRENCY']);
 		if(isset($arFields['QUANTITY_FROM']) && (int)$arFields['QUANTITY_FROM'] <= 0) $arFields['QUANTITY_FROM'] = null;
 		if(isset($arFields['QUANTITY_TO']) && (int)$arFields['QUANTITY_TO'] <= 0) $arFields['QUANTITY_TO'] = null;
 		$arFields = array('fields' => $arFields);
 		if($boolRecalc) $arFields['actions']['RECOUNT_PRICES'] = true;
-		if($result = \Bitrix\Catalog\Model\Price::update($ID, $arFields))
+
+		$result = false;
+		$action = 'iteration';
+		$i = 10;
+		while($i > 0 && $action=='iteration')
+		{
+			$action = '';
+			$i--;
+			try{
+				$result = \Bitrix\Catalog\Model\Price::update($ID, $arFields);
+				return $result->isSuccess();
+			}catch(\Exception $ex){
+				$action = $this->CheckExceptions($ex, (bool)($i==0));
+			}
+		}
+		return $result;
+		
+		/*if($result = \Bitrix\Catalog\Model\Price::update($ID, $arFields))
 		{
 			return $result->isSuccess();
 		}
-		else return false;
+		else return false;*/
 	}
 	
 	public function Delete($ID)

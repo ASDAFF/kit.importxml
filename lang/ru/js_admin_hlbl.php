@@ -1,14 +1,11 @@
 <?
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 $MESS['KIT_IX_GROUP_ELEMENT'] = "Элемент";
 $MESS['KIT_IX_GROUP_OFFER'] = "Торговое предложение";
 $MESS['KIT_IX_GROUP_SECTION'] = "Раздел";
 $MESS['KIT_IX_GROUP_SUBSECTION'] = "Подраздел";
 $MESS['KIT_IX_GROUP_PROPERTY'] = "Свойство элемента";
 $MESS['KIT_IX_ADD_FIELD'] = "Добавить поле";
+$MESS['KIT_IX_ADD_FIELD_COPY_SETTING'] = "При нажатии клавиши Shift будут\r\nскопированы настройки из предыдущего поля";
 $MESS['KIT_IX_REMOVE_FIELD'] = "Удалить поле";
 $MESS['KIT_IX_FIELD_SETTINGS'] = "Настройки поля";
 $MESS['KIT_IX_SHOW_ALL_ATTRIBUTES'] = "Показать все значения";
@@ -26,9 +23,12 @@ $MESS['KIT_IX_INSERT_ALL_FIND_VALUES'] = "Подставить все найде
 $MESS['KIT_IX_POPUP_SOURCE_EMAIL'] = "Настройки импорта с Email-адреса";
 $MESS['KIT_IX_SOURCE_EMAIL_SUCCESS'] = "Успешно";
 $MESS['KIT_IX_SOURCE_EMAIL_FAIL'] = "Ошибка при подключении";
+$MESS['KIT_IX_SOURCE_EMAIL_FAIL_NOTE'] = "<b>Обратите внимание!</b> У Яндекса, mail.ru и ряда других почтовых сервисов доступ к imap-серверу по основному паролю может быть запрещён. В этом случае нужно создать в настройках аккаунта <b>пароль приложения</b> и использовать его для подключения.";
 $MESS['KIT_IX_POPUP_SOURCE_LINKAUTH'] = "Настройки импорта с авторизацией";
 $MESS['KIT_IX_SOURCE_LAUTH_SUCCESS'] = "Загрузка прошла успешно";
 $MESS['KIT_IX_SOURCE_LAUTH_FAIL'] = "Ошибка при загрузке";
 $MESS['KIT_IX_POPUP_MISSINGELEM_FIELDS_TITLE'] = "Значения полей для отсутствующих в файле элементов";
 $MESS['KIT_IX_POPUP_MISSINGOFFER_FIELDS_TITLE'] = "Значения полей для отсутствующих в файле торговых предложений";
+$MESS['KIT_IX_POPUP_MISSINGELEM_FILTER_TITLE'] = "Фильтр для отсутствующих в файле элементов";
+$MESS["KIT_IX_CRON_CHOOSE_PROFILE"] = "Выберите профиль";
 ?>

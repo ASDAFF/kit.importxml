@@ -1,10 +1,11 @@
 <?
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
-use Bitrix\Main\Localization\Loc;
-$module_id = 'kit.importxml';
+use Bitrix\Main\Localization\Loc,
+	Bitrix\Main\Loader;
+$moduleId = $module_id = 'kit.importxml';
+$moduleJsId = str_replace('.', '_', $moduleId);
+$formName = 'kit_importxml_settings';
+Loader::includeModule($moduleId);
+CJSCore::Init(array($moduleJsId));
 
 if($USER->IsAdmin())
 {
@@ -42,7 +43,7 @@ if($USER->IsAdmin())
 		{
 			foreach($_POST['SETTINGS'] as $k=>$v)
 			{
-				COption::SetOptionString($module_id, $k, $v);
+				COption::SetOptionString($module_id, $k, (is_array($v) ? serialize($v) : $v));
 			}
 
 			//LocalRedirect($APPLICATION->GetCurPage().'?lang='.LANGUAGE_ID.'&mid_menu=1&mid='.$module_id.'&'.$tabControl->ActiveTabParam());
@@ -52,7 +53,7 @@ if($USER->IsAdmin())
 
 	$tabControl->Begin();
 	?>
-	<form method="POST" action="<?echo $APPLICATION->GetCurPage()?>?lang=<?echo LANGUAGE_ID?>&mid_menu=1&mid=<?=$module_id?>" name="essol_importxml_settings">
+	<form method="POST" action="<?echo $APPLICATION->GetCurPage()?>?lang=<?echo LANGUAGE_ID?>&mid_menu=1&mid=<?=$module_id?>" name="<?echo $formName;?>">
 	<? echo bitrix_sessid_post();
 
 	$tabControl->BeginNextTab();
@@ -116,6 +117,12 @@ if($USER->IsAdmin())
 			<input type="checkbox" name="SETTINGS[CRON_REMOVE_LOADED_FILE]" value="Y" <?if(COption::GetOptionString($module_id, 'CRON_REMOVE_LOADED_FILE', 'N')=='Y') echo 'checked';?>>
 		</td>
 	</tr>
+	<tr>
+		<td><? echo Loc::getMessage('KIT_IX_OPTIONS_CRON_USER'); ?> <span id="hint_CRON_USER"></span><script>BX.hint_replace(BX('hint_CRON_USER'), '<?echo Loc::getMessage("KIT_IX_OPTIONS_CRON_USER_HINT"); ?>');</script></td>
+		<td>
+			<?echo FindUserID('SETTINGS[CRON_USER_ID]', COption::GetOptionString($module_id, 'CRON_USER_ID', ''), '', $formName);?>
+		</td>
+	</tr>
 	
 	<tr class="heading">
 		<td colspan="2"><? echo Loc::getMessage('KIT_IX_OPTIONS_NOTIFY'); ?></td>
@@ -148,6 +155,26 @@ if($USER->IsAdmin())
 			<input type="checkbox" name="SETTINGS[NOTIFY_END_IMPORT]" value="Y" <?if(COption::GetOptionString($module_id, 'NOTIFY_END_IMPORT', 'N')=='Y') echo 'checked';?>>
 		</td>
 	</tr>
+	<tr>
+		<td><? echo Loc::getMessage('KIT_IX_OPTIONS_NOTIFY_BREAK_IMPORT'); ?>:</td>
+		<td>
+			<input type="hidden" name="SETTINGS[NOTIFY_BREAK_IMPORT]" value="N">
+			<input type="checkbox" name="SETTINGS[NOTIFY_BREAK_IMPORT]" value="Y" <?if(COption::GetOptionString($module_id, 'NOTIFY_BREAK_IMPORT', 'N')=='Y') echo 'checked';?>>
+		</td>
+	</tr>
+	<tr>
+		<td><? echo Loc::getMessage('KIT_IX_OPTIONS_NOTIFY_BREAK_IMPORT_NC'); ?>:</td>
+		<td>
+			<?$val = COption::GetOptionString($moduleId, 'NOTIFY_BREAK_IMPORT_NC', 'N');?>
+			<select name="SETTINGS[NOTIFY_BREAK_IMPORT_NC]" onchange="document.getElementById('notify_break_import_nc_dh').style.display = (this.value=='D' || this.value=='H' ? 'inline' : 'none');">
+				<option value="N"><? echo Loc::getMessage('KIT_IX_OPTIONS_NOTIFY_BREAK_IMPORT_NC_OFF'); ?></option>
+				<option value="Y"<?if($val=='Y'){echo ' selected';}?>><? echo Loc::getMessage('KIT_IX_OPTIONS_NOTIFY_BREAK_IMPORT_NC_ON'); ?></option>
+				<option value="D"<?if($val=='D'){echo ' selected';}?>><? echo Loc::getMessage('KIT_IX_OPTIONS_NOTIFY_BREAK_IMPORT_NC_DAYS'); ?></option>
+				<option value="H"<?if($val=='H'){echo ' selected';}?>><? echo Loc::getMessage('KIT_IX_OPTIONS_NOTIFY_BREAK_IMPORT_NC_HOURS'); ?></option>
+			</select>
+			<input id="notify_break_import_nc_dh" type="text" name="SETTINGS[NOTIFY_BREAK_IMPORT_NC_DH]" value="<?echo htmlspecialcharsex(COption::GetOptionString($moduleId, 'NOTIFY_BREAK_IMPORT_NC_DH'));?>"<?if(!in_array($val, array('D', 'H'))){echo ' style="display: none;"';}?> size="4">
+		</td>
+	</tr>
 	
 	<tr class="heading">
 		<td colspan="2"><? echo Loc::getMessage('KIT_IX_OPTIONS_DISCOUNT'); ?></td>
@@ -161,6 +188,50 @@ if($USER->IsAdmin())
 	</tr>
 	
 	<tr class="heading">
+		<td colspan="2"><? echo Loc::getMessage('KIT_IX_OPTIONS_PROXY'); ?></td>
+	</tr>
+	<tr>
+		<td><? echo Loc::getMessage('KIT_IX_OPTIONS_PROXY_HOST'); ?>:</td>
+		<td>
+			<input type="text" name="SETTINGS[PROXY_HOST]" value="<?echo htmlspecialcharsex(COption::GetOptionString($module_id, 'PROXY_HOST', ''))?>" size="35">
+		</td>
+	</tr>
+	<tr>
+		<td><? echo Loc::getMessage('KIT_IX_OPTIONS_PROXY_PORT'); ?>:</td>
+		<td>
+			<input type="text" name="SETTINGS[PROXY_PORT]" value="<?echo htmlspecialcharsex(COption::GetOptionString($module_id, 'PROXY_PORT', ''))?>" size="35">
+		</td>
+	</tr>
+	<tr>
+		<td><? echo Loc::getMessage('KIT_IX_OPTIONS_PROXY_USER'); ?>:</td>
+		<td>
+			<input type="text" name="SETTINGS[PROXY_USER]" value="<?echo htmlspecialcharsex(COption::GetOptionString($module_id, 'PROXY_USER', ''))?>" size="35">
+		</td>
+	</tr>
+	<tr>
+		<td><? echo Loc::getMessage('KIT_IX_OPTIONS_PROXY_PASSWORD'); ?>:</td>
+		<td>
+			<input type="text" name="SETTINGS[PROXY_PASSWORD]" value="<?echo htmlspecialcharsex(COption::GetOptionString($module_id, 'PROXY_PASSWORD', ''))?>" size="35">
+		</td>
+	</tr>
+	
+	<tr class="heading">
+		<td colspan="2"><? echo Loc::getMessage('KIT_IX_OPTIONS_EXTERNAL_TRANSLATE'); ?></td>
+	</tr>
+	<tr>
+		<td><? echo Loc::getMessage('KIT_IX_OPTIONS_TRANSLATE_YANDEX'); ?>:</td>
+		<td>
+			<input type="text" name="SETTINGS[TRANSLATE_YANDEX_KEY]" value="<?echo htmlspecialcharsex(COption::GetOptionString($module_id, 'TRANSLATE_YANDEX_KEY', ''))?>" size="35">
+		</td>
+	</tr>
+	<tr>
+		<td><? echo Loc::getMessage('KIT_IX_OPTIONS_TRANSLATE_GOOGLE'); ?>:</td>
+		<td>
+			<input type="text" name="SETTINGS[TRANSLATE_GOOGLE_KEY]" value="<?echo htmlspecialcharsex(COption::GetOptionString($module_id, 'TRANSLATE_GOOGLE_KEY', ''))?>" size="35">
+		</td>
+	</tr>
+	
+	<tr class="heading">
 		<td colspan="2"><? echo Loc::getMessage('KIT_IX_OPTIONS_EXTERNAL_SERVICES'); ?></td>
 	</tr>
 	<tr>
@@ -169,10 +240,23 @@ if($USER->IsAdmin())
 	<tr>
 		<td><? echo Loc::getMessage('KIT_IX_OPTIONS_YANDEX_DISC_APIKEY'); ?>:</td>
 		<td>
+			<a name="yandex_token" style="position:absolute; margin-top: -140px;" href="#"></a>
 			<input type="text" name="SETTINGS[YANDEX_APIKEY]" value="<?echo htmlspecialcharsex(COption::GetOptionString($module_id, 'YANDEX_APIKEY', ''))?>" size="35">
 			&nbsp; <a href="https://oauth.yandex.ru/authorize?response_type=token&client_id=30e9fb3edb184522afaf5e72ee255cbc" target="_blank"><? echo Loc::getMessage('KIT_IX_OPTIONS_YANDEX_DISC_APIKEY_GET'); ?></a>
 		</td>
 	</tr>
+	
+	<tr>
+		<td colspan="2" align="center"><br><b><? echo Loc::getMessage('KIT_IX_OPTIONS_GOOGLE_DRIVE'); ?></b></td>
+	</tr>
+	<tr>
+		<td><? echo Loc::getMessage('KIT_IX_OPTIONS_GOOGLE_DRIVE_APIKEY'); ?>:</td>
+		<td>
+			<input type="text" name="SETTINGS[GOOGLE_APIKEY]" value="<?echo htmlspecialcharsex(COption::GetOptionString($module_id, 'GOOGLE_APIKEY', ''))?>" size="35">
+			&nbsp; <a href="https://accounts.google.com/o/oauth2/auth?client_id=685892932415-87toodq5o9e4vq8pqeh1es86vlcf3oi7.apps.googleusercontent.com&redirect_uri=https://kitutions.su/marketplace/oauth.php&access_type=offline&response_type=code&scope=https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email" target="_blank"><? echo Loc::getMessage('KIT_IX_OPTIONS_GOOGLE_DRIVE_APIKEY_GET'); ?></a>
+		</td>
+	</tr>
+	
 	<tr>
 		<td colspan="2" align="center"><br><b><? echo Loc::getMessage('KIT_IX_OPTIONS_CLOUD_MAILRU'); ?></b></td>
 	</tr>
@@ -188,6 +272,128 @@ if($USER->IsAdmin())
 			<input type="text" name="SETTINGS[CLOUD_MAILRU_PASSWORD]" value="<?echo htmlspecialcharsex(COption::GetOptionString($module_id, 'CLOUD_MAILRU_PASSWORD', ''))?>" size="35">
 		</td>
 	</tr>
+	
+	<?
+	if(!Loader::includeModule('catalog') && Loader::includeModule('iblock'))
+	{
+		$fl = new \Bitrix\KitImportxml\FieldList(array());
+		$arIblocks = $fl->GetIblocks();
+		$arIblockNames = array();
+		foreach($arIblocks as $type)
+		{
+			if(!is_array($type['IBLOCKS'])) continue;
+			foreach($type['IBLOCKS'] as $iblock)
+			{
+				$arIblockNames[$iblock["ID"]] = $iblock["NAME"];
+			}
+		}
+		$arProps = array();
+		$dbRes = CIBlockProperty::GetList(array('IBLOCK_ID'=>'ASC', 'SORT'=>'ASC', 'ID'=>'ASC'), array('PROPERTY_TYPE'=>'E', 'ACTIVE'=>'Y'));
+		while($arr = $dbRes->Fetch())
+		{
+			if(!isset($arProps[$arr['IBLOCK_ID']]))
+			{
+				$arProps[$arr['IBLOCK_ID']] = array('NAME' => $arIblockNames[$arr['IBLOCK_ID']], 'PROPS' => array());
+			}
+			$arProps[$arr['IBLOCK_ID']]['PROPS'][$arr['ID']] = $arr;
+		}
+		$arRels = unserialize(COption::GetOptionString($moduleId, 'CATALOG_RELS'));
+		if(!is_array($arRels)) $arRels = array();
+		if(count($arRels)==0) $arRels[] = array('IBLOCK_ID'=>'', 'OFFERS_IBLOCK_ID'=>'', 'OFFERS_PROP_ID'=>'');
+		?>
+		<tr class="heading">
+			<td colspan="2"><? echo Loc::getMessage('KIT_IX_OPTIONS_CATALOG_RELS');?></td>
+		</tr>
+		
+		<tr>
+			<td colspan="2" align="center">
+			<table border="1" cellpadding="5" class="kit-ix-options-rels-table">
+				<tr>
+					<th><?echo GetMessage("KIT_IX_OPTIONS_IBLOCK_PRODUCTS");?></th>
+					<th><?echo GetMessage("KIT_IX_OPTIONS_IBLOCK_OFFERS");?></th>
+					<th><?echo GetMessage("KIT_IX_OPTIONS_IBLOCK_OFFERS_PROP");?></th>
+					<th></th>
+				</tr>
+				<?foreach($arRels as $relKey=>$arRel){?>
+				<tr data-index="<?echo $relKey?>">
+					<td>
+						<select name="SETTINGS[CATALOG_RELS][<?echo htmlspecialcharsbx($relKey)?>][IBLOCK_ID]">
+							<option value=""><?echo GetMessage("KIT_IX_OPTIONS_NO_CHOOSEN"); ?></option>
+							<?
+							foreach($arIblocks as $type)
+							{
+								?><optgroup label="<?echo $type['NAME']?>"><?
+								foreach($type['IBLOCKS'] as $iblock)
+								{
+									?><option value="<?echo $iblock["ID"];?>" <?if($iblock["ID"]==$arRel['IBLOCK_ID']){echo 'selected';}?>><?echo htmlspecialcharsbx($iblock["NAME"].' ['.$iblock["ID"].']'); ?></option><?
+								}
+								?></optgroup><?
+							}
+							?>
+						</select>
+					</td>
+					<td>
+						<select name="SETTINGS[CATALOG_RELS][<?echo htmlspecialcharsbx($relKey)?>][OFFERS_IBLOCK_ID]" onchange="KdaOptions.ReloadProps(this);">
+							<option value=""><?echo GetMessage("KIT_IX_OPTIONS_NO_CHOOSEN"); ?></option>
+							<?
+							foreach($arIblocks as $type)
+							{
+								?><optgroup label="<?echo $type['NAME']?>"><?
+								foreach($type['IBLOCKS'] as $iblock)
+								{
+									?><option value="<?echo $iblock["ID"];?>" <?if($iblock["ID"]==$arRel['OFFERS_IBLOCK_ID']){echo 'selected';}?>><?echo htmlspecialcharsbx($iblock["NAME"].' ['.$iblock["ID"].']'); ?></option><?
+								}
+								?></optgroup><?
+							}
+							?>
+						</select>
+					</td>
+					<td>
+						<select name="SETTINGS[CATALOG_RELS][<?echo htmlspecialcharsbx($relKey)?>][OFFERS_PROP_ID]">
+							<option value=""><?echo GetMessage("KIT_IX_OPTIONS_NO_CHOOSEN"); ?></option>
+							<?
+							foreach($arProps as $iblockId=>$iblock)
+							{
+								if($arRel['OFFERS_IBLOCK_ID'] > 0 && $iblockId!=$arRel['OFFERS_IBLOCK_ID']) continue;
+								?><optgroup label="<?echo $iblock['NAME']?>" data-id="<?echo $iblockId;?>"><?
+								foreach($iblock['PROPS'] as $prop)
+								{
+									?><option value="<?echo $prop["ID"];?>" <?if($prop["ID"]==$arRel['OFFERS_PROP_ID']){echo 'selected';}?>><?echo htmlspecialcharsbx($prop["NAME"].' ['.$prop["ID"].']'); ?></option><?
+								}
+								?></optgroup><?
+							}
+							?>
+						</select>
+					</td>
+					<td>
+						<a href="javascript:void(0)" onclick="KitIxOptions.RemoveRel(this);" class="kit-ix-options-rels-delete" title="<?echo GetMessage("KIT_IX_OPTIONS_REMOVE"); ?>"></a>
+					</td>
+				</tr>
+				<?}?>
+			</table>
+			<div class="kit-ix-options-rels">
+				<select name="OFFERS_PROP_ID">
+					<option value=""><?echo GetMessage("KIT_IX_OPTIONS_NO_CHOOSEN"); ?></option>
+					<?
+					foreach($arProps as $iblockId=>$iblock)
+					{
+						?><optgroup label="<?echo $iblock['NAME']?>" data-id="<?echo $iblockId;?>"><?
+						foreach($iblock['PROPS'] as $prop)
+						{
+							?><option value="<?echo $prop["ID"];?>" <?if($prop["ID"]==$iblockId){echo 'selected';}?>><?echo htmlspecialcharsbx($prop["NAME"].' ['.$prop["ID"].']'); ?></option><?
+						}
+						?></optgroup><?
+					}
+					?>
+				</select>
+				<a href="javascript:void(0)" onclick="KitIxOptions.AddRels(this);"><?echo GetMessage("KIT_IX_OPTIONS_ADD_RELS"); ?></a>
+			</div>
+			</td>
+		</tr>
+		<?
+	}
+	?>
+	
 	<?$tabControl->BeginNextTab();?>
 	<?require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/admin/group_rights.php");?>
 	<?

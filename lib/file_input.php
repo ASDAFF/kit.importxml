@@ -1,8 +1,4 @@
 <?
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Loader,
@@ -19,6 +15,7 @@ class CFileInput
 		$bUseCloud = false,
 		$bUseEmail = false,
 		$bUseLinkauth = false,
+		$bUseNotUpdate = false,
 		$bShowDescInput = false,
 		$bShowDelInput = true,
 		$curFileIds = array(),
@@ -50,6 +47,7 @@ class CFileInput
 		self::$bUseCloud = false;
 		self::$bUseEmail = false;
 		self::$bUseLinkauth = false;
+		self::$bUseNotUpdate = false;
 		self::$bShowDelInput = false;
 		self::$bShowDescInput = false;
 		self::$bViewMode = false;
@@ -91,6 +89,7 @@ class CFileInput
 		$cloudInput = $inputs['cloud'] === true ? array() : $inputs['cloud'];
 		$emailInput = $inputs['email'] === true ? array() : $inputs['email'];
 		$linkauthInput = $inputs['linkauth'] === true ? array() : $inputs['linkauth'];
+		$notUpdateInput = $inputs['not_update'] === true ? array() : $inputs['not_update'];
 
 		self::Init($showInfo, $strInputName);
 
@@ -146,6 +145,14 @@ class CFileInput
 			if(!array_key_exists("NAME", $linkauthInput))
 				$linkauthInput["NAME"] = $strInputName;
 		}
+		
+		//7. Use not update
+		if(is_array($notUpdateInput))
+		{
+			self::$bUseNotUpdate = true;
+			if(!array_key_exists("NAME", $notUpdateInput))
+				$notUpdateInput["NAME"] = $strInputName;
+		}
 
 		if($inputs['description'] !== false)
 		{
@@ -195,6 +202,7 @@ class CFileInput
 		if (!self::$bViewMode || self::$bFileExists)
 		{
 			$inputs = array(
+				'not_update' => self::$bUseNotUpdate,
 				'upload' => self::$bUseUpload,
 				'medialib' => self::$bUseMedialib,
 				'file_dialog' => self::$bUseFileDialog,
@@ -392,6 +400,11 @@ class CFileInput
 		self::$menuNew = array();
 		self::$menuExist = array();
 
+		if ($inputs['not_update'])
+		{
+			self::$menuNew[] = array("ID" => "not_update", "GLOBAL_ICON" => "adm-menu-upload-not-update", "TEXT" => GetMessage("KIT_IX_ADM_FILE_NEW_NOT_UPDATE"), "ONCLICK" => "EProfile.SetNotUpdataFile(this)");
+			self::$menuExist[] = array("ID" => "not_update", "GLOBAL_ICON" => "adm-menu-upload-not-update", "TEXT" => GetMessage("KIT_IX_ADM_FILE_NEW_NOT_UPDATE"), "ONCLICK" => "EProfile.SetNotUpdataFile(this)");
+		}
 		if ($inputs['upload'])
 		{
 			self::$menuNew[] = array("ID" => "upload", "GLOBAL_ICON" => "adm-menu-upload-pc", "TEXT" => GetMessage("KIT_IX_ADM_FILE_UPLOAD"), "CLOSE_ON_CLICK" => false);
@@ -525,9 +538,16 @@ class CFileInput
 				$hint .= '<span class="adm-input-file-hint-row">'.GetMessage('KIT_IX_ADM_FILE_INFO_DIM').':&nbsp;&nbsp;'.$arFile['WIDTH'].'x'.$arFile['HEIGHT'].'</span>';
 			if ($sImagePath != '')
 				$hint .= '<span class="adm-input-file-hint-row">'.GetMessage('KIT_IX_ADM_FILE_INFO_LINK').':&nbsp;&nbsp;<a href="'.\CHTTP::urnEncode($sImagePath, "UTF-8").'">'.htmlspecialcharsbx($sImagePath).'</a></span>';
+			
+			if (is_callable(array($arFile['TIMESTAMP_X'], 'toString')))
+				$hint .= '<span class="adm-input-file-hint-row">'.GetMessage('KIT_IX_ADM_FILE_INFO_DATETIME').':&nbsp;&nbsp;'.$arFile['TIMESTAMP_X']->toString().'</span>';
+			elseif (is_string($arFile['TIMESTAMP_X']) && strlen($arFile['TIMESTAMP_X']) > 0)
+				$hint .= '<span class="adm-input-file-hint-row">'.GetMessage('KIT_IX_ADM_FILE_INFO_DATETIME').':&nbsp;&nbsp;'.$arFile['TIMESTAMP_X'].'</span>';
 
 			if (!self::$bShowDescInput && $arFile['DESCRIPTION'] != "")
 				$hint .= '<span class="adm-input-file-hint-row">'.GetMessage('KIT_IX_ADM_FILE_DESCRIPTION').':&nbsp;&nbsp;'.htmlspecialcharsbx($arFile['DESCRIPTION']).'</span>';
+			
+			$hint .= '<span class="adm-input-file-hint-row"><a href="/bitrix/admin/fileman_file_download.php?path='.htmlspecialcharsbx($sImagePath).'&lang='.LANGUAGE_ID.'&hash='.md5(mt_rand()).'">'.GetMessage('KIT_IX_ADM_FILE_DOWNLOAD_LINK').'</a></span>';
 		}
 		?><span class="adm-input-file-exist-cont" id="<?= self::$jsId?>_file_cont_<?= $ind?>">
 		<div class="adm-input-file-ex-wrap<?if(self::$bMultiple){echo ' adm-input-cont-bordered';}?>">

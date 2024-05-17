@@ -1,8 +1,8 @@
 <?
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
+$MESS['IBLOCK_BAD_FILE_ERROR'] = "Произошла ошибка при загрузке файла на сервер.";
+$MESS['IBLOCK_BAD_FILE_NOT_FOUND'] = "Файл не найден.";
+$MESS['IBLOCK_BAD_FILE_NOT_PICTURE'] = "Не графический файл.";
+$MESS['IBLOCK_ERR_BAD_FILE_UNSUPPORTED'] = "Изменение размера картинки возможно только для файлов JPEG, GIF, PNG или WEBP.";
 $MESS['KIT_IX_NOT_SET_UID'] = "Не указано поле для идентификации элемента (поле %s)";
 $MESS['KIT_IX_NOT_SET_SECTION_UID'] = "Не указано поле для идентификации раздела (поле %s)";
 $MESS['KIT_IX_NOT_SET_FIELD'] = "Не указано поле %s";
@@ -14,8 +14,8 @@ $MESS['KIT_IX_FIELD_VAL_N'] = "0,нет,Нет,НЕТ,not,n,false";
 $MESS['KIT_IX_FIELD_VAL_Y'] = "1,да,Да,ДА,yes,y,true";
 $MESS['KIT_IX_ADD_SECTION_ERROR'] = "Ошибка при создании раздела '%s': %s (%s)";
 $MESS['KIT_IX_NOT_SAVE_SECTION_SEPARATE'] = "Ошибка при сохранении раздела (%s)";
-$MESS['KIT_IX_NEW_ELEMENT_WITH_ID'] = "Элемент с ID=\"%s\" не существует и его создание невозможно. Используйте Внешний код вместо ID (%s)";
-$MESS['KIT_IX_NEW_OFFER_WITH_ID'] = "Торговое предложение с ID=\"%s\" не существует и его создание невозможно. Используйте Внешний код вместо ID (%s)";
+$MESS['KIT_IX_NEW_ELEMENT_WITH_ID'] = "Не удается создать элемент с ID=\"%s\". %s";
+$MESS['KIT_IX_NEW_OFFER_WITH_ID'] = "Не удается создать торговое предложение с ID=\"%s\". %s";
 $MESS['KIT_IX_DISCOUNT_PRODUCT_GIFT'] = "Подарок к товару";
 $MESS['KIT_IX_DISCOUNT_NAME_TYPE_P'] = "Скидка";
 $MESS['KIT_IX_DISCOUNT_NAME_TYPE_F'] = "Скидка";
@@ -25,4 +25,10 @@ $MESS['KIT_IX_PRODUCTS_TAG_1C'] = "Товары";
 $MESS['KIT_IX_PRODUCT_TAG_1C'] = "Товар";
 $MESS['KIT_IX_SECTIONS_TAG_1C'] = "Группы";
 $MESS['KIT_IX_SECTION_TAG_1C'] = "Группа";
+$MESS['KIT_IX_PROP_STRING'] = "Строка";
+$MESS['KIT_IX_PROP_NUMBER'] = "Число";
+$MESS['KIT_IX_PROP_LIST'] = "Справочник";
+$MESS['KIT_IX_ERROR_FORMAT_ID'] = "ID должно содержать только цифры и не может начинаться с нуля";
+$MESS['KIT_IX_ERROR_EXISTING_ID'] = "Элемент с указанным ID уже существует";
+$MESS['KIT_IX_ERROR_OUTOFRANGE_ID'] = "ID не может быть больше %s";
 ?>

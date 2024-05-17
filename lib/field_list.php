@@ -1,8 +1,4 @@
 <?php
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Loader;
@@ -17,6 +13,7 @@ class FieldList {
 		$this->uidSku = $params['ELEMENT_UID_SKU'];
 		$this->isSku = !empty($params['ELEMENT_UID_SKU']);
 		$this->showStyles = (bool)($params['ELEMENT_NOT_LOAD_STYLES']!='Y');
+		$this->iblockId = (int)$params['IBLOCK_ID'];
 		
 		$this->sectionLevels = (is_numeric($params['MAX_SECTION_LEVEL']) > 0 ? $params['MAX_SECTION_LEVEL'] : 5);
 		$this->sectionLevels = max(0, $this->sectionLevels);
@@ -37,7 +34,7 @@ class FieldList {
 		?><select name="<?echo $fname;?>"><?
 		foreach($arGroups as $k=>$v)
 		{
-			echo '<option name="'.htmlspecialcharsex($k).'">'.$v.'</option>';
+			echo '<option name="'.htmlspecialcharsbx($k).'">'.$v.'</option>';
 		}
 		?></select><?
 	}
@@ -47,70 +44,119 @@ class FieldList {
 		return array(
 			"IE_NAME" => array(
 				"uid" => "Y",
+				"general" => "Y",
 				"name" => Loc::getMessage("KIT_IX_FI_NAME"),
+				"type" => "string",
+				"filtrable" => "Y"
 			),
 			"IE_ID" => array(
 				"uid" => "Y",
+				"general" => "Y",
 				"name" => Loc::getMessage("KIT_IX_FI_ID"),
+				"type" => "id",
+				"filtrable" => "Y"
 			),
 			"IE_XML_ID" => array(
 				"uid" => "Y",
-				"name" => Loc::getMessage("KIT_IX_FI_UNKIT"),
+				"general" => "Y",
+				"name" => Loc::getMessage("KIT_IX_FI_UNIXML"),
+				"type" => "string",
+				"filtrable" => "Y"
 			),
 			"IE_CODE" => array(
 				"uid" => "Y",
+				"general" => "Y",
 				"name" => Loc::getMessage("KIT_IX_FI_CODE"),
+				"type" => "string",
+				"filtrable" => "Y"
 			),
 			"IE_PREVIEW_PICTURE" => array(
+				"general" => "Y",
 				"name" => Loc::getMessage("KIT_IX_FI_CATIMG"),
+				"type" => "file",
+				"filtrable" => "Y"
 			),
 			"IE_PREVIEW_PICTURE_DESCRIPTION" => array(
+				"general" => "Y",
 				"name" => Loc::getMessage("KIT_IX_FI_CATIMG_DESCRIPTION"),
+				"type" => "string"
 			),
 			"IE_PREVIEW_TEXT" => array(
+				"general" => "Y",
 				"name" => Loc::getMessage("KIT_IX_FI_CATDESCR"),
+				"type" => "text",
+				"filtrable" => "Y"
 			),
 			"IE_PREVIEW_TEXT|PREVIEW_TEXT_TYPE=text" => array(
+				"general" => "Y",
 				"name" => Loc::getMessage("KIT_IX_FI_CATDESCR").' ('.Loc::getMessage("KIT_IX_TEXTTYPE").')',
 			),
 			"IE_PREVIEW_TEXT|PREVIEW_TEXT_TYPE=html" => array(
+				"general" => "Y",
 				"name" => Loc::getMessage("KIT_IX_FI_CATDESCR").' (html)',
 			),
 			"IE_DETAIL_PICTURE" => array(
+				"general" => "Y",
 				"name" => Loc::getMessage("KIT_IX_FI_DETIMG"),
+				"type" => "file",
+				"filtrable" => "Y"
 			),
 			"IE_DETAIL_PICTURE_DESCRIPTION" => array(
+				"general" => "Y",
 				"name" => Loc::getMessage("KIT_IX_FI_DETIMG_DESCRIPTION"),
+				"type" => "string"
 			),
 			"IE_DETAIL_TEXT" => array(
+				"general" => "Y",
 				"name" => Loc::getMessage("KIT_IX_FI_DETDESCR"),
+				"type" => "text",
+				"filtrable" => "Y"
 			),
 			"IE_DETAIL_TEXT|DETAIL_TEXT_TYPE=text" => array(
+				"general" => "Y",
 				"name" => Loc::getMessage("KIT_IX_FI_DETDESCR").' ('.Loc::getMessage("KIT_IX_TEXTTYPE").')',
 			),
 			"IE_DETAIL_TEXT|DETAIL_TEXT_TYPE=html" => array(
+				"general" => "Y",
 				"name" => Loc::getMessage("KIT_IX_FI_DETDESCR").' (html)',
 			),
 			"IE_ACTIVE" => array(
+				"general" => "Y",
 				"name" => Loc::getMessage("KIT_IX_FI_ACTIV"),
+				"type" => "boolean",
+				"filtrable" => "Y"
 			),
 			"IE_ACTIVE_FROM" => array(
+				"general" => "Y",
 				"uid" => "Y",
 				"name" => Loc::getMessage("KIT_IX_FI_ACTIVFROM"),
+				"type" => "date",
+				"filtrable" => "Y"
 			),
 			"IE_ACTIVE_TO" => array(
+				"general" => "Y",
 				"uid" => "Y",
 				"name" => Loc::getMessage("KIT_IX_FI_ACTIVTO"),
+				"type" => "date",
+				"filtrable" => "Y"
 			),
 			"IE_SORT" => array(
+				"general" => "Y",
 				"name" => Loc::getMessage("KIT_IX_FI_SORT"),
+				"type" => "number",
+				"filtrable" => "Y"
 			),
 			"IE_TAGS" => array(
+				"general" => "Y",
 				"uid" => "Y",
 				"name" => Loc::getMessage("KIT_IX_FI_TAGS"),
+				"type" => "string",
+				"filtrable" => "Y"
 			),
 			"IE_DATE_CREATE" => array(
 				"name" => Loc::getMessage("KIT_IX_FI_DATE_CREATE"),
+				"type" => "date",
+				"filtrable" => "Y"
 			),
 			"IE_CREATED_BY" => array(
 				"name" => Loc::getMessage("KIT_IX_FI_CREATED_BY"),
@@ -124,11 +170,20 @@ class FieldList {
 		);
 	}
 	
+	public static function GetIblockElementFieldsForStat()
+	{
+		$arFields = self::GetIblockElementFields();
+		$arFields["IE_MODIFIED_BY"] = array(
+			"name" => Loc::getMessage("KIT_IX_FI_MODIFIED_BY"),
+		);
+		return $arFields;
+	}
+	
 	public static function GetIblockElementDefaultFields()
 	{
 		return array(
 			"IE_XML_ID" => array(
-				"NAME" => Loc::getMessage("KIT_IX_FI_UNKIT"),
+				"NAME" => Loc::getMessage("KIT_IX_FI_UNIXML"),
 			),
 			"IE_CODE" => array(
 				"NAME" => Loc::getMessage("KIT_IX_FI_CODE"),
@@ -145,6 +200,18 @@ class FieldList {
 			"IE_TAGS" => array(
 				"NAME" => Loc::getMessage("KIT_IX_FI_TAGS"),
 			),
+			"IE_PREVIEW_TEXT" => array(
+				"NAME" => Loc::getMessage("KIT_IX_FI_CATDESCR"),
+			),
+			"IE_PREVIEW_TEXT_TYPE" => array(
+				"NAME" => Loc::getMessage("KIT_IX_FI_CATDESCR_TYPE"),
+			),
+			"IE_DETAIL_TEXT" => array(
+				"NAME" => Loc::getMessage("KIT_IX_FI_DETDESCR"),
+			),
+			"IE_DETAIL_TEXT_TYPE" => array(
+				"NAME" => Loc::getMessage("KIT_IX_FI_DETDESCR_TYPE"),
+			),
 		);
 	}
 	
@@ -156,6 +223,10 @@ class FieldList {
 			$dbRes = \CCatalog::GetList(array("ID"=>"ASC"), array("IBLOCK_ID"=>$IBLOCK_ID));
 			if($arCatalog = $dbRes->Fetch())
 			{
+				$arDefaultCatFields["ICAT_PURCHASING_PRICE"] = array('NAME' => Loc::getMessage("KIT_IX_FI_PURCHASING_PRICE"));
+				$arDefaultCatFields["ICAT_QUANTITY"] = array('NAME' => Loc::getMessage("KIT_IX_FI_QUANTITY"));
+				$arDefaultCatFields["ICAT_QUANTITY_RESERVED"] = array('NAME' => Loc::getMessage("KIT_IX_FI_QUANTITY_RESERVED"));
+				
 				$dbRes = \CCatalogStore::GetList(array("SORT"=>"ID"), array(), false, false, array("ID", "TITLE", "ADDRESS"));
 				while($arStore = $dbRes->Fetch())
 				{
@@ -401,10 +472,14 @@ class FieldList {
 				$arCatalogFields[] = array(
 					"value" => "ICAT_PURCHASING_PRICE",
 					"name" => Loc::getMessage("KIT_IX_FI_PURCHASING_PRICE"),
+					"type" => "number",
+					"filtrable" => "Y"
 				);
 				$arCatalogFields[] = array(
 					"value" => "ICAT_PURCHASING_CURRENCY",
 					"name" => Loc::getMessage("KIT_IX_FI_PRICE_CURRENCY").' "'.Loc::getMessage("KIT_IX_FI_PURCHASING_PRICE").'"',
+					"type" => "list",
+					"filtrable" => "Y"
 				);
 			
 				$dbPriceType = \CCatalogGroup::GetList(array("SORT" => "ASC"));
@@ -413,10 +488,14 @@ class FieldList {
 					$arCatalogFields[] = array(
 						"value" => "ICAT_PRICE".$arPriceType["ID"]."_PRICE",
 						"name" => Loc::getMessage("KIT_IX_FI_PRICE_NAME").' "'.($arPriceType["NAME_LANG"] ? $arPriceType["NAME_LANG"] : $arPriceType["NAME"]).'"',
+						"type" => "number",
+						"filtrable" => "Y"
 					);
 					$arCatalogFields[] = array(
 						"value" => "ICAT_PRICE".$arPriceType["ID"]."_CURRENCY",
 						"name" => Loc::getMessage("KIT_IX_FI_PRICE_CURRENCY").' "'.($arPriceType["NAME_LANG"] ? $arPriceType["NAME_LANG"] : $arPriceType["NAME"]).'"',
+						"type" => "list",
+						"filtrable" => "Y"
 					);
 					$arCatalogFields[] = array(
 						"value" => "ICAT_PRICE".$arPriceType["ID"]."_QUANTITY_FROM",
@@ -446,6 +525,14 @@ class FieldList {
 				$arCatalogFields[] = array(
 					"value" => "ICAT_QUANTITY",
 					"name" => Loc::getMessage("KIT_IX_FI_QUANTITY"),
+					"type" => "number",
+					"filtrable" => "Y"
+				);
+				$arCatalogFields[] = array(
+					"value" => "ICAT_QUANTITY_RESERVED",
+					"name" => Loc::getMessage("KIT_IX_FI_QUANTITY_RESERVED"),
+					"type" => "number",
+					"filtrable" => "Y"
 				);
 				
 				$dbRes = \CCatalogStore::GetList(array("SORT"=>"ID"), array(), false, false, array("ID", "TITLE", 'ADDRESS'));
@@ -454,7 +541,9 @@ class FieldList {
 					if(strlen($arStore['TITLE'])==0 && $arStore['ADDRESS']) $arStore['TITLE'] = $arStore['ADDRESS'];
 					$arCatalogFields[] = array(
 						"value" => "ICAT_STORE".$arStore["ID"]."_AMOUNT",
-						"name" => Loc::getMessage("KIT_IX_FI_QUANTITY_STORE").' "'.$arStore["TITLE"].'"'
+						"name" => Loc::getMessage("KIT_IX_FI_QUANTITY_STORE").' "'.$arStore["TITLE"].'"',
+						"type" => "number",
+						"filtrable" => "Y"
 					);
 				}
 				
@@ -568,6 +657,10 @@ class FieldList {
 							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_SUM"),
 						),
 						array(
+							"value" => "ICAT_DISCOUNT_VALUE|VALUE_TYPE=S",
+							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_PRICE"),
+						),
+						array(
 							"value" => "ICAT_DISCOUNT_MAX_DISCOUNT",
 							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_MAX_DISCOUNT"),
 						),
@@ -578,6 +671,10 @@ class FieldList {
 						array(
 							"value" => "ICAT_DISCOUNT_LAST_DISCOUNT",
 							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_LAST_DISCOUNT"),
+						),
+						array(
+							"value" => "ICAT_DISCOUNT_LAST_LEVEL_DISCOUNT",
+							"name" => Loc::getMessage("KIT_IX_FI_DISCOUNT_LAST_LEVEL_DISCOUNT"),
 						),
 					);
 				}
@@ -731,13 +828,44 @@ class FieldList {
 			));
 			while($arr = $dbRes->Fetch())
 			{
+				$type = 'string';
+				if(in_array($arr['PROPERTY_TYPE'], array('L', 'G', 'E')) ||
+					($arr['PROPERTY_TYPE']=='S' && $arr['USER_TYPE']=='UserID') ||
+					($arr['PROPERTY_TYPE']=='S' && $arr['USER_TYPE']=='directory'))
+				{
+					$type = 'list';
+				}
+				elseif($arr['PROPERTY_TYPE']=='F')
+				{
+					$type = 'file';
+				}
+				elseif($arr['PROPERTY_TYPE']=='S' && $arr['USER_TYPE']=='HTML')
+				{
+					$type = 'text';
+				}
+				elseif($arr['PROPERTY_TYPE']=='S' && ($arr['USER_TYPE']=='Date' || $arr['USER_TYPE']=='DateTime'))
+				{
+					$type = 'date';
+				}
+				elseif(in_array($arr['PROPERTY_TYPE'], array('S', 'N')) && strlen($arr['USER_TYPE']) > 0 && !in_array($arr['USER_TYPE'], array('HTML', 'video', 'Date', 'DateTime', 'map_yandex', 'map_google', 'UserID', 'TopicID', 'FileMan', 'ElementXmlID', 'directory')))
+				{
+					$uType = \CIBlockProperty::GetUserType($arr["USER_TYPE"]);
+					if(is_array($uType) && array_key_exists("GetPropertyFieldHtml", $uType))
+					{
+						$type = 'custom';
+					}
+				}
+				
 				$bUid = (in_array($arr['PROPERTY_TYPE'], array('S', 'N', 'L', 'E'))/* && $arr['MULTIPLE']=='N'*/);
 				$arProperties[] = array(
 					"value" => "IP_PROP".$arr["ID"],
 					"name" => $arr["NAME"].' ['.$arr["CODE"].']',
 					"uid" => ($bUid ? "Y" : "N"),
-					"wdesc" => ($arr["WITH_DESCRIPTION"]=='Y'),
-					"forsum" => (bool)(($arr["PROPERTY_TYPE"]=='S' || $arr["PROPERTY_TYPE"]=='N') && !$arr['USER_TYPE'] && $arr['MULTIPLE']=='N')
+					"general" => "Y",
+					"wdesc" => (bool)($arr["WITH_DESCRIPTION"]=='Y' || ($arr['PROPERTY_TYPE']=='E' && $arr['USER_TYPE'] && !(in_array($arr['USER_TYPE'], array('SKU', 'EList', 'EAutocomplete')))) || in_array($arr['USER_TYPE'], array('CitrusArealtyMetroStation'))),
+					"forsum" => (bool)(($arr["PROPERTY_TYPE"]=='S' || $arr["PROPERTY_TYPE"]=='N') && !$arr['USER_TYPE'] && $arr['MULTIPLE']=='N'),
+					"type" => $type,
+					"filtrable" => 'Y'
 				);
 			}
 		}
@@ -929,6 +1057,72 @@ class FieldList {
 		return $this->aFields[$IBLOCK_ID];
 	}
 	
+	public function GetFiltrableFields($IBLOCK_ID, $offers = false)
+	{
+		if(!$this->aFiltrableFields) $this->aFiltrableFields = array();
+		
+		if(!$this->aFiltrableFields[$IBLOCK_ID])
+		{
+			if(!$offers)
+			{
+				$this->aFiltrableFields[$IBLOCK_ID]['section'] = array(
+					'title' => Loc::getMessage("KIT_IX_GROUP_SECTION_PARENT"),
+					'items' => array(
+						'IE_IBLOCK_SECTION' => array(
+							"name" => Loc::getMessage("KIT_IX_ELEMENT_SECTION"),
+							"type" => "section",
+							"filtrable" => "Y"
+						)
+					)
+				);
+			}
+			
+			$this->aFiltrableFields[$IBLOCK_ID]['element'] = array(
+				//'title' => ($offers ? Loc::getMessage("KIT_IX_GROUP_OFFER") : Loc::getMessage("KIT_IS_GROUP_ELEMENT")),
+				'title' => Loc::getMessage("KIT_IS_GROUP_ELEMENT"),
+				'items' => array()
+			);
+			foreach(self::GetIblockElementFields() as $k=>$ar)
+			{
+				if($ar["filtrable"]!='Y') continue;
+				//if($offers) $k = 'OFFER_'.$k;
+				$this->aFiltrableFields[$IBLOCK_ID]['element']['items'][$k] = $ar;
+			}
+			
+			if($arPropFields = self::GetIblockProperties($IBLOCK_ID))
+			{
+				$this->aFiltrableFields[$IBLOCK_ID]['prop'] = array(
+					//'title' => ($offers ? Loc::getMessage("KIT_IX_GROUP_OFFER").' ('.Loc::getMessage("KIT_IX_GROUP_PROP").')' : Loc::getMessage("KIT_IX_GROUP_PROP")),
+					'title' => Loc::getMessage("KIT_IX_GROUP_PROP"),
+					'items' => array()
+				);
+				foreach($arPropFields as $ar)
+				{
+					if($ar["filtrable"]!='Y') continue;
+					//if($offers) $ar["value"] = 'OFFER_'.$ar["value"];
+					$this->aFiltrableFields[$IBLOCK_ID]['prop']['items'][$ar["value"]] = $ar;
+				}
+			}
+			
+			if($arCatalogFields = self::GetCatalogFields($IBLOCK_ID))
+			{
+				$this->aFiltrableFields[$IBLOCK_ID]['catalog'] = array(
+					//'title' => ($offers ? Loc::getMessage("KIT_IX_GROUP_OFFER").' ('.Loc::getMessage("KIT_IX_GROUP_CATALOG").')' : Loc::getMessage("KIT_IX_GROUP_CATALOG")),
+					'title' => Loc::getMessage("KIT_IX_GROUP_CATALOG"),
+					'items' => array()
+				);
+				foreach($arCatalogFields as $ar)
+				{
+					if($ar["filtrable"]!='Y') continue;
+					//if($offers) $ar["value"] = 'OFFER_'.$ar["value"];
+					$this->aFiltrableFields[$IBLOCK_ID]['catalog']['items'][$ar["value"]] = $ar;
+				}
+			}
+		}
+	
+		return $this->aFiltrableFields[$IBLOCK_ID];
+	}
+	
 	public function GetFieldNames($IBLOCK_ID)
 	{
 		if(!$this->arFieldNames)
@@ -955,39 +1149,52 @@ class FieldList {
 		return $this->arFieldNames[$IBLOCK_ID];
 	}
 	
-	public static function GetOfferIblock($IBLOCK_ID, $retarray=false)
+	public function GetFieldsForPropMapping($IBLOCK_ID, $isOffers=false)
 	{
-		if(!$IBLOCK_ID || !Loader::includeModule('catalog')) return false;
-		$dbRes = \CCatalog::GetList(array(), array('IBLOCK_ID'=>$IBLOCK_ID));
-		$arFields = $dbRes->Fetch();
-		if(!$arFields['OFFERS_IBLOCK_ID'])
+		if($isOffers) $arGroups = array();
+		else $arGroups = $this->GetFields($IBLOCK_ID);
+		$arGroupsOffers = array();
+		if($this->isSku)
 		{
-			$dbRes = \CCatalog::GetList(array(), array('PRODUCT_IBLOCK_ID'=>$IBLOCK_ID));
-			if($arFields2 = $dbRes->Fetch())
+			$arOffer = Utils::GetOfferIblock($IBLOCK_ID, true);
+			if($arOffer)
 			{
-				$arFields = Array(
-					'IBLOCK_ID' => $arFields2['PRODUCT_IBLOCK_ID'],
-					'YANDEX_EXPORT' => $arFields2['YANDEX_EXPORT'],
-					'SUBSCRIPTION' => $arFields2['SUBSCRIPTION'],
-					'VAT_ID' => $arFields2['VAT_ID'],
-					'PRODUCT_IBLOCK_ID' => 0,
-					'SKU_PROPERTY_ID' => 0,
-					'OFFERS_PROPERTY_ID' => $arFields2['SKU_PROPERTY_ID'],
-					'OFFERS_IBLOCK_ID' => $arFields2['IBLOCK_ID'],
-					'ID' => $arFields2['IBLOCK_ID'],
-					'IBLOCK_TYPE_ID' => $arFields2['IBLOCK_TYPE_ID'],
-					'IBLOCK_ACTIVE' => $arFields2['IBLOCK_ACTIVE'],
-					'LID' => $arFields2['LID'],
-					'NAME' => $arFields2['NAME']
-				);
+				$arGroupsOffers = $this->GetFields($arOffer['OFFERS_IBLOCK_ID'], $arOffer['OFFERS_PROPERTY_ID']);
+				foreach($arGroupsOffers as $k=>$v)
+				{
+					$arGroups['offer_'.$k] = $v;
+				}
 			}
 		}
-		if($arFields['OFFERS_IBLOCK_ID'])
+		$arGroupsTmp = array_diff_key($arGroups, array_flip(preg_grep('/^(offer_)?(iprop_temp|catalog_set\d*|section\d*)$/', array_keys($arGroups))));
+		$removeFields = array('IP_LIST_PROPS', 'IE_IBLOCK_SECTION_TMP_ID', 'IE_SECTION_PATH');
+		$removeFields = array_merge($removeFields, array_map(array(__CLASS__, 'AddOfferPrefix'), $removeFields));
+		foreach($arGroupsTmp as $k2=>$v2)
 		{
-			if($retarray) return $arFields;
-			else return $arFields['OFFERS_IBLOCK_ID'];
+			foreach($v2['items'] as $k=>$v)
+			{
+				if(in_array($k, $removeFields)) unset($arGroupsTmp[$k2]['items'][$k]);
+			}
 		}
-		return false;
+		$arGroups = array();
+		foreach(array('prop', 'offer_prop') as $groupCode)
+		{
+			if(array_key_exists($groupCode, $arGroupsTmp))
+			{
+				$arGroups[$groupCode] = $arGroupsTmp[$groupCode];
+				unset($arGroupsTmp[$groupCode]);
+			}
+		}
+		foreach($arGroupsTmp as $groupCode=>$groupVal)
+		{
+			$arGroups[$groupCode] = $groupVal;
+		}
+		return $arGroups;
+	}
+	
+	public static function AddOfferPrefix($n)
+	{
+		return "OFFER_".$n;
 	}
 	
 	public function ShowSelectFields($IBLOCK_ID, $fname, $value="")
@@ -996,10 +1203,10 @@ class FieldList {
 		$arGroupsOffers = array();
 		if($this->isSku)
 		{
-			$arOffer = self::GetOfferIblock($IBLOCK_ID, true);
+			$arOffer = Utils::GetOfferIblock($IBLOCK_ID, true);
 			if($arOffer) $arGroupsOffers = $this->GetFields($arOffer['OFFERS_IBLOCK_ID'], $arOffer['OFFERS_PROPERTY_ID']);
 		}
-		?><select name="<?echo $fname;?>"><option value=""><?echo Loc::getMessage("KIT_IX_CHOOSE_FIELD");?></option><option value="VARIABLE"><?echo Loc::getMessage("KIT_IX_VARIABLE");?></option><?
+		?><select name="<?echo $fname;?>"><option value=""><?echo Loc::getMessage("KIT_IX_CHOOSE_FIELD");?></option><?
 		/*?><option value="new_prop"><?echo Loc::getMessage("KIT_IX_CREATE_PROPERTY");?></option><?*/
 		foreach($arGroups as $k2=>$v2)
 		{
@@ -1019,7 +1226,7 @@ class FieldList {
 			}
 			?></optgroup><?
 		}
-		?></select><?
+		?><optgroup label="<?echo Loc::getMessage("KIT_IX_GROUP_FIELDS_OTHER");?>"><option value="VARIABLE"><?echo Loc::getMessage("KIT_IX_VARIABLE");?></option><option value="PROFILE_URL"><?echo Loc::getMessage("KIT_IX_PROFILE_URL");?></option></optgroup></select><?
 	}
 	
 	public function ShowSelectOfferFields($IBLOCK_ID, $fname, $value="")
@@ -1027,7 +1234,7 @@ class FieldList {
 		$arGroupsOffers = array();
 		if($this->isSku)
 		{
-			$arOffer = self::GetOfferIblock($IBLOCK_ID, true);
+			$arOffer = Utils::GetOfferIblock($IBLOCK_ID, true);
 			if($arOffer) $arGroupsOffers = $this->GetFields($arOffer['OFFERS_IBLOCK_ID'], $arOffer['OFFERS_PROPERTY_ID']);
 		}
 		if(empty($arGroupsOffers)) return;
@@ -1046,6 +1253,7 @@ class FieldList {
 	
 	public function ShowSelectSectionFields($IBLOCK_ID, $fname, $value="")
 	{
+		$prefix = 'ISECT_';
 		$arGroups = $this->GetSectionFields($IBLOCK_ID);
 		?><select name="<?echo $fname;?>"><option value=""><?echo Loc::getMessage("KIT_IX_CHOOSE_FIELD");?></option><?
 		foreach($arGroups as $k2=>$v2)
@@ -1057,11 +1265,12 @@ class FieldList {
 			}
 			?></optgroup><?
 		}
-		?></select><?
+		?><optgroup label="<?echo Loc::getMessage("KIT_IX_GROUP_FIELDS_OTHER");?>"><option value="<?echo $prefix;?>PROFILE_URL"><?echo Loc::getMessage("KIT_IX_PROFILE_URL");?></option></optgroup></select><?
 	}
 	
-	public function ShowSelectSubSectionFields($IBLOCK_ID, $fname, $value="")
+	public function ShowSelectSubSectionFields($IBLOCK_ID, $fname, $level=1, $value="")
 	{
+		$prefix = 'I'.str_repeat('SUB', $level).'SECT_';
 		$arGroups = $this->GetSectionFields($IBLOCK_ID);
 		?><select name="<?echo $fname;?>"><option value=""><?echo Loc::getMessage("KIT_IX_CHOOSE_FIELD");?></option><?
 		foreach($arGroups as $k2=>$v2)
@@ -1071,16 +1280,16 @@ class FieldList {
 			{
 				if(strpos($k, 'ISECT_')==0)
 				{
-					$k = 'ISUBSECT_'.substr($k, 6);
+					$k = $prefix.substr($k, 6);
 				}
 				?><option value="<?echo $k; ?>" <?if($k==$value){echo 'selected';}?>><?echo htmlspecialcharsbx($v); ?></option><?
 			}
 			?></optgroup><?
 		}
-		?></select><?
+		?><optgroup label="<?echo Loc::getMessage("KIT_IX_GROUP_FIELDS_OTHER");?>"><option value="<?echo $prefix;?>PROFILE_URL"><?echo Loc::getMessage("KIT_IX_PROFILE_URL");?></option></optgroup></select><?
 	}
 	
-	public function GetPropertyFields($IBLOCK_ID)
+	public function GetPropertyFields($IBLOCK_ID, $groupName='PROPERTY')
 	{
 		if(!$this->aPropertyFields)
 		{
@@ -1090,11 +1299,13 @@ class FieldList {
 		if(!$this->aPropertyFields[$IBLOCK_ID])
 		{
 			$this->aPropertyFields[$IBLOCK_ID] = array(
-				'PROPERTY_NAME' => Loc::getMessage("KIT_IX_PROPERTY_NAME"),
-				'PROPERTY_CODE' => Loc::getMessage("KIT_IX_PROPERTY_CODE"),
-				'PROPERTY_TMP_ID' => Loc::getMessage("KIT_IX_PROPERTY_TMP_ID"),
-				'PROPERTY_VALUE' => Loc::getMessage("KIT_IX_PROPERTY_VALUE"),
-				'PROPERTY_DESCRIPTION' => Loc::getMessage("KIT_IX_PROPERTY_DESCRIPTION")
+				$groupName.'_NAME' => Loc::getMessage("KIT_IX_PROPERTY_NAME"),
+				$groupName.'_VALUE' => Loc::getMessage("KIT_IX_PROPERTY_VALUE"),
+				$groupName.'_DESCRIPTION' => Loc::getMessage("KIT_IX_PROPERTY_DESCRIPTION"),
+				$groupName.'_CODE' => Loc::getMessage("KIT_IX_PROPERTY_CODE"),
+				$groupName.'_XML_ID' => Loc::getMessage("KIT_IX_PROPERTY_XML_ID"),
+				$groupName.'_TMP_ID' => Loc::getMessage("KIT_IX_PROPERTY_TMP_ID"),
+				$groupName.'_VALUE_XML_ID' => Loc::getMessage("KIT_IX_PROPERTY_VALUE_XML_ID")
 			);
 		}
 	
@@ -1112,24 +1323,121 @@ class FieldList {
 		?></select><?
 	}
 	
-	public function GetIbPropertyFields()
+	public function ShowSelectOfferPropertyFields($IBLOCK_ID, $fname, $value="")
+	{
+		$OFFER_IBLOCK_ID = false;
+		if($this->isSku) $OFFER_IBLOCK_ID = Utils::GetOfferIblock($IBLOCK_ID);
+		if(!$OFFER_IBLOCK_ID) return;
+		$arFields = $this->GetPropertyFields($OFFER_IBLOCK_ID, 'OFFPROPERTY');
+		?><select name="<?echo $fname;?>"><option value=""><?echo Loc::getMessage("KIT_IX_CHOOSE_FIELD");?></option><?
+		foreach($arFields as $k=>$v)
+		{
+			?><option value="<?echo $k; ?>" <?if($k==$value){echo 'selected';}?>><?echo htmlspecialcharsbx($v); ?></option><?
+		}
+		?></select><?
+	}
+	
+	public function GetIbPropertyFields($IBLOCK_ID=false)
 	{
 		$arFields = array(
 			'IBPROP_NAME' => Loc::getMessage("KIT_IX_IBPROPERTY_NAME"),
 			'IBPROP_CODE' => Loc::getMessage("KIT_IX_IBPROPERTY_CODE"),
 			'IBPROP_TMP_ID' => Loc::getMessage("KIT_IX_IBPROPERTY_TMP_ID"),
+			'IBPROP_XML_ID' => Loc::getMessage("KIT_IX_IBPROPERTY_XML_ID"),
+			'IBPROP_SORT' => Loc::getMessage("KIT_IX_IBPROPERTY_SORT"),
 			'IBPROP_PROPERTY_TYPE' => Loc::getMessage("KIT_IX_IBPROPERTY_PROPERTY_TYPE"),
 			'IBPROP_MULTIPLE' => Loc::getMessage("KIT_IX_IBPROPERTY_MULTIPLE"),
 			'IBPROP_WITH_DESCRIPTION' => Loc::getMessage("KIT_IX_WITH_DESCRIPTION"),
+			'IBPROP_HINT' => Loc::getMessage("KIT_IX_IBPROPERTY_HINT"),
 			'IBPROP_SMART_FILTER' => Loc::getMessage("KIT_IX_IBPROPERTY_SMART_FILTER"),
-			'IBPROP_VALUES' => Loc::getMessage("KIT_IX_IBPROPERTY_VALUES")
+			'IBPROP_VALUES' => Loc::getMessage("KIT_IX_IBPROPERTY_VALUES"),
+			'IBPROP_SECTION_PROPERTY' => Loc::getMessage("KIT_IX_IBPROPERTY_SECTION_PROPERTY")
 		);
+		if(is_callable(array('\Bitrix\Iblock\Model\PropertyFeature', 'isEnabledFeatures')) && \Bitrix\Iblock\Model\PropertyFeature::isEnabledFeatures())
+		{
+			$arFeatures = \Bitrix\Iblock\Model\PropertyFeature::getPropertyFeatureList(array());
+			foreach($arFeatures as $arFeature)
+			{
+				$arFields['IBPROP_'.$arFeature['MODULE_ID'].':'.$arFeature['FEATURE_ID']] = $arFeature['FEATURE_NAME'];
+			}
+		}
+		if($IBLOCK_ID && Loader::IncludeModule('aspro.max') && class_exists('\Aspro\Max\PropertyGroups') && function_exists('json_decode') && \Aspro\Max\PropertyGroups::checkIblockId($IBLOCK_ID))
+		{
+			$arFields['IBPROP_GROUP_NAME'] = Loc::getMessage("KIT_IX_IBPROPERTY_GROUP_NAME");
+		}
 		return $arFields;
 	}
 	
 	public function ShowSelectIbPropertyFields($IBLOCK_ID, $fname, $value="")
 	{
-		$arFields = $this->GetIbPropertyFields();
+		$arFields = $this->GetIbPropertyFields($IBLOCK_ID);
+		?><select name="<?echo $fname;?>"><option value=""><?echo Loc::getMessage("KIT_IX_CHOOSE_FIELD");?></option><?
+		foreach($arFields as $k=>$v)
+		{
+			?><option value="<?echo $k; ?>" <?if($k==$value){echo 'selected';}?>><?echo htmlspecialcharsbx($v); ?></option><?
+		}
+		?></select><?
+	}
+	
+	public function GetIbPropValFields()
+	{
+		$arFields = array(
+			'IBPVAL_VALUE' => Loc::getMessage("KIT_IX_IBPROPVAL_VALUE"),
+			'IBPVAL_XML_ID' => Loc::getMessage("KIT_IX_IBPROPVAL_XML_ID"),
+			'IBPVAL_TMP_ID' => Loc::getMessage("KIT_IX_IBPROPVAL_TMP_ID")
+		);
+		return $arFields;
+	}
+	
+	public function ShowSelectIbPropValFields($IBLOCK_ID, $fname, $value="")
+	{
+		$arFields = $this->GetIbPropValFields();
+		?><select name="<?echo $fname;?>"><option value=""><?echo Loc::getMessage("KIT_IX_CHOOSE_FIELD");?></option><?
+		foreach($arFields as $k=>$v)
+		{
+			?><option value="<?echo $k; ?>" <?if($k==$value){echo 'selected';}?>><?echo htmlspecialcharsbx($v); ?></option><?
+		}
+		?></select><?
+	}
+	
+	public function GetStoreFields()
+	{
+		$arFields = array(
+			'STORE_XML_ID' => Loc::getMessage("KIT_IX_STORE_XML_ID"),
+			'STORE_CODE' => Loc::getMessage("KIT_IX_STORE_CODE"),
+			'STORE_TITLE' => Loc::getMessage("KIT_IX_STORE_TITLE"),
+			'STORE_ACTIVE' => Loc::getMessage("KIT_IX_STORE_ACTIVE"),
+			'STORE_ADDRESS' => Loc::getMessage("KIT_IX_STORE_ADDRESS"),
+			'STORE_SORT' => Loc::getMessage("KIT_IX_STORE_SORT"),
+			'STORE_ISSUING_CENTER' => Loc::getMessage("KIT_IX_STORE_ISSUING_CENTER"),
+			'STORE_SHIPPING_CENTER' => Loc::getMessage("KIT_IX_STORE_SHIPPING_CENTER"),
+		);
+		return $arFields;
+	}
+	
+	public function ShowSelectStoreFields($IBLOCK_ID, $fname, $value="")
+	{
+		$arFields = $this->GetStoreFields();
+		?><select name="<?echo $fname;?>"><option value=""><?echo Loc::getMessage("KIT_IX_CHOOSE_FIELD");?></option><?
+		foreach($arFields as $k=>$v)
+		{
+			?><option value="<?echo $k; ?>" <?if($k==$value){echo 'selected';}?>><?echo htmlspecialcharsbx($v); ?></option><?
+		}
+		?></select><?
+	}
+	
+	public function GetRestStoreFields()
+	{
+		$arFields = array(
+			'RESTSTORE_STORE_XML_ID' => Loc::getMessage("KIT_IX_RESTSTORE_STORE_XML_ID"),
+			'RESTSTORE_AMOUNT' => Loc::getMessage("KIT_IX_RESTSTORE_AMOUNT"),
+		);
+		return $arFields;
+	}
+	
+	public function ShowSelectRestStoreFields($IBLOCK_ID, $fname, $value="")
+	{
+		$arFields = $this->GetRestStoreFields();
 		?><select name="<?echo $fname;?>"><option value=""><?echo Loc::getMessage("KIT_IX_CHOOSE_FIELD");?></option><?
 		foreach($arFields as $k=>$v)
 		{
@@ -1146,7 +1454,7 @@ class FieldList {
 	
 	public function ShowSelectSectionUidFields($IBLOCK_ID, $fname, $val=false)
 	{
-		?><select name="<?echo $fname;?>"><?
+		?><select name="<?echo $fname;?>" style="max-width: 400px;"><?
 			?><option value="NAME"<?if($val=='NAME') echo ' selected';?>><?echo Loc::getMessage("KIT_IX_SECTION_NAME"); ?></option><?
 			?><option value="CODE"<?if($val=='CODE') echo ' selected';?>><?echo Loc::getMessage("KIT_IX_SECTION_CODE"); ?></option><?
 			?><option value="ID"<?if($val=='ID') echo ' selected';?>><?echo Loc::getMessage("KIT_IX_SECTION_ID"); ?></option><?
@@ -1159,7 +1467,7 @@ class FieldList {
 				$name = trim($arField['LIST_COLUMN_LABEL']);
 				if(strlen($name)==0) $name = trim($arField['EDIT_FORM_LABEL']);
 				if(strlen($name)==0) $name = trim($arField['FIELD_NAME']);
-				?><option value="<?echo htmlspecialcharsex($arField['FIELD_NAME']);?>"<?if($val==$arField['FIELD_NAME']) echo ' selected';?>><?echo $name.' ['.$arField['FIELD_NAME'].']';?></option><?
+				?><option value="<?echo htmlspecialcharsbx($arField['FIELD_NAME']);?>"<?if($val==$arField['FIELD_NAME']) echo ' selected';?>><?echo htmlspecialcharsbx($name.' ['.$arField['FIELD_NAME'].']');?></option><?
 			}
 			
 		?></select><?
@@ -1167,7 +1475,13 @@ class FieldList {
 	
 	public function ShowSelectPropertyList($IBLOCK_ID, $fname, $val=false, $prefix='')
 	{
-		?><select name="<?echo $fname;?>" class="kda-chosen-multi" multiple data-placeholder="<?echo Loc::getMessage('KIT_IX_PLACEHOLDER_CHOOSE');?>"><?echo $this->GetSelectPropertyList($IBLOCK_ID, $val, $prefix);?></select><?
+		$properties = $this->GetSelectPropertyList($IBLOCK_ID, $val, $prefix);
+		$catalogFields = $this->GetSelectCatalogList($IBLOCK_ID, $val, $prefix);
+		?><select name="<?echo $fname;?>" class="kda-chosen-multi" multiple data-placeholder="<?echo Loc::getMessage('KIT_IX_PLACEHOLDER_CHOOSE');?>">
+		<?
+		if(strlen($properties) > 0) echo '<optgroup label="'.Loc::getMessage("KIT_IX_GROUP_PROP").'">'.$properties.'</optgroup>';
+		if(strlen($catalogFields) > 0) echo '<optgroup label="'.Loc::getMessage("KIT_IX_GROUP_CATALOG").'">'.$catalogFields.'</optgroup>';
+		?></select><?
 	}
 	
 	public function GetSelectPropertyList($IBLOCK_ID, $val=false, $prefix='')
@@ -1181,8 +1495,71 @@ class FieldList {
 		{
 			foreach($arProps as $k=>$v)
 			{
-				$optval = ($prefix ? $prefix : '').htmlspecialcharsex($v['value']);
-				$options .= '<option value="'.$optval.'"'.(in_array($optval, $val) ? ' selected' : '').'>'.$v['name'].'</option>';
+				if($v['value']=='IP_LIST_PROPS') continue;
+				$optval = ($prefix ? $prefix : '').htmlspecialcharsbx($v['value']);
+				$options .= '<option value="'.$optval.'"'.(in_array($optval, $val) ? ' selected' : '').'>'.htmlspecialcharsbx($v['name']).'</option>';
+			}
+		}
+		return $options;
+	}
+	
+	public function GetSelectCatalogList($IBLOCK_ID, $val=false, $prefix='')
+	{
+		$IBLOCK_ID = intval($IBLOCK_ID);
+		$arFields = self::GetCatalogFields($IBLOCK_ID);
+		if(!is_array($val)) $val = array();
+		
+		$options = '';
+		if(is_array($arFields))
+		{
+			foreach($arFields as $k=>$v)
+			{
+				if(!preg_match('/^ICAT_STORE\d+_AMOUNT$/', $v['value'])) continue;
+				$optval = ($prefix ? $prefix : '').htmlspecialcharsbx($v['value']);
+				$options .= '<option value="'.$optval.'"'.(in_array($optval, $val) ? ' selected' : '').'>'.htmlspecialcharsbx($v['name']).'</option>';
+			}
+		}
+		return $options;
+	}
+	
+	public function ShowSelectStoreListForSum($fname, $val=false, $fname2=false, $val2=false)
+	{
+		$display = true;
+		if($fname2)
+		{
+			if(!$val2 && !empty($val)) $val2 = 'INC';
+			if(!in_array($val2, array('INC', 'EXC'))) $display = false;
+			echo '<select name="'.$fname2.'" onchange="$(\'#quantity_sum_stores_list\').css(\'display\', this.value==\'ALL\' ? \'none\' : \'\')">'.
+					'<option value="ALL">'.Loc::getMessage('KIT_IX_PRODUCT_STORES_MODE_ALL').'</option>'.
+					'<option value="INC"'.($val2=='INC' ? ' selected' : '').'>'.Loc::getMessage('KIT_IX_PRODUCT_STORES_MODE_INCLUDE').'</option>'.
+					'<option value="EXC"'.($val2=='EXC' ? ' selected' : '').'>'.Loc::getMessage('KIT_IX_PRODUCT_STORES_MODE_EXCLUDE').'</option>'.
+				'</select>';
+		}
+		
+		echo '<span id="quantity_sum_stores_list"'.($display ? '' : ' style="display: none;"').'>';
+		/*echo GetMessage("KIT_IX_PRODUCT_STORES");?>:<br><?*/
+		?><select name="<?echo $fname;?>" class="kda-chosen-multi" multiple data-placeholder="<?echo Loc::getMessage('KIT_IX_PLACEHOLDER_CHOOSE');?>"><?echo $this->GetSelectStoreListForSum($val);?></select><?
+		//echo '<br><small>'.GetMessage("KIT_IX_PRODUCT_STORES_HINT").'<small>';
+		echo '</span>';
+	}
+	
+	public function GetSelectStoreListForSum($val=false)
+	{
+		$arStores = array();
+		$dbRes = \CCatalogStore::GetList(array("SORT"=>"ID"), array(), false, false, array("ID", "TITLE", "ADDRESS"));
+		while($arStore = $dbRes->Fetch())
+		{
+			$arStores[$arStore["ID"]] = (strlen($arStore["TITLE"]) > 0 ? $arStore["TITLE"] : $arStore["ADDRESS"]);
+		}
+		if(!is_array($val)) $val = array();
+		
+		$options = '';
+		if(is_array($arStores))
+		{
+			foreach($arStores as $k=>$v)
+			{
+				$optval = htmlspecialcharsbx($k);
+				$options .= '<option value="'.$optval.'"'.(in_array($optval, $val) ? ' selected' : '').'>'.htmlspecialcharsbx($v).'</option>';
 			}
 		}
 		return $options;
@@ -1214,11 +1591,45 @@ class FieldList {
 			foreach($arProps as $k=>$v)
 			{
 				if(!$v['forsum']) continue;
-				$optval = htmlspecialcharsex($v['value']);
+				$optval = htmlspecialcharsbx($v['value']);
 				$options .= '<option value="'.$optval.'"'.(in_array($optval, $val) ? ' selected' : '').'>'.htmlspecialcharsbx($v['name']).'</option>';
 			}
 		}
 		return $options;
+	}
+	
+	public function GetSelectGeneralFields($IBLOCK_ID, $val=false, $prefix='')
+	{
+		$hash = $IBLOCK_ID.'_'.md5(serialize($val));
+		$IBLOCK_ID = intval($IBLOCK_ID);
+		if(!$this->GeneralFields) $this->GeneralFields = array();
+		
+		if(!$this->GeneralFields[$hash])
+		{
+			ob_start();
+			foreach(self::GetIblockElementFields() as $k=>$ar)
+			{
+				if($ar['general']=="Y")
+				{
+					$k = $prefix.$k;
+					?><option value="<?echo $k; ?>" <?if((is_array($val) && in_array($k, $val)) || $k==$val){echo 'selected';}?>><?echo htmlspecialcharsbx($ar["name"]); ?></option><?
+				}
+			}
+			
+			if($arPropFields = self::GetIblockProperties($IBLOCK_ID))
+			{
+				foreach($arPropFields as $ar)
+				{
+					if($ar['general']=="Y")
+					{
+						$ar["value"] = $prefix.$ar["value"];
+						?><option value="<?echo $ar["value"] ?>" <?if((is_array($val) && in_array($ar["value"], $val)) || $ar["value"]==$val){echo 'selected';}?>><?echo Loc::getMessage("KIT_IX_FI_PROP");?> "<?echo htmlspecialcharsbx($ar["name"]); ?>"</option><?
+					}
+				}
+			}		
+			$this->GeneralFields[$hash] = ob_get_clean();
+		}
+		return $this->GeneralFields[$hash];
 	}
 	
 	public function GetSelectUidFields($IBLOCK_ID, $val=false, $prefix='')
@@ -1319,7 +1730,8 @@ class FieldList {
 				'ID' => $arr['ID'],
 				'NAME' => $arr['NAME']
 			);
-			$arr['IBLOCKS'] = $arIblocks[$arr['ID']];
+			$arr['IBLOCKS'] = (isset($arIblocks[$arr['ID']]) && is_array($arIblocks[$arr['ID']]) ? $arIblocks[$arr['ID']] : array());
+			if(array_key_exists('IBLOCKS', $arr['IBLOCKS'])) continue;
 			$arIblocks[$arr['ID']] = $arr;
 		}
 		
@@ -1342,7 +1754,7 @@ class FieldList {
 					);
 					$arr['IBLOCKS'] = $arIblocks[$arr['ID']];
 					$arIblocks[$arr['ID']] = $arr;
-					unset($arNFTypes[$arr['ID']]);
+					$arNFTypes = array_diff($arNFTypes, array($arr['ID']));
 				}
 			}
 		}
@@ -1384,7 +1796,7 @@ class FieldList {
 			$arHLFields = array();
 			while($arHLField = $dbRes->Fetch())
 			{
-				if($arHLField['MULTIPLE']!='Y' && in_array($arHLField['USER_TYPE_ID'], array('string', 'hlblock', 'integer', 'double', 'datetime', 'date', 'boolean', 'enumeration', 'iblock_section', 'iblock_element')))
+				if(/*$arHLField['MULTIPLE']!='Y' &&*/ in_array($arHLField['USER_TYPE_ID'], array('string', 'hlblock', 'integer', 'double', 'datetime', 'date', 'boolean', 'enumeration', 'iblock_section', 'iblock_element')))
 				{
 					$arHLField['UID'] = 'Y';
 				}
@@ -1414,7 +1826,7 @@ class FieldList {
 				{
 					if($ar['UID']=="Y")
 					{
-						?><option value="<?echo $ar["FIELD_NAME"] ?>" <?if((is_array($val) && in_array($ar["FIELD_NAME"], $val)) || $ar["FIELD_NAME"]==$val){echo 'selected';}?>><?echo $ar["NAME_LANG"]; ?></option><?
+						?><option value="<?echo $ar["FIELD_NAME"] ?>" <?if((is_array($val) && in_array($ar["FIELD_NAME"], $val)) || $ar["FIELD_NAME"]==$val){echo 'selected';}?>><?echo htmlspecialcharsbx($ar["NAME_LANG"]); ?></option><?
 					}
 				}
 			}		
@@ -1453,7 +1865,15 @@ class FieldList {
 			$arGroups['element']['items']['IE_IBLOCK_SECTION_ID'] = Loc::getMessage("KIT_IX_FI_IBLOCK_SECTION_ID");
 			$arGroups['element']['items']['IE_IBLOCK_SECTION_IDS'] = Loc::getMessage("KIT_IX_FI_IBLOCK_SECTION_IDS");
 			$arGroups['element']['items']['IE_IBLOCK_SECTION_PARENT_IDS'] = Loc::getMessage("KIT_IX_FI_IBLOCK_SECTION_PARENT_IDS");
-		}		
+		}
+		$arGroups['section'] = array(
+			'title' => Loc::getMessage("KIT_IX_GROUP_SECTION_PARENT"),
+			'items' => array()
+		);
+		foreach($this->GetIblockSectionFields('', $IBLOCK_ID) as $k=>$ar)
+		{
+			$arGroups['section']['items'][$k] = $ar["name"];
+		}	
 		return $arGroups;
 	}
 	

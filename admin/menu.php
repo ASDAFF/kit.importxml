@@ -1,8 +1,4 @@
 <?
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 if (!CModule::IncludeModule("iblock"))
 	return false;
 
@@ -30,54 +26,73 @@ if($APPLICATION->GetGroupRight($moduleId) < "W")
 
 if($bUserIsAdmin || $bHasWRight)
 {
-	if($bUserIsAdmin || $bHasWRight)
+	$aSubMenu[] = array(
+		"text" => GetMessage("KIT_MENU_IMPORT_TITLE"),
+		"url" => $moduleFilePrefix.".php?lang=".LANGUAGE_ID,
+		"more_url" => array(
+			$moduleFilePrefix."_profile_list.php",
+			$moduleFilePrefix."_rollback.php"
+		),
+		"title" => GetMessage("KIT_MENU_IMPORT_TITLE"),
+		"module_id" => $moduleId,
+		"items_id" => "menu_".$moduleIdUl,
+		"sort" => 100,
+		"section" => $moduleIdUl,
+	);
+	
+	if(CModule::IncludeModule('highloadblock'))
 	{
 		$aSubMenu[] = array(
-			"text" => GetMessage("KIT_MENU_IMPORT_TITLE"),
-			"url" => $moduleFilePrefix.".php?lang=".LANGUAGE_ID,
-			"more_url" => array($moduleFilePrefix."_profile_list.php"),
-			"title" => GetMessage("KIT_MENU_IMPORT_TITLE"),
+			"text" => GetMessage("KIT_MENU_IMPORT_TITLE_HIGHLOAD"),
+			"url" => $moduleFilePrefix."_highload.php?lang=".LANGUAGE_ID,
+			"title" => GetMessage("KIT_MENU_IMPORT_TITLE_HIGHLOAD"),
 			"module_id" => $moduleId,
 			"items_id" => "menu_".$moduleIdUl,
-			"sort" => 100,
+			"sort" => 200,
 			"section" => $moduleIdUl,
-		);
-		
-		if(CModule::IncludeModule('highloadblock'))
-		{
-			$aSubMenu[] = array(
-				"text" => GetMessage("KIT_MENU_IMPORT_TITLE_HIGHLOAD"),
-				"url" => $moduleFilePrefix."_highload.php?lang=".LANGUAGE_ID,
-				"title" => GetMessage("KIT_MENU_IMPORT_TITLE_HIGHLOAD"),
+		);			
+	}
+	
+	$aSubMenu[] = array(
+		"text" => GetMessage("KIT_MENU_IMPORT_TITLE_STAT_WRAP"),
+		"title" => GetMessage("KIT_MENU_IMPORT_TITLE_STAT_WRAP"),
+		"module_id" => $moduleId,
+		"items_id" => "menu_".$moduleIdUl,
+		"sort" => 300,
+		"section" => $moduleIdUl,
+		'items' => array(
+			array(
+				"text" => GetMessage("KIT_MENU_IMPORT_TITLE_STAT"),
+				"url" => $moduleFilePrefix."_event_stat.php?lang=".LANGUAGE_ID,
+				"title" => GetMessage("KIT_MENU_IMPORT_TITLE_STAT"),
+				"module_id" => $moduleId,
+				"items_id" => "menu_".$moduleIdUl,
+				"sort" => 100,
+				"section" => $moduleIdUl,
+			),
+			array(
+				"text" => GetMessage("KIT_MENU_IMPORT_TITLE_STAT_DETAIL"),
+				"url" => $moduleFilePrefix."_event_log.php?lang=".LANGUAGE_ID,
+				"title" => GetMessage("KIT_MENU_IMPORT_TITLE_STAT_DETAIL"),
 				"module_id" => $moduleId,
 				"items_id" => "menu_".$moduleIdUl,
 				"sort" => 200,
 				"section" => $moduleIdUl,
-			);			
-		}
-		
-		/*$aSubMenu[] = array(
-			"text" => GetMessage("KIT_MENU_IMPORT_TITLE_STAT"),
-			"url" => $moduleFilePrefix."_event_log.php?lang=".LANGUAGE_ID,
-			"title" => GetMessage("KIT_MENU_IMPORT_TITLE_STAT"),
-			"module_id" => $moduleId,
-			"items_id" => "menu_".$moduleIdUl,
-			"sort" => 300,
-			"section" => $moduleIdUl,
-		);*/
-		
-		$aMenu[] = array(
-			"parent_menu" => "global_menu_content",
-			"section" => $moduleIdUl,
-			"sort" => 1200,
-			"text" => GetMessage("KIT_MENU_IMPORT_TITLE_PARENT"),
-			"title" => GetMessage("KIT_MENU_IMPORT_TITLE_PARENT"),
-			"icon" => $moduleIdUl."_menu_import_icon",
-			"items_id" => "menu_".$moduleIdUl."_parent",
-			"module_id" => $moduleId,
-			"items" => $aSubMenu,
-		);
-	}
+			)
+		)
+	);
+	
+	$aMenu[] = array(
+		"parent_menu" => "global_menu_content",
+		"section" => $moduleIdUl,
+		"sort" => 1200,
+		"text" => GetMessage("KIT_MENU_IMPORT_TITLE_PARENT"),
+		"title" => GetMessage("KIT_MENU_IMPORT_TITLE_PARENT"),
+		"icon" => $moduleIdUl."_menu_import_icon",
+		"items_id" => "menu_".$moduleIdUl."_parent",
+		"module_id" => $moduleId,
+		"items" => $aSubMenu,
+	);
 }
 
 return $aMenu;

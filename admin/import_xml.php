@@ -1,8 +1,5 @@
 <?
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
+if(!defined('NO_AGENT_CHECK')) define('NO_AGENT_CHECK', true);
 require_once ($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_before.php");
 $moduleId = 'kit.importxml';
 $moduleFilePrefix = 'kit_import_xml';
@@ -19,15 +16,22 @@ require_once ($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/iblock/prolog.php");
 IncludeModuleLangFile(__FILE__);
 
 include_once(dirname(__FILE__).'/../install/demo.php');
-if ($moduleDemoExpiredFunc()) {
+if (call_user_func($moduleDemoExpiredFunc)) {
 	require ($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_after.php");
-	$moduleShowDemoFunc();
+	call_user_func($moduleShowDemoFunc);
 	require ($DOCUMENT_ROOT."/bitrix/modules/main/include/epilog_admin.php");
 	die();
 }
 
 $MODULE_RIGHT = $APPLICATION->GetGroupRight($moduleId);
 if($MODULE_RIGHT < "W") $APPLICATION->AuthForm(GetMessage("ACCESS_DENIED"));
+
+$SETTINGS_DEFAULT = $SETTINGS = null;
+if($_POST)
+{
+	if(isset($_POST['SETTINGS'])) $SETTINGS = $_POST['SETTINGS'];
+	if(isset($_POST['SETTINGS_DEFAULT'])) $SETTINGS_DEFAULT = $_POST['SETTINGS_DEFAULT'];
+}
 
 $siteEncoding = \Bitrix\KitImportxml\Utils::getSiteEncoding();
 $oProfile = new \Bitrix\KitImportxml\Profile();
@@ -50,7 +54,7 @@ if(strlen($PROFILE_ID) > 0 && $PROFILE_ID!=='new')
 $SHOW_FIRST_LINES = 10;
 $SETTINGS_DEFAULT['IBLOCK_ID'] = intval($SETTINGS_DEFAULT['IBLOCK_ID']);
 $STEP = intval($STEP);
-if ($STEP <= 0)
+if ($STEP<=0)
 	$STEP = 1;
 
 $notRewriteFile = false;
@@ -63,21 +67,27 @@ if ($_SERVER["REQUEST_METHOD"] == "POST")
 		$STEP = $STEP - 1;
 		$notRewriteFile = true;
 	}
-
+	if(isset($_POST["CHB_NOT_UPDATE_FILE_IMPORT"]) && $_POST["CHB_NOT_UPDATE_FILE_IMPORT"]=='Y')
+	{
+		$notRewriteFile = true;
+	}
 }
 
-$strError = $oProfile->GetErrors();
+$strErrorProfile = $oProfile->GetErrors();
+$strError = '';
+$htmlError = '';
 $io = CBXVirtualIo::GetInstance();
 
 /////////////////////////////////////////////////////////////////////
 if ($REQUEST_METHOD == "POST" && $MODE=='AJAX')
 {
+	define('PUBLIC_AJAX_MODE', 'Y');
 	if($ACTION=='SHOW_MODULE_MESSAGE')
 	{
 		$APPLICATION->RestartBuffer();
 		if(ob_get_contents()) ob_end_clean();
 		?><div><?
-		$moduleShowDemoFunc(true);
+		call_user_func($moduleShowDemoFunc, true);
 		?></div><?
 		die();
 	}
@@ -85,6 +95,20 @@ if ($REQUEST_METHOD == "POST" && $MODE=='AJAX')
 	if($ACTION=='DELETE_TMP_DIRS')
 	{
 		\Bitrix\KitImportxml\Utils::RemoveTmpFiles();
+		die();
+	}
+	
+	if($ACTION=='GET_FILTER_FIELD_VALS')
+	{
+		$oFilter = new \Bitrix\KitImportxml\Filter($_POST['IBLOCK_ID']);
+		$arValues = $oFilter->GetListValues($_POST['FIELD'], array(
+			'query' => (isset($_POST['q']) ? $_POST['q'] : ''),
+			'inputname' => (isset($_POST['inputname']) ? $_POST['inputname'] : ''),
+			'oldvalue' => (isset($_POST['oldvalue']) ? $_POST['oldvalue'] : '')
+		));
+		$APPLICATION->RestartBuffer();
+		ob_end_clean();
+		echo CUtil::PhpToJSObject($arValues);
 		die();
 	}
 	
@@ -152,10 +176,24 @@ if ($REQUEST_METHOD == "POST" && $MODE=='AJAX')
 		$fl->Rename($_REQUEST['ID'], $newName);
 		die();
 	}
+	
+	if($ACTION=='GET_XPATH_VALUES')
+	{
+		$arFile = \CFile::GetFileArray($SETTINGS_DEFAULT['DATA_FILE']);
+		$xmlViewer = new \Bitrix\KitImportxml\XMLViewer($arFile['SRC'], $SETTINGS_DEFAULT);
+		$arVals = $xmlViewer->GetXpathVals($_POST['XPATH'], $_POST['PARENT_XPATH'], $_POST['EXTRASETTINGS'], $SETTINGS_DEFAULT);
+		
+		$APPLICATION->RestartBuffer();
+		if(ob_get_contents()) ob_end_clean();
+		echo CUtil::PhpToJSObject($arVals);
+		die();
+	}
 }
 
 if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 {
+	if($ACTION) define('PUBLIC_AJAX_MODE', 'Y');
+	
 	//*****************************************************************//	
 	if ($STEP > 1)
 	{
@@ -164,9 +202,9 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 		session_write_close();
 		$_SESSION = $sess;
 		
-		if (strlen($strError) <= 0)
+		if (strlen($strError) <= 0 && (!$notRewriteFile || $_POST['FORCE_UPDATE_FILE']=='Y'))
 		{
-			if($STEP==2 && !$notRewriteFile)
+			if($STEP==2 || ($STEP==3 && $_POST['FORCE_UPDATE_FILE']=='Y'))
 			{
 				if((!isset($_FILES["DATA_FILE"]) || !$_FILES["DATA_FILE"]["tmp_name"]) && (!isset($_POST['DATA_FILE']) || is_numeric($_POST['DATA_FILE'])))
 				{
@@ -174,7 +212,7 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 					elseif($SETTINGS_DEFAULT["EXT_DATA_FILE"]) $_POST['DATA_FILE'] = $SETTINGS_DEFAULT["EXT_DATA_FILE"];
 					elseif($SETTINGS_DEFAULT['EMAIL_DATA_FILE'])
 					{
-						$fileId = \Bitrix\KitImportxml\SMail::GetNewFile($SETTINGS_DEFAULT['EMAIL_DATA_FILE']);
+						$fileId = \Bitrix\KitImportxml\SMail::GetNewFile($SETTINGS_DEFAULT['EMAIL_DATA_FILE'], 0, 'kit_importxml_'.$PROFILE_ID);
 						if($fileId > 0)
 						{
 							if($_POST['OLD_DATA_FILE'])
@@ -195,11 +233,14 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 			if((isset($_FILES["DATA_FILE"]) && $_FILES["DATA_FILE"]["tmp_name"]) || (isset($_POST['DATA_FILE']) && $_POST['DATA_FILE'] && !is_numeric($_POST['DATA_FILE'])))
 			{
 				$extFile = false;
+				$extError = '';
 				$fid = 0;
 				if(isset($_FILES["DATA_FILE"]) && is_uploaded_file($_FILES["DATA_FILE"]["tmp_name"]))
 				{
-					//$fid = \Bitrix\KitImportxml\Utils::SaveFile($_FILES["DATA_FILE"], $moduleId);
+					$SETTINGS_DEFAULT['LAST_MODIFIED_FILE'] = $SETTINGS_DEFAULT['OLD_FILE_SIZE'] = '';
 					$arFile = \Bitrix\KitImportxml\Utils::MakeFileArray($_FILES["DATA_FILE"]);
+					$arFile['external_id'] = 'kit_importxml_'.$PROFILE_ID;
+					$arFile['del_old'] = 'Y';
 					$fid = \Bitrix\KitImportxml\Utils::SaveFile($arFile, $moduleId);
 				}
 				elseif(isset($_POST['DATA_FILE']) && strlen($_POST['DATA_FILE']) > 0)
@@ -214,8 +255,24 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 						}
 						if(!file_exists($filepath))
 						{
-							if($siteEncoding=='utf-8') $filepath = $APPLICATION->ConvertCharsetArray($filepath, LANG_CHARSET, 'CP1251');
-							else $filepath = $APPLICATION->ConvertCharsetArray($filepath, LANG_CHARSET, 'UTF-8');
+							if(defined("BX_UTF")) $filepath2 = $APPLICATION->ConvertCharsetArray($filepath, LANG_CHARSET, 'CP1251');
+							else $filepath2 = $APPLICATION->ConvertCharsetArray($filepath, LANG_CHARSET, 'UTF-8');
+							if(file_exists($filepath2)) $filepath = $filepath2;
+						}
+						if($filepath && file_exists($filepath) && $_POST['OLD_DATA_FILE'])
+						{
+							$arOldFile = CFIle::GetFileArray($_POST['OLD_DATA_FILE']);
+							$existsOldFile = (bool)($arOldFile && $arOldFile['SRC'] && file_exists($_SERVER['DOCUMENT_ROOT'].$arOldFile['SRC']));
+							$oldFileSize = (int)filesize($_SERVER['DOCUMENT_ROOT'].$arOldFile['SRC']);
+							$oldFileSize = ($_POST['OLD_FILE_SIZE'] > 0 && $oldFileSize > 0 && (max($_POST['OLD_FILE_SIZE'], $oldFileSize)/min($_POST['OLD_FILE_SIZE'], $oldFileSize) < 2) ? $_POST['OLD_FILE_SIZE'] : $oldFileSize);
+							$newFileSize = (int)filesize($filepath);
+							$lastModified = date('Y-m-d H:i:s', filemtime($filepath));
+							$SETTINGS_DEFAULT['LAST_MODIFIED_FILE'] = $lastModified;
+							$SETTINGS_DEFAULT['OLD_FILE_SIZE'] = $newFileSize;
+							if($existsOldFile && $oldFileSize > 0 && $newFileSize > 0 && $oldFileSize==$newFileSize && $lastModified<=$_POST['LAST_MODIFIED_FILE'])
+							{
+								$fid = $_POST['OLD_DATA_FILE'];
+							}
 						}
 					}
 					else
@@ -224,12 +281,22 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 						$filepath = $_POST['DATA_FILE'];
 						if($filepath && $_POST['OLD_DATA_FILE'])
 						{
-							$arOldFile = CFile::GetFileArray($_POST['OLD_DATA_FILE']);
+							$arOldFile = CFIle::GetFileArray($_POST['OLD_DATA_FILE']);
+							$existsOldFile = (bool)($arOldFile && $arOldFile['SRC'] && file_exists($_SERVER['DOCUMENT_ROOT'].$arOldFile['SRC']));
 							$oldFileSize = (int)filesize($_SERVER['DOCUMENT_ROOT'].$arOldFile['SRC']);
+							$oldFileSize = ($_POST['OLD_FILE_SIZE'] > 0 && $oldFileSize > 0 && (max($_POST['OLD_FILE_SIZE'], $oldFileSize)/min($_POST['OLD_FILE_SIZE'], $oldFileSize) < 2) ? $_POST['OLD_FILE_SIZE'] : $oldFileSize);
 							$client = new \Bitrix\Main\Web\HttpClient(array('disableSslVerification'=>true));
 							$newFileSize = 0;
-							if(is_callable(array($client, 'head')) && ($headers = $client->head($filepath)) && $client->getStatus()!=404) $newFileSize = (int)$headers->get('content-length');
-							if($oldFileSize > 0 && $newFileSize > 0 && $oldFileSize==$newFileSize)
+							$lastModified = '';
+							if(stripos(trim($filepath), 'http')===0 && strpos($filepath, '{API_')===false && !\Bitrix\KitImportxml\Utils::IsApiService($filepath) && is_callable(array($client, 'head')) && ($headers = $client->head($filepath)) && $client->getStatus()!=404)
+							{
+								$newFileSize = (int)$headers->get('content-length');
+								$lastModified = $client->getHeaders()->get('last-modified');
+								if(strlen($lastModified)) $lastModified = date('Y-m-d H:i:s', strtotime($lastModified));
+								$SETTINGS_DEFAULT['LAST_MODIFIED_FILE'] = $lastModified;
+							}
+							$SETTINGS_DEFAULT['OLD_FILE_SIZE'] = $newFileSize;
+							if($existsOldFile && $oldFileSize > 0 && $newFileSize > 0 && $oldFileSize==$newFileSize && $newFileSize>1024*100 && (strlen($lastModified)==0 || $lastModified<=$_POST['LAST_MODIFIED_FILE']))
 							{
 								$fid = $_POST['OLD_DATA_FILE'];
 							}
@@ -241,14 +308,32 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 						if($arFile['name'])
 						{
 							if(strpos($arFile['name'], '.')===false) $arFile['name'] .= '.xml';
-							$fid = \Bitrix\KitImportxml\Utils::SaveFile($arFile, $moduleId);
+							$arFile['external_id'] = 'kit_importxml_'.$PROFILE_ID;
+							$arFile['del_old'] = 'Y';
+							if($fid = \Bitrix\KitImportxml\Utils::SaveFile($arFile, $moduleId))
+							{
+								\Bitrix\KitImportxml\Utils::SetLastFileParams($SETTINGS_DEFAULT);
+							}
+						}
+						elseif($arFile['ERROR_MESSAGE'])
+						{
+							$extError = $arFile['ERROR_MESSAGE'];
 						}
 					}
 				}
 				
 				if(!$fid)
 				{
+					$SETTINGS_DEFAULT['LAST_MODIFIED_FILE'] = $SETTINGS_DEFAULT['OLD_FILE_SIZE'] = '';
 					$strError.= GetMessage("KIT_IX_FILE_UPLOAD_ERROR")."<br>";
+					if(strlen($extError) > 0)
+					{
+						$strError.= $extError."<br>";
+					}
+					if(preg_match('/^ftps?:\/\//', trim($_POST['DATA_FILE'])) && !function_exists('ftp_connect'))
+					{
+						$strError.= GetMessage("KIT_IX_FTP_EXTENSION")."<br>";
+					}
 					if($extFile)
 					{
 						$SETTINGS_DEFAULT["EXT_DATA_FILE"] = $_POST['DATA_FILE'];
@@ -263,6 +348,14 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 					}
 					$SETTINGS_DEFAULT["EXT_DATA_FILE"] = ($extFile ? $_POST['DATA_FILE'] : false);
 				}
+			}
+		}
+		elseif($notRewriteFile)
+		{
+			if(!isset($SETTINGS_DEFAULT["EXT_DATA_FILE"]))
+			{
+				if(isset($_POST['DATA_FILE']) && !is_numeric($_POST['DATA_FILE'])) $SETTINGS_DEFAULT["EXT_DATA_FILE"] = $_POST['DATA_FILE'];
+				elseif(isset($_POST['EXT_DATA_FILE']) && $_POST['EXT_DATA_FILE']) $SETTINGS_DEFAULT["EXT_DATA_FILE"] = $_POST['EXT_DATA_FILE'];
 			}
 		}
 		
@@ -312,7 +405,7 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 			else
 				$SETTINGS_DEFAULT['URL_DATA_FILE'] = $DATA_FILE_NAME;
 			
-			if(!in_array(ToLower(GetFileExtension($DATA_FILE_NAME)), array('xml', 'yml')))
+			if(strlen($strError)==0 && !in_array(ToLower(GetFileExtension($DATA_FILE_NAME)), array('xml', 'yml')))
 			{
 				$strError.= GetMessage("KIT_IX_FILE_NOT_SUPPORT")."<br>";
 			}
@@ -322,7 +415,7 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 			elseif (!CIBlockRights::UserHasRightTo($SETTINGS_DEFAULT['IBLOCK_ID'], $SETTINGS_DEFAULT['IBLOCK_ID'], "element_edit_any_wf_status"))
 				$strError.= GetMessage("KIT_IX_NO_IBLOCK")."<br>";
 			
-			if((!$DATA_FILE_NAME = \Bitrix\KitImportxml\Utils::GetFileName($DATA_FILE_NAME)))
+			if(strlen($strError)==0 && (!$DATA_FILE_NAME = \Bitrix\KitImportxml\Utils::GetFileName($DATA_FILE_NAME)))
 			{
 				$strError.= GetMessage("KIT_IX_FILE_NOT_FOUND")."<br>";
 			}
@@ -339,7 +432,7 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 			$oProfile = new \Bitrix\KitImportxml\Profile();
 			if($PROFILE_ID === 'new')
 			{
-				$PID = $oProfile->Add($NEW_PROFILE_NAME);
+				$PID = $oProfile->Add($NEW_PROFILE_NAME, $SETTINGS_DEFAULT["DATA_FILE"]);
 				if($PID===false)
 				{
 					if($ex = $APPLICATION->GetException())
@@ -369,10 +462,11 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 
 		$error = '';
 		$fl = new \Bitrix\KitImportxml\FieldList($SETTINGS_DEFAULT);
-		$xmlViewer = new \Bitrix\KitImportxml\XMLViewer($DATA_FILE_NAME, $SETTINGS_DEFAULT);
+		$xmlViewer = new \Bitrix\KitImportxml\XMLViewer($DATA_FILE_NAME, $SETTINGS_DEFAULT, $PROFILE_ID);
 		try{
 			$arStruct = $xmlViewer->GetFileStructure();
 			$arXPathsMulti = $xmlViewer->GetXPathsMulti();
+			$xmlViewer->CheckDefaultParams($SETTINGS_DEFAULT, $SETTINGS, $EXTRASETTINGS, $arStruct);
 		}catch(Exception $ex){
 			$error = GetMessage("KIT_IX_ERROR").$ex->getMessage();
 		}
@@ -382,27 +476,46 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 		if(strlen($error) > 0) echo $error;
 		//print_r($arStruct);
 		
-		echo '<div class="kit_ix_section_section">'.GetMessage("KIT_IX_SECTION");
+		echo '<div class="kit_ix_section_section"><span>'.GetMessage("KIT_IX_SECTION").'</span><span id="hint_SECTION_ID"></span><script>BX.hint_replace(BX("hint_SECTION_ID"), "'.GetMessage("KIT_IX_SECTION_HINT").'");</script>';
 			$fl->ShowSelectSections($SETTINGS_DEFAULT['IBLOCK_ID'], 'SETTINGS[SECTION_ID]', $SETTINGS['SECTION_ID']);
 		echo '</div>';
 		
 		echo '<div class="kit_ix_xml_wrap" id="kit_ix_xml_wrap">';
 		
 		echo '<div class="kit_ix_xml_settings">';
+		echo '<input type="hidden" name="SETTINGS[PROPERTY_MAP]" value="'.htmlspecialcharsbx($SETTINGS['PROPERTY_MAP']).'">';
+		echo '<input type="hidden" name="SETTINGS[OFFPROPERTY_MAP]" value="'.htmlspecialcharsbx($SETTINGS['OFFPROPERTY_MAP']).'">';
+		echo '<input type="hidden" name="SETTINGS[SECTION_MAP]" value="'.htmlspecialcharsbx($SETTINGS['SECTION_MAP']).'">';
 		echo '<input type="hidden" name="SETTINGS[XPATHS_MULTI]" value="'.base64_encode(serialize($arXPathsMulti)).'">';
 		echo '<input type="hidden" name="SETTINGS[INACTIVE_FIELDS]" value="'.htmlspecialcharsbx($SETTINGS['INACTIVE_FIELDS']).'">';
-		echo '<input type="hidden" name="defaultsettings_json" value="'.htmlspecialcharsex(CUtil::PhpToJSObject($SETTINGS_DEFAULT)).'">';
-		echo '<input type="hidden" name="settings_json" value="'.htmlspecialcharsex(CUtil::PhpToJSObject($SETTINGS)).'">';
-		echo '<input type="hidden" name="extrasettings_json" value="'.htmlspecialcharsex(CUtil::PhpToJSObject($EXTRASETTINGS)).'">';
-		//echo '<input type="hidden" name="struct_json" value="'.htmlspecialcharsex(CUtil::PhpToJSObject($arStruct)).'">';
+		echo '<input type="hidden" name="defaultsettings_json" value="'.htmlspecialcharsbx(CUtil::PhpToJSObject($SETTINGS_DEFAULT)).'">';
+		echo '<input type="hidden" name="settings_json" value="'.htmlspecialcharsbx(CUtil::PhpToJSObject($SETTINGS)).'">';
+		echo '<input type="hidden" name="extrasettings_json" value="'.htmlspecialcharsbx(CUtil::PhpToJSObject($EXTRASETTINGS)).'">';
+		//echo '<input type="hidden" name="struct_json" value="'.htmlspecialcharsbx(CUtil::PhpToJSObject($arStruct)).'">';
 		echo '<input type="hidden" name="struct_base64" value="'.base64_encode(serialize($arStruct)).'">';
 		$fl->ShowSelectFields($SETTINGS_DEFAULT['IBLOCK_ID'], 'element_fields');
 		$fl->ShowSelectOfferFields($SETTINGS_DEFAULT['IBLOCK_ID'], 'offer_fields');
 		$fl->ShowSelectSectionFields($SETTINGS_DEFAULT['IBLOCK_ID'], 'section_fields');
-		$fl->ShowSelectSubSectionFields($SETTINGS_DEFAULT['IBLOCK_ID'], 'subsection_fields');
+		for($i=1; $i<5; $i++)
+		{
+			$fl->ShowSelectSubSectionFields($SETTINGS_DEFAULT['IBLOCK_ID'], str_repeat('sub', $i).'section_fields', $i);
+		}
 		$fl->ShowSelectPropertyFields($SETTINGS_DEFAULT['IBLOCK_ID'], 'property_fields');
+		$fl->ShowSelectOfferPropertyFields($SETTINGS_DEFAULT['IBLOCK_ID'], 'offproperty_fields');
 		$fl->ShowSelectIbPropertyFields($SETTINGS_DEFAULT['IBLOCK_ID'], 'ibproperty_fields');
+		$fl->ShowSelectIbPropValFields($SETTINGS_DEFAULT['IBLOCK_ID'], 'ibpropval_fields');
+		$fl->ShowSelectStoreFields($SETTINGS_DEFAULT['IBLOCK_ID'], 'store_fields');
+		$fl->ShowSelectRestStoreFields($SETTINGS_DEFAULT['IBLOCK_ID'], 'reststore_fields');
 		echo '</div>';
+		
+		if($SETTINGS['AUTOFIELDS']=='Y')
+		{
+			echo '<div class="kit_ix_xml_struct_warning">';
+			echo BeginNote();
+			echo '<b>'.GetMessage("KIT_IX_AUTOFIELDS_NOTE").'</b> <a href="javascript:void(0)" onclick="EIXPreview.UnsetAutoSettings(this)">'.GetMessage("KIT_IX_AUTOFIELDS_CANCEL").'</a>';
+			echo EndNote();
+			echo '</div>';
+		}
 		
 		echo '<div class="kit_ix_xml_struct">';
 		$xmlViewer->ShowXmlTag($arStruct);
@@ -426,17 +539,17 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 		$arResult = $moduleRunnerClass::ImportIblock($DATA_FILE_NAME, $params, $EXTRASETTINGS, $stepparams, $PROFILE_ID);
 		$APPLICATION->RestartBuffer();
 		if(ob_get_contents()) ob_end_clean();
-		echo CUtil::PhpToJSObject($arResult);
+		echo '<!--module_return_data-->'.CUtil::PhpToJSObject($arResult).'<!--/module_return_data-->';
 		
-		require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/epilog_after.php");
+		require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/epilog_after.php");
 		die();
 	}
 	
 	/*Profile update*/
 	if(strlen($PROFILE_ID) > 0 && $PROFILE_ID!=='new')
 	{
-		$oProfile->Update($PROFILE_ID, $SETTINGS_DEFAULT, $SETTINGS);
-		if(is_array($EXTRASETTINGS)) $oProfile->UpdateExtra($PROFILE_ID, $EXTRASETTINGS);
+		$oProfile->Update($PROFILE_ID, $SETTINGS_DEFAULT, $SETTINGS, $EXTRASETTINGS);
+		//if(is_array($EXTRASETTINGS)) $oProfile->UpdateExtra($PROFILE_ID, $EXTRASETTINGS);
 	}
 	/*/Profile update*/
 	
@@ -458,8 +571,8 @@ require ($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_af
 /********************  BODY  *****************************************/
 /*********************************************************************/
 
-if (!$moduleDemoExpiredFunc()) {
-	$moduleShowDemoFunc();
+if (!call_user_func($moduleDemoExpiredFunc)) {
+	call_user_func($moduleShowDemoFunc);
 }
 
 $arSubMenu = array();
@@ -474,18 +587,25 @@ $arSubMenu[] = array(
 	"TITLE"=>GetMessage("KIT_IX_SHOW_CRONTAB"),
 	"ONCLICK" => "EProfile.ShowCron();",
 );
+$arSubMenu[] = array(
+	"TEXT" => GetMessage("KIT_IX_TOOLS_IMG_LOADER"),
+	"TITLE" => GetMessage("KIT_IX_TOOLS_IMG_LOADER"),
+	"ONCLICK" => "EProfile.ShowMassUploader();"
+);
 $aMenu = array(
 	array(
-		"TEXT"=>GetMessage("KIT_IX_MENU_HELP"),
+		/*"TEXT"=>GetMessage("KIT_IX_MENU_HELP"),
 		"TITLE"=>GetMessage("KIT_IX_MENU_HELP"),
 		"ONCLICK" => "EHelper.ShowHelp();",
-		"ICON" => "",
+		"ICON" => "",*/
+		"HTML" => '<a href="https://esolutions.su/solutions/'.$moduleId.'/?tab=video" target="blank" class="adm-btn" title="'.GetMessage("KIT_IX_MENU_VIDEO").'">'.GetMessage("KIT_IX_MENU_VIDEO").'</a>'
 	),
 	array(
-		"TEXT"=>GetMessage("KIT_IX_MENU_FAQ"),
+		/*"TEXT"=>GetMessage("KIT_IX_MENU_FAQ"),
 		"TITLE"=>GetMessage("KIT_IX_MENU_FAQ"),
 		"ONCLICK" => "EHelper.ShowHelp(1);",
-		"ICON" => "",
+		"ICON" => "",*/
+		"HTML" => '<a href="https://esolutions.su/solutions/'.$moduleId.'/?tab=faq" target="blank" class="adm-btn" title="'.GetMessage("KIT_IX_MENU_FAQ").'">'.GetMessage("KIT_IX_MENU_FAQ").'</a>'
 	),
 	array(
 		"TEXT"=>GetMessage("KIT_IX_TOOLS_LIST"),
@@ -528,10 +648,17 @@ if ($STEP < 2)
 	));	
 }*/
 
-CAdminMessage::ShowMessage($strError);
+if(strlen($strErrorProfile.$strError) > 0)
+{
+	CAdminMessage::ShowMessage(array(
+		'MESSAGE' => $strErrorProfile.$strError,
+		'DETAILS' => $htmlError,
+		'HTML' => true
+	));
+}
 ?>
 
-<form method="POST" action="<?echo $sDocPath ?>?lang=<?echo LANG ?>" ENCTYPE="multipart/form-data" name="dataload" id="dataload" class="kit-ix-s1-form">
+<form method="POST" action="<?echo $sDocPath ?>?<?if(strlen($PROFILE_ID) > 0){echo 'PROFILE_ID='.$PROFILE_ID.'&';}?>lang=<?echo LANG ?>" ENCTYPE="multipart/form-data" name="dataload" id="dataload" class="kit-ix-s1-form">
 
 <?
 $arProfile = (strlen($PROFILE_ID) > 0 ? $oProfile->GetFieldsByID($PROFILE_ID) : array());
@@ -571,7 +698,7 @@ if ($STEP == 1)
 		<td colspan="2" class="kit-ix-profile-header">
 			<div>
 				<?echo GetMessage("KIT_IX_PROFILE_HEADER"); ?>
-				<a href="javascript:void(0)" onclick="EHelper.ShowHelp();" title="<?echo GetMessage("KIT_IX_MENU_HELP"); ?>" class="kit-ix-help-link"></a>
+				<?/*?><a href="javascript:void(0)" onclick="EHelper.ShowHelp();" title="<?echo GetMessage("KIT_IX_MENU_HELP"); ?>" class="kit-ix-help-link"></a><?*/?>
 			</div>
 		</td>
 	</tr>
@@ -579,7 +706,7 @@ if ($STEP == 1)
 	<tr>
 		<td><?echo GetMessage("KIT_IX_PROFILE"); ?>:</td>
 		<td>		
-			<?$oProfile->ShowProfileList('PROFILE_ID');?>
+			<?$oProfile->ShowProfileList('PROFILE_ID', $PROFILE_ID);?>
 			
 			<?if(strlen($PROFILE_ID) > 0 && $PROFILE_ID!='new'){?>
 				<span class="kit-ix-edit-btns">
@@ -594,14 +721,32 @@ if ($STEP == 1)
 	<tr id="new_profile_name">
 		<td><?echo GetMessage("KIT_IX_NEW_PROFILE_NAME"); ?>:</td>
 		<td>
-			<input type="text" name="NEW_PROFILE_NAME" value="<?echo htmlspecialcharsbx($NEW_PROFILE_NAME)?>">
+			<input type="text" name="NEW_PROFILE_NAME" value="<?echo htmlspecialcharsbx($NEW_PROFILE_NAME)?>" size="50">
 		</td>
 	</tr>
 
 	<?
 	if(strlen($PROFILE_ID) > 0)
 	{
+		$isDescription = (bool)(strlen(trim($SETTINGS_DEFAULT['PROFILE_DESCRIPTION'])) > 0);
+		if(!$isDescription)
+		{
 	?>
+		<tr>
+			<td class="kit-ix-settings-margin-container" colspan="2" align="center">
+				<a class="kit-ix-grey" href="javascript:void(0)" onclick="ESettings.AddProfileDescription(this)"><?echo GetMessage("KIT_IX_PROFILE_DESCRIPTION_ADD");?></a>
+			</td>
+		</tr>
+		<?
+		}
+		?>
+		<tr <?if(!$isDescription){echo ' style="display: none;"';}?>>
+			<td><?echo GetMessage("KIT_IX_PROFILE_DESCRIPTION"); ?>:</td>
+			<td>
+				<textarea name="SETTINGS_DEFAULT[PROFILE_DESCRIPTION]" cols="50" rows="3"><?echo htmlspecialcharsbx($SETTINGS_DEFAULT['PROFILE_DESCRIPTION'])?></textarea>
+			</td>
+		</tr>
+		
 		<tr class="heading">
 			<td colspan="2"><?echo GetMessage("KIT_IX_DEFAULT_SETTINGS"); ?></td>
 		</tr>
@@ -612,6 +757,8 @@ if ($STEP == 1)
 				<!--KIT_IX_CHOOSE_FILE-->
 				<?if($SETTINGS_DEFAULT['EMAIL_DATA_FILE']) echo '<input type="hidden" name="SETTINGS_DEFAULT[EMAIL_DATA_FILE]" value="'.htmlspecialcharsbx($SETTINGS_DEFAULT['EMAIL_DATA_FILE']).'">';?>
 				<?if($SETTINGS_DEFAULT['EXT_DATA_FILE']) echo '<input type="hidden" name="EXT_DATA_FILE" value="'.htmlspecialcharsbx($SETTINGS_DEFAULT['EXT_DATA_FILE']).'">';?>
+				<input type="hidden" name="LAST_MODIFIED_FILE" value="<?echo htmlspecialcharsbx($SETTINGS_DEFAULT['LAST_MODIFIED_FILE']); ?>">
+				<input type="hidden" name="OLD_FILE_SIZE" value="<?echo (int)($SETTINGS_DEFAULT['OLD_FILE_SIZE']); ?>">
 				<input type="hidden" name="OLD_DATA_FILE" value="<?echo htmlspecialcharsbx($SETTINGS_DEFAULT['DATA_FILE']); ?>">
 				<?
 				$arFile = CFile::GetFileArray($SETTINGS_DEFAULT["DATA_FILE"]);
@@ -643,6 +790,7 @@ if ($STEP == 1)
 					"FILE_SIZE" => "Y",
 					"DIMENSIONS" => "N"
 				), array(
+					'not_update' => true,
 					'upload' => true,
 					'medialib' => false,
 					'file_dialog' => true,
@@ -672,6 +820,7 @@ if ($STEP == 1)
 		<tr>
 			<td><?echo GetMessage("KIT_IX_ELEMENT_UID"); ?>: <span id="hint_ELEMENT_UID"></span><script>BX.hint_replace(BX('hint_ELEMENT_UID'), '<?echo GetMessage("KIT_IX_ELEMENT_UID_HINT"); ?>');</script></td>
 			<td>
+				<input type="hidden" name="SETTINGS_DEFAULT[SHOW_MODE_ELEMENT_UID]" value="<?echo htmlspecialcharsbx($SETTINGS_DEFAULT['SHOW_MODE_ELEMENT_UID']);?>">
 				<?$fl->ShowSelectUidFields($SETTINGS_DEFAULT['IBLOCK_ID'], 'SETTINGS_DEFAULT[ELEMENT_UID][]', $SETTINGS_DEFAULT['ELEMENT_UID']);?>
 			</td>
 		</tr>
@@ -682,6 +831,7 @@ if ($STEP == 1)
 		<tr <?if(!$OFFERS_IBLOCK_ID){echo 'style="display: none;"';}?> id="element_uid_sku">
 			<td><?echo GetMessage("KIT_IX_ELEMENT_UID_SKU"); ?>: <span id="hint_ELEMENT_UID_SKU"></span><script>BX.hint_replace(BX('hint_ELEMENT_UID_SKU'), '<?echo GetMessage("KIT_IX_ELEMENT_UID_SKU_HINT"); ?>');</script></td>
 			<td>
+			<input type="hidden" name="SETTINGS_DEFAULT[SHOW_MODE_ELEMENT_UID_SKU]" value="<?echo htmlspecialcharsbx($SETTINGS_DEFAULT['SHOW_MODE_ELEMENT_UID_SKU']);?>">
 			<?
 			if($OFFERS_IBLOCK_ID)
 			{
@@ -695,17 +845,43 @@ if ($STEP == 1)
 			</td>
 		</tr>
 
-		<tr>
-			<td><?echo GetMessage("KIT_IX_ONLY_UPDATE_MODE"); ?>: <span id="hint_ONLY_UPDATE_MODE_ELEMENT"></span><script>BX.hint_replace(BX('hint_ONLY_UPDATE_MODE_ELEMENT'), '<?echo GetMessage("KIT_IX_ONLY_UPDATE_MODE_HINT"); ?>');</script></td>
-			<td>
-				<input type="checkbox" name="SETTINGS_DEFAULT[ONLY_UPDATE_MODE_ELEMENT]" value="Y" <?if($SETTINGS_DEFAULT['ONLY_UPDATE_MODE']=='Y' || $SETTINGS_DEFAULT['ONLY_UPDATE_MODE_ELEMENT']=='Y'){echo 'checked';}?> onchange="EProfile.RadioChb(this, ['SETTINGS_DEFAULT[ONLY_CREATE_MODE_ELEMENT]', 'SETTINGS_DEFAULT[ONLY_DELETE_MODE]'])">
+		<?$sepMode = (bool)($OFFERS_IBLOCK_ID && $SETTINGS_DEFAULT['ONLY_UPDATE_MODE_SEP']=='Y');?>
+		<tr class="kit-extra-mode-chbs-wrap<?if($sepMode){echo ' kit-extra-mode-chbs-wrap-active';}?>">
+			<td valign="top"><?echo GetMessage("KIT_IX_ONLY_UPDATE_MODE"); ?>: <span id="hint_ONLY_UPDATE_MODE_ELEMENT"></span><script>BX.hint_replace(BX('hint_ONLY_UPDATE_MODE_ELEMENT'), '<?echo GetMessage("KIT_IX_ONLY_UPDATE_MODE_HINT"); ?>');</script></td>
+			<td>			
+				<input type="hidden" name="SETTINGS_DEFAULT[ONLY_UPDATE_MODE_SEP]" value="<?echo ($sepMode ? 'Y' : 'N')?>">
+				<input type="checkbox" name="SETTINGS_DEFAULT[ONLY_UPDATE_MODE_ELEMENT]" value="Y" <?if($SETTINGS_DEFAULT['ONLY_UPDATE_MODE']=='Y' || $SETTINGS_DEFAULT['ONLY_UPDATE_MODE_ELEMENT']=='Y'){echo 'checked';}?> onchange="EProfile.RadioChb(this, ['SETTINGS_DEFAULT[ONLY_CREATE_MODE_ELEMENT]', 'SETTINGS_DEFAULT[ONLY_DELETE_MODE]'])"<?if($sepMode){echo ' disabled';}?>>
+				<a href="javascript:void(0)" onclick="EProfile.ShowExtraModeChbs(this)" class="kit-extra-mode-link" title="<?echo GetMessage("KIT_IX_EXTRA_MODE_LINK"); ?>" <?if(!$OFFERS_IBLOCK_ID){echo 'style="display: none;"';}?>></a>
+				<div class="kit-extra-mode-chbs">
+					<div>
+						<input id="only_update_mode_product" type="checkbox" name="SETTINGS_DEFAULT[ONLY_UPDATE_MODE_PRODUCT]" value="Y" <?if($SETTINGS_DEFAULT['ONLY_UPDATE_MODE_PRODUCT']=='Y' || ($SETTINGS_DEFAULT['ONLY_UPDATE_MODE_SEP']!='Y' && $SETTINGS_DEFAULT['ONLY_UPDATE_MODE_ELEMENT']=='Y')){echo 'checked';}?> onchange="EProfile.RadioChb(this, ['SETTINGS_DEFAULT[ONLY_CREATE_MODE_PRODUCT]', 'SETTINGS_DEFAULT[ONLY_DELETE_MODE]'])">
+						<label for="only_update_mode_product"><?echo GetMessage("KIT_IX_ONLY_UPDATE_MODE_PRODUCT"); ?></label>
+					</div>
+					<div>
+						<input id="only_update_mode_offer" type="checkbox" name="SETTINGS_DEFAULT[ONLY_UPDATE_MODE_OFFER]" value="Y" <?if($SETTINGS_DEFAULT['ONLY_UPDATE_MODE_OFFER']=='Y' || ($SETTINGS_DEFAULT['ONLY_UPDATE_MODE_SEP']!='Y' && $SETTINGS_DEFAULT['ONLY_UPDATE_MODE_ELEMENT']=='Y')){echo 'checked';}?> onchange="EProfile.RadioChb(this, ['SETTINGS_DEFAULT[ONLY_CREATE_MODE_OFFER]', 'SETTINGS_DEFAULT[ONLY_DELETE_MODE]'])">
+						<label for="only_update_mode_offer"><?echo GetMessage("KIT_IX_ONLY_UPDATE_MODE_OFFERS"); ?></label>
+					</div>
+				</div>
 			</td>
 		</tr>
 
-		<tr>
-			<td><?echo GetMessage("KIT_IX_ONLY_CREATE_MODE"); ?>: <span id="hint_ONLY_CREATE_MODE_ELEMENT"></span><script>BX.hint_replace(BX('hint_ONLY_CREATE_MODE_ELEMENT'), '<?echo GetMessage("KIT_IX_ONLY_CREATE_MODE_HINT"); ?>');</script></td>
+		<?$sepMode = (bool)($OFFERS_IBLOCK_ID && $SETTINGS_DEFAULT['ONLY_CREATE_MODE_SEP']=='Y');?>
+		<tr class="kit-extra-mode-chbs-wrap<?if($sepMode){echo ' kit-extra-mode-chbs-wrap-active';}?>">
+			<td valign="top"><?echo GetMessage("KIT_IX_ONLY_CREATE_MODE"); ?>: <span id="hint_ONLY_CREATE_MODE_ELEMENT"></span><script>BX.hint_replace(BX('hint_ONLY_CREATE_MODE_ELEMENT'), '<?echo GetMessage("KIT_IX_ONLY_CREATE_MODE_HINT"); ?>');</script></td>
 			<td>
-				<input type="checkbox" name="SETTINGS_DEFAULT[ONLY_CREATE_MODE_ELEMENT]" value="Y" <?if($SETTINGS_DEFAULT['ONLY_CREATE_MODE']=='Y' || $SETTINGS_DEFAULT['ONLY_CREATE_MODE_ELEMENT']=='Y'){echo 'checked';}?> onchange="EProfile.RadioChb(this, ['SETTINGS_DEFAULT[ONLY_UPDATE_MODE_ELEMENT]', 'SETTINGS_DEFAULT[ONLY_DELETE_MODE]'])">
+				<input type="hidden" name="SETTINGS_DEFAULT[ONLY_CREATE_MODE_SEP]" value="<?echo ($sepMode ? 'Y' : 'N')?>">
+				<input type="checkbox" name="SETTINGS_DEFAULT[ONLY_CREATE_MODE_ELEMENT]" value="Y" <?if($SETTINGS_DEFAULT['ONLY_CREATE_MODE']=='Y' || $SETTINGS_DEFAULT['ONLY_CREATE_MODE_ELEMENT']=='Y'){echo 'checked';}?> onchange="EProfile.RadioChb(this, ['SETTINGS_DEFAULT[ONLY_UPDATE_MODE_ELEMENT]', 'SETTINGS_DEFAULT[ONLY_DELETE_MODE]'])"<?if($sepMode){echo ' disabled';}?>>
+				<a href="javascript:void(0)" onclick="EProfile.ShowExtraModeChbs(this)" class="kit-extra-mode-link" title="<?echo GetMessage("KIT_IX_EXTRA_MODE_LINK"); ?>" <?if(!$OFFERS_IBLOCK_ID){echo 'style="display: none;"';}?>></a>
+				<div class="kit-extra-mode-chbs">
+					<div>
+						<input id="only_create_mode_product" type="checkbox" name="SETTINGS_DEFAULT[ONLY_CREATE_MODE_PRODUCT]" value="Y" <?if($SETTINGS_DEFAULT['ONLY_CREATE_MODE_PRODUCT']=='Y' || ($SETTINGS_DEFAULT['ONLY_CREATE_MODE_SEP']!='Y' && $SETTINGS_DEFAULT['ONLY_CREATE_MODE_ELEMENT']=='Y')){echo 'checked';}?> onchange="EProfile.RadioChb(this, ['SETTINGS_DEFAULT[ONLY_UPDATE_MODE_PRODUCT]', 'SETTINGS_DEFAULT[ONLY_DELETE_MODE]'])">
+						<label for="only_create_mode_product"><?echo GetMessage("KIT_IX_ONLY_CREATE_MODE_PRODUCT"); ?></label>
+					</div>
+					<div>
+						<input id="only_create_mode_offer" type="checkbox" name="SETTINGS_DEFAULT[ONLY_CREATE_MODE_OFFER]" value="Y" <?if($SETTINGS_DEFAULT['ONLY_CREATE_MODE_OFFER']=='Y' || ($SETTINGS_DEFAULT['ONLY_CREATE_MODE_SEP']!='Y' && $SETTINGS_DEFAULT['ONLY_CREATE_MODE_ELEMENT']=='Y')){echo 'checked';}?> onchange="EProfile.RadioChb(this, ['SETTINGS_DEFAULT[ONLY_UPDATE_MODE_OFFER]', 'SETTINGS_DEFAULT[ONLY_DELETE_MODE]'])">
+						<label for="only_create_mode_offer"><?echo GetMessage("KIT_IX_ONLY_CREATE_MODE_OFFERS"); ?></label>
+					</div>
+				</div>
 			</td>
 		</tr>
 		
@@ -713,7 +889,7 @@ if ($STEP == 1)
 		<tr>
 			<td><?echo GetMessage("KIT_IX_ONLY_DELETE_MODE"); ?>: <span id="hint_ONLY_DELETE_MODE"></span><script>BX.hint_replace(BX('hint_ONLY_DELETE_MODE'), '<?echo GetMessage("KIT_IX_ONLY_DELETE_MODE_HINT"); ?>');</script></td>
 			<td>
-				<input type="checkbox" name="SETTINGS_DEFAULT[ONLY_DELETE_MODE]" value="Y" <?if($SETTINGS_DEFAULT['ONLY_DELETE_MODE']=='Y'){echo 'checked';}?> onchange="EProfile.RadioChb(this, ['SETTINGS_DEFAULT[ONLY_UPDATE_MODE]', 'SETTINGS_DEFAULT[ONLY_CREATE_MODE]'], '<?echo htmlspecialcharsex(GetMessage("KIT_IX_ONLY_DELETE_MODE_CONFIRM")); ?>')">
+				<input type="checkbox" name="SETTINGS_DEFAULT[ONLY_DELETE_MODE]" value="Y" <?if($SETTINGS_DEFAULT['ONLY_DELETE_MODE']=='Y'){echo 'checked';}?> onchange="EProfile.RadioChb(this, ['SETTINGS_DEFAULT[ONLY_UPDATE_MODE]', 'SETTINGS_DEFAULT[ONLY_CREATE_MODE]'], '<?echo htmlspecialcharsbx(GetMessage("KIT_IX_ONLY_DELETE_MODE_CONFIRM")); ?>')">
 			</td>
 		</tr>
 		<?*/?>
@@ -745,13 +921,6 @@ if ($STEP == 1)
 			<td><?echo GetMessage("KIT_IX_ELEMENT_LOADING_ACTIVATE"); ?>: <span id="hint_ELEMENT_LOADING_ACTIVATE"></span><script>BX.hint_replace(BX('hint_ELEMENT_LOADING_ACTIVATE'), '<?echo GetMessage("KIT_IX_ELEMENT_LOADING_ACTIVATE_HINT"); ?>');</script></td>
 			<td>
 				<input type="checkbox" name="SETTINGS_DEFAULT[ELEMENT_LOADING_ACTIVATE]" value="Y" <?if($SETTINGS_DEFAULT['ELEMENT_LOADING_ACTIVATE']=='Y'){echo 'checked';}?>>
-			</td>
-		</tr>
-		
-		<tr>
-			<td><?echo GetMessage("KIT_IX_ELEMENT_NOT_UPDATE_WO_CHANGES"); ?>: <span id="hint_ELEMENT_NOT_UPDATE_WO_CHANGES"></span><script>BX.hint_replace(BX('hint_ELEMENT_NOT_UPDATE_WO_CHANGES'), '<?echo GetMessage("KIT_IX_ELEMENT_NOT_UPDATE_WO_CHANGES_HINT"); ?>');</script></td>
-			<td>
-				<input type="checkbox" name="SETTINGS_DEFAULT[ELEMENT_NOT_UPDATE_WO_CHANGES]" value="Y" <?if($SETTINGS_DEFAULT['ELEMENT_NOT_UPDATE_WO_CHANGES']=='Y'){echo 'checked';}?>>
 			</td>
 		</tr>
 		
@@ -828,14 +997,14 @@ if ($STEP == 1)
 		<tr>
 			<td colspan="2" align="center">
 				<input type="hidden" id="CELEMENT_MISSING_DEFAULTS" name="SETTINGS_DEFAULT[CELEMENT_MISSING_DEFAULTS]" value="<?echo htmlspecialcharsbx($SETTINGS_DEFAULT['CELEMENT_MISSING_DEFAULTS']);?>">
-				<a href="javascript:void(0)" onclick="EProfile.OpenMissignElementFields(this)"><?echo GetMessage("KIT_IX_ELEMENT_MISSING_SET_FIELDS"); ?></a>
+				<a href="javascript:void(0)" onclick="EProfile.OpenMissignElementFields(this)" class="kit-ix-link2window"><?echo GetMessage("KIT_IX_ELEMENT_MISSING_SET_FIELDS"); ?></a>
 			</td>
 		</tr>
 		
 		<tr>
 			<td colspan="2" align="center">
 				<input type="hidden" id="CELEMENT_MISSING_FILTER" name="SETTINGS_DEFAULT[CELEMENT_MISSING_FILTER]" value="<?echo htmlspecialcharsbx($SETTINGS_DEFAULT['CELEMENT_MISSING_FILTER']);?>">
-				<a href="javascript:void(0)" onclick="EProfile.OpenMissignElementFilter(this)"><?echo GetMessage("KIT_IX_ELEMENT_MISSING_SET_FILTER"); ?></a>
+				<a href="javascript:void(0)" onclick="EProfile.OpenMissignElementFilter(this)" class="kit-ix-link2window"><?echo GetMessage("KIT_IX_ELEMENT_MISSING_SET_FILTER"); ?></a>
 			</td>
 		</tr>
 		
@@ -886,7 +1055,7 @@ if ($STEP == 1)
 		<tr <?if(!$OFFERS_IBLOCK_ID){echo 'style="display: none;"';}?> class="kda-sku-block">
 			<td colspan="2" align="center">
 				<input type="hidden" id="OFFER_MISSING_DEFAULTS" name="SETTINGS_DEFAULT[OFFER_MISSING_DEFAULTS]" value="<?echo htmlspecialcharsbx($SETTINGS_DEFAULT['OFFER_MISSING_DEFAULTS']);?>">
-				<a href="javascript:void(0)" onclick="EProfile.OpenMissignElementFields(this)"><?echo GetMessage("KIT_IX_ELEMENT_MISSING_SET_FIELDS"); ?></a>
+				<a href="javascript:void(0)" onclick="EProfile.OpenMissignElementFields(this)" class="kit-ix-link2window"><?echo GetMessage("KIT_IX_ELEMENT_MISSING_SET_FIELDS"); ?></a>
 			</td>
 		</tr>
 		
@@ -926,6 +1095,13 @@ if ($STEP == 1)
 		</tr>
 		
 		<tr>
+			<td><?echo GetMessage("KIT_IX_SECTION_NOTEMPTY_ACTIVATE"); ?>:</td>
+			<td>
+				<input type="checkbox" name="SETTINGS_DEFAULT[SECTION_NOTEMPTY_ACTIVATE]" value="Y" <?if($SETTINGS_DEFAULT['SECTION_NOTEMPTY_ACTIVATE']=='Y'){echo 'checked';}?>>
+			</td>
+		</tr>
+		
+		<tr>
 			<td><?echo GetMessage("KIT_IX_SECTION_EMPTY_DEACTIVATE"); ?>:</td>
 			<td>
 				<input type="checkbox" name="SETTINGS_DEFAULT[SECTION_EMPTY_DEACTIVATE]" value="Y" <?if($SETTINGS_DEFAULT['SECTION_EMPTY_DEACTIVATE']=='Y'){echo 'checked';}?>>
@@ -933,9 +1109,9 @@ if ($STEP == 1)
 		</tr>
 		
 		<tr>
-			<td><?echo GetMessage("KIT_IX_SECTION_NOTEMPTY_ACTIVATE"); ?>:</td>
+			<td><?echo GetMessage("KIT_IX_SECTION_EMPTY_REMOVE"); ?>:</td>
 			<td>
-				<input type="checkbox" name="SETTINGS_DEFAULT[SECTION_NOTEMPTY_ACTIVATE]" value="Y" <?if($SETTINGS_DEFAULT['SECTION_NOTEMPTY_ACTIVATE']=='Y'){echo 'checked';}?>>
+				<input type="checkbox" name="SETTINGS_DEFAULT[SECTION_EMPTY_REMOVE]" value="Y" <?if($SETTINGS_DEFAULT['SECTION_EMPTY_REMOVE']=='Y'){echo 'checked';}?>>
 			</td>
 		</tr>
 		
@@ -979,7 +1155,13 @@ if ($STEP == 1)
 			<tr>
 				<td><?echo GetMessage("KIT_IX_QUANTITY_AS_SUM_STORE"); ?>:</td>
 				<td>
-					<input type="checkbox" name="SETTINGS_DEFAULT[QUANTITY_AS_SUM_STORE]" value="Y" <?if($SETTINGS_DEFAULT['QUANTITY_AS_SUM_STORE']=='Y'){echo 'checked';}?> onchange="EProfile.RadioChb(this, ['SETTINGS_DEFAULT[QUANTITY_AS_SUM_PROPERTIES]'])">
+					<table cellspacing="0"><tr>
+					<td style="padding-left: 0px;"><input type="checkbox" name="SETTINGS_DEFAULT[QUANTITY_AS_SUM_STORE]" value="Y" <?if($SETTINGS_DEFAULT['QUANTITY_AS_SUM_STORE']=='Y'){echo 'checked';}?> onchange="EProfile.RadioChb(this, ['SETTINGS_DEFAULT[QUANTITY_AS_SUM_PROPERTIES]', 'SETTINGS_DEFAULT[CALCULATE_PRICE]']); if(this.checked){$('#quantity_sum_stores').show();}else{$('#quantity_sum_stores').hide();}"></td>
+					<td>&nbsp; &nbsp;</td>
+					<td id="quantity_sum_stores"<?if($SETTINGS_DEFAULT['QUANTITY_AS_SUM_STORE']!='Y'){echo ' style="display: none;"';}?>>
+						<?$fl->ShowSelectStoreListForSum('SETTINGS_DEFAULT[ELEMENT_STORES_FOR_QUANTITY][]', $SETTINGS_DEFAULT['ELEMENT_STORES_FOR_QUANTITY'], 'SETTINGS_DEFAULT[ELEMENT_STORES_MODE_FOR_QUANTITY]', $SETTINGS_DEFAULT['ELEMENT_STORES_MODE_FOR_QUANTITY']);?>
+					</td>
+					</tr></table>
 				</td>
 			</tr>
 			
@@ -987,7 +1169,7 @@ if ($STEP == 1)
 				<td><?echo GetMessage("KIT_IX_QUANTITY_AS_SUM_PROPERTIES"); ?>:</td>
 				<td>
 					<table cellspacing="0"><tr>
-					<td style="padding-left: 0px;"><input type="checkbox" name="SETTINGS_DEFAULT[QUANTITY_AS_SUM_PROPERTIES]" value="Y" <?if($SETTINGS_DEFAULT['QUANTITY_AS_SUM_PROPERTIES']=='Y'){echo 'checked';}?> onchange="EProfile.RadioChb(this, ['SETTINGS_DEFAULT[QUANTITY_AS_SUM_STORE]']); if(this.checked){$('#quantity_sum_props').show();}else{$('#quantity_sum_props').hide();}"></td>
+					<td style="padding-left: 0px;"><input type="checkbox" name="SETTINGS_DEFAULT[QUANTITY_AS_SUM_PROPERTIES]" value="Y" <?if($SETTINGS_DEFAULT['QUANTITY_AS_SUM_PROPERTIES']=='Y'){echo 'checked';}?> onchange="EProfile.RadioChb(this, ['SETTINGS_DEFAULT[QUANTITY_AS_SUM_STORE]', 'SETTINGS_DEFAULT[CALCULATE_PRICE]']); if(this.checked){$('#quantity_sum_props').show();}else{$('#quantity_sum_props').hide();}"></td>
 					<td>&nbsp; &nbsp;</td>
 					<td id="quantity_sum_props"<?if($SETTINGS_DEFAULT['QUANTITY_AS_SUM_PROPERTIES']!='Y'){echo ' style="display: none;"';}?>>
 						<div id="properties_for_sum"><?$fl->ShowSelectPropertyListForSum($SETTINGS_DEFAULT['IBLOCK_ID'], 'SETTINGS_DEFAULT[ELEMENT_PROPERTIES_FOR_QUANTITY][]', $SETTINGS_DEFAULT['ELEMENT_PROPERTIES_FOR_QUANTITY']);?></div>
@@ -996,40 +1178,267 @@ if ($STEP == 1)
 					</tr></table>
 				</td>
 			</tr>
+			
+			<tr>
+				<td><?echo GetMessage("KIT_IX_CALCULATE_PRICE"); ?>:</td>
+				<td>
+					<input type="checkbox" name="SETTINGS_DEFAULT[CALCULATE_PRICE]" value="Y" <?if($SETTINGS_DEFAULT['CALCULATE_PRICE']=='Y'){echo 'checked';}?> onchange="EProfile.RadioChb(this, ['SETTINGS_DEFAULT[QUANTITY_AS_SUM_STORE]', 'SETTINGS_DEFAULT[QUANTITY_AS_SUM_PROPERTIES]'])">
+					&nbsp;
+					(<a href="javascript:void(0)" onclick="EProfile.OpenCalcPriceForm(this)" class="kit-ix-link2window"><?echo GetMessage("KIT_IX_CALCULATE_PRICE_WINDOW"); ?></a>)
+				</td>
+			</tr>
 		<?}?>
 		
-		<?/*?>
 		<tr class="heading">
-			<td colspan="2"><?echo GetMessage("KIT_IX_SETTINGS_STATISTIC"); ?></td>
+			<td colspan="2"><?echo GetMessage("KIT_IX_SETTINGS_SPEED"); ?> <a href="javascript:void(0)" onclick="EProfile.ToggleAdditionalSettings(this)" class="kit_ix_head_more show"><?echo GetMessage("KIT_IX_SETTINGS_ADDITONAL_SHOW_HIDE"); ?></a></td>
+		</tr>
+		
+		<?/*?>
+		<tr>
+			<td><?echo GetMessage("KIT_IX_IMAGES_FORCE_UPDATE"); ?>: <span id="hint_ELEMENT_IMAGES_FORCE_UPDATE"></span><script>BX.hint_replace(BX('hint_ELEMENT_IMAGES_FORCE_UPDATE'), '<?echo GetMessage("KIT_IX_IMAGES_FORCE_UPDATE_HINT"); ?>');</script></td>
+			<td>
+				<input type="checkbox" name="SETTINGS_DEFAULT[ELEMENT_IMAGES_FORCE_UPDATE]" value="Y" <?if($SETTINGS_DEFAULT['ELEMENT_IMAGES_FORCE_UPDATE']=='Y'){echo 'checked';}?>>
+			</td>
+		</tr>
+		<?*/?>
+		
+		<tr>
+			<td><?echo GetMessage("KIT_IX_CHECK_CHANGES"); ?>: <span id="hint_CHECK_CHANGES"></span><script>BX.hint_replace(BX('hint_CHECK_CHANGES'), '<?echo GetMessage("KIT_IX_CHECK_CHANGES_HINT"); ?>');</script></td>
+			<td>
+				<input type="hidden" name="SETTINGS_DEFAULT[CHECK_CHANGES]" value="N">
+				<input type="checkbox" name="SETTINGS_DEFAULT[CHECK_CHANGES]" value="Y" <?if($SETTINGS_DEFAULT['CHECK_CHANGES']!='N' && $SETTINGS_DEFAULT['ELEMENT_IMAGES_FORCE_UPDATE']!='Y'){echo 'checked';}?> data-confirm-disable="<?echo GetMessage("KIT_IX_DISABLE_IS_LOW_SPEED"); ?>">
+			</td>
+		</tr>
+		
+		<tr>
+			<td><?echo GetMessage("KIT_IX_ELEMENT_NOT_UPDATE_WO_CHANGES"); ?>: <span id="hint_ELEMENT_NOT_UPDATE_WO_CHANGES"></span><script>BX.hint_replace(BX('hint_ELEMENT_NOT_UPDATE_WO_CHANGES'), '<?echo GetMessage("KIT_IX_ELEMENT_NOT_UPDATE_WO_CHANGES_HINT"); ?>');</script></td>
+			<td>
+				<input type="checkbox" name="SETTINGS_DEFAULT[ELEMENT_NOT_UPDATE_WO_CHANGES]" value="Y" <?if($SETTINGS_DEFAULT['ELEMENT_NOT_UPDATE_WO_CHANGES']=='Y' || ($PROFILE_ID=='new' && strlen($strError)==0)){echo 'checked';}?> data-confirm-disable="<?echo GetMessage("KIT_IX_DISABLE_IS_LOW_SPEED"); ?>">
+			</td>
+		</tr>
+		
+		<tr>
+			<td><?echo GetMessage("KIT_IX_ELEMENT_DISABLE_EVENTS"); ?>: <span id="hint_ELEMENT_DISABLE_EVENTS"></span><script>BX.hint_replace(BX('hint_ELEMENT_DISABLE_EVENTS'), '<?echo GetMessage("KIT_IX_ELEMENT_DISABLE_EVENTS_HINT"); ?>');</script></td>
+			<td>
+				<input type="checkbox" name="SETTINGS_DEFAULT[ELEMENT_DISABLE_EVENTS]" value="Y" <?if($SETTINGS_DEFAULT['ELEMENT_DISABLE_EVENTS']=='Y'){echo 'checked';}?>>
+			</td>
+		</tr>
+		
+		<tr>
+			<td valign="top"><?echo GetMessage("KIT_IX_PACKET_IMPORT"); ?>: <span id="hint_PACKET_IMPORT"></span><script>BX.hint_replace(BX('hint_PACKET_IMPORT'), '<?echo GetMessage("KIT_IX_PACKET_IMPORT_HINT"); ?>');</script></td>
+			<td valign="top">
+				<??>
+				<table cellspacing="0"><tr>
+				<td valign="top" style="padding-left: 0px;"><input type="checkbox" name="SETTINGS_DEFAULT[PACKET_IMPORT]" value="Y" <?if($SETTINGS_DEFAULT['PACKET_IMPORT']=='Y'){echo 'checked';}?> onchange="EProfile.ToggleAvailStatOption(!this.checked); if(this.checked){$('#packet_size').show();}else{$('#packet_size').hide();}"></td>
+				<td>&nbsp; &nbsp;</td>
+				<td id="packet_size"<?if($SETTINGS_DEFAULT['PACKET_IMPORT']!='Y'){echo ' style="display: none;"';}?>>
+					<?echo GetMessage("KIT_IX_PACKET_SIZE"); ?>:
+					<input type="text" name="SETTINGS_DEFAULT[PACKET_SIZE]" value="<?echo htmlspecialcharsbx($SETTINGS_DEFAULT['PACKET_SIZE'])?>" size="10" placeholder="1000" style="position: absolute; margin: -5px 0px 0px 5px;">
+				</td>
+				</tr></table>
+			</td>
+		</tr>
+		
+		<tr>
+			<td><?echo GetMessage("KIT_IX_IMAGES_CHECK_PARAMS"); ?>: <span id="hint_EPARAMS_FOR_IMAGES_CHECK"></span><script>BX.hint_replace(BX('hint_EPARAMS_FOR_IMAGES_CHECK'), '<?echo GetMessage("KIT_IX_IMAGES_CHECK_PARAMS_HINT"); ?>');</script></td>
+			<td>
+				<select name="SETTINGS_DEFAULT[IMAGES_CHECK_PARAMS]">
+					<option value="PATH"<?if($SETTINGS_DEFAULT['IMAGES_CHECK_PARAMS']=='PATH' || $PROFILE_ID=='new'){echo ' selected';}?>><?echo GetMessage("KIT_IX_IMAGES_CHECK_PATH").' ('.GetMessage("KIT_IX_IMAGES_CHECK_PARAMS_FAST").')';?></option>
+					<option value="MD5"<?if($SETTINGS_DEFAULT['IMAGES_CHECK_PARAMS']=='MD5'){echo ' selected';}?>><?echo GetMessage("KIT_IX_IMAGES_CHECK_MD5").' ('.GetMessage("KIT_IX_IMAGES_CHECK_PARAMS_SLOW_EXACTLY").')';?></option>
+					<option value=""<?if(!$SETTINGS_DEFAULT['IMAGES_CHECK_PARAMS'] && $PROFILE_ID!='new'){echo ' selected';}?>><?echo GetMessage("KIT_IX_IMAGES_CHECK_DEFAULT").' ('.GetMessage("KIT_IX_IMAGES_CHECK_PARAMS_SLOW").')';?></option>
+					<option value="WO_NAME"<?if($SETTINGS_DEFAULT['IMAGES_CHECK_PARAMS']=='WO_NAME' || $SETTINGS_DEFAULT['ELEMENT_NOT_CHECK_NAME_IMAGES']=='Y'){echo ' selected';}?>><?echo GetMessage("KIT_IX_IMAGES_CHECK_WO_NAME").' ('.GetMessage("KIT_IX_IMAGES_CHECK_PARAMS_SLOW").')';?></option>
+					<option value="WO_SIZE"<?if($SETTINGS_DEFAULT['IMAGES_CHECK_PARAMS']=='WO_SIZE'){echo ' selected';}?>><?echo GetMessage("KIT_IX_IMAGES_CHECK_WO_SIZE").' ('.GetMessage("KIT_IX_IMAGES_CHECK_PARAMS_SLOW").')';?></option>
+					<option value="PATH_SIZES"<?if($SETTINGS_DEFAULT['IMAGES_CHECK_PARAMS']=='PATH_SIZES'){echo ' selected';}?>><?echo GetMessage("KIT_IX_IMAGES_CHECK_PATH_SIZES").' ('.GetMessage("KIT_IX_IMAGES_CHECK_PARAMS_SLOW").')';?></option>
+				</select>
+			</td>
+		</tr>
+		
+		<?
+		$arItems = array(
+			GetMessage("KIT_IX_SPEED_NOTE_ACC_UPDATE"),
+			GetMessage("KIT_IX_SPEED_NOTE_PICTURES"),
+			GetMessage("KIT_IX_SPEED_NOTE_ACC_CREATE")
+		);
+		if(class_exists('\Bitrix\Iblock\ElementTable'))
+		{
+			$entity =  new \Bitrix\Iblock\ElementTable();
+			$tblName = $entity->getTableName();
+			$conn = \Bitrix\Main\Application::getConnection();
+			if(is_callable(array($conn, 'isIndexExists')) && !$conn->isIndexExists($tblName, array('IBLOCK_ID', 'NAME')))
+			{
+				array_unshift($arItems, GetMessage("KIT_IX_SPEED_NOTE_INDEX_NAME", array(
+					"#LINK#" => '/bitrix/admin/sql.php?lang='.LANGUAGE_ID,
+					"#SQL#" => 'CREATE INDEX `ix_iblock_element_name` ON `b_iblock_element` (`IBLOCK_ID`,`NAME`)'
+				)));
+			}
+		}
+
+		if($SETTINGS_DEFAULT['IBLOCK_ID'] && is_array($SETTINGS_DEFAULT['ELEMENT_UID']) && count($SETTINGS_DEFAULT['ELEMENT_UID']) > 0 && count($SETTINGS_DEFAULT['ELEMENT_UID'])==count(preg_grep('/^IP_PROP\d+$/', $SETTINGS_DEFAULT['ELEMENT_UID'])) && class_exists('\Bitrix\Iblock\PropertyTable'))
+		{
+			$arPropIds = array();
+			foreach($SETTINGS_DEFAULT['ELEMENT_UID'] as $uidName) $arPropIds[] = mb_substr($uidName, 7);
+			$arPropIds = array_unique($arPropIds);
+			if(count($arPropIds)==\Bitrix\Iblock\PropertyTable::getCount(array('ID'=>$arPropIds, 'VERSION'=>2, 'MULTIPLE'=>'N')))
+			{
+				sort($arPropIds, SORT_NUMERIC);
+				$arPropFields = array();
+				foreach($arPropIds as $propId) $arPropFields[] = 'PROPERTY_'.$propId;
+				$conn = \Bitrix\Main\Application::getConnection();
+				$tblName = 'b_iblock_element_prop_s'.$SETTINGS_DEFAULT['IBLOCK_ID'];
+				if(is_callable(array($conn, 'isTableExists')) && $conn->isTableExists($tblName))
+				{
+					$arIndPropFields = array();
+					$dbRes = $conn->query("SHOW COLUMNS FROM `" . $tblName . "`");
+					while($arr = $dbRes->Fetch())
+					{
+						if(in_array($arr['Field'], $arPropFields))
+						{
+							$arIndPropFields[] = '`'.$arr['Field'].'`'.(strpos($arr['Type'], 'text')!==false || strpos($arr['Type']!==false, 'blob') ? '(255)' : '');
+						}
+					}
+					
+					if(count($arIndPropFields)==count($arPropFields) && is_callable(array($conn, 'isIndexExists')) && !$conn->isIndexExists($tblName, $arPropFields))
+					{
+						array_unshift($arItems, GetMessage("KIT_IX_SPEED_NOTE_INDEX_PROPS", array(
+							"#LINK#" => '/bitrix/admin/sql.php?lang='.LANGUAGE_ID,
+							"#SQL#" => 'CREATE INDEX `ix_iblock_prop_'.implode('_', $arPropIds).'` ON `'.$tblName.'` ('.implode(',', $arIndPropFields).')'
+						)));
+					}
+				}
+			}
+		}
+		
+
+		if(!class_exists('\XMLReader'))
+		{
+			array_unshift($arItems, GetMessage("KIT_IX_SPEED_NOTE_XMLREADER"));
+		}
+		if(count($arItems) > 0)
+		{
+		?>
+			<td colspan="2">
+			<?
+			echo BeginNote();
+			echo '<p align="center"><b>'.GetMessage("KIT_IX_SPEED_NOTES").'</b></p>';
+			echo '<ul>';
+			foreach($arItems as $item)
+			{
+				echo '<li>'.$item.'</li>';
+			}
+			echo '</ul>';
+			echo EndNote();
+			?>
+			</td>
+		<?
+		}
+		?>
+		
+		<tr class="heading">
+			<td colspan="2"><?echo GetMessage("KIT_IX_SETTINGS_STATISTIC"); ?> <a href="javascript:void(0)" onclick="EProfile.ToggleAdditionalSettings(this)" class="kit_ix_head_more show"><?echo GetMessage("KIT_IX_SETTINGS_ADDITONAL_SHOW_HIDE"); ?></a></td>
 		</tr>
 		
 		<tr>
 			<td><?echo GetMessage("KIT_IX_STAT_SAVE"); ?>:</td>
 			<td>
-				<input type="checkbox" name="SETTINGS_DEFAULT[STAT_SAVE]" value="Y" <?if($SETTINGS_DEFAULT['STAT_SAVE']=='Y'){echo 'checked';}?>>
+				<?if($SETTINGS_DEFAULT['PACKET_IMPORT']=='Y'){echo '<input type="hidden" name="SETTINGS_DEFAULT[STAT_SAVE]" value="Y">';}?>
+				<input type="checkbox" name="SETTINGS_DEFAULT[STAT_SAVE]" value="Y" <?if($SETTINGS_DEFAULT['STAT_SAVE']=='Y' || $SETTINGS_DEFAULT['PACKET_IMPORT']=='Y'){echo 'checked';}?> <?if($SETTINGS_DEFAULT['PACKET_IMPORT']=='Y'){echo 'disabled';}?>>
+			</td>
+		</tr>
+		
+		<?/*$removeOldStat = (bool)($SETTINGS_DEFAULT['STAT_DELETE_OLD']=='Y');?>
+		<tr>
+			<td><?echo GetMessage("KIT_IX_STAT_DELETE_OLD"); ?>:</td>
+			<td>
+				<input type="checkbox" name="SETTINGS_DEFAULT[STAT_DELETE_OLD]" value="Y" <?if($removeOldStat){echo 'checked';}?>>
+			</td>
+		</tr>
+		<?*/?>
+		
+		<tr>
+			<td><?echo GetMessage("KIT_IX_STAT_SAVE_LAST_N"); ?>:</td>
+			<td>
+				<input type="text" name="SETTINGS_DEFAULT[STAT_SAVE_LAST_N]" value="<?echo max(1, (int)$SETTINGS_DEFAULT['STAT_SAVE_LAST_N'])?>" size="5">
 			</td>
 		</tr>
 		
 		<tr>
-			<td><?echo GetMessage("KIT_IX_STAT_DELETE_OLD"); ?>:</td>
-			<td>
-				<input type="checkbox" name="SETTINGS_DEFAULT[STAT_DELETE_OLD]" value="Y" <?if($SETTINGS_DEFAULT['STAT_DELETE_OLD']=='Y'){echo 'checked';}?>>
+			<td colspan="2" align="center">
+				<?
+				echo BeginNote();
+				echo sprintf(GetMessage("KIT_IX_STAT_NOTE"), '/bitrix/admin/'.$moduleFilePrefix.'_profile_list.php?lang='.LANGUAGE_ID);
+				echo EndNote();
+				?>
 			</td>
 		</tr>
-		<?*/?>
+		
+		<tr class="heading">
+			<td colspan="2"><?echo GetMessage("KIT_IX_SETTINGS_FILE_READING"); ?> <a href="javascript:void(0)" onclick="EProfile.ToggleAdditionalSettings(this)" class="kit_ix_head_more show" id="kda-head-more-link"><?echo GetMessage("KIT_IX_SETTINGS_ADDITONAL_SHOW_HIDE"); ?></a></td>
+		</tr>
+		
+		<tr>
+			<td><?echo GetMessage("KIT_IX_HTML_ENTITY_DECODE"); ?>:</td>
+			<td>
+				<input type="hidden" name="SETTINGS_DEFAULT[HTML_ENTITY_DECODE]" value="N">
+				<input type="checkbox" name="SETTINGS_DEFAULT[HTML_ENTITY_DECODE]" value="Y" <?if($SETTINGS_DEFAULT['HTML_ENTITY_DECODE']=='Y' || $PROFILE_ID=='new'){echo 'checked';}?>>
+			</td>
+		</tr>
+		
+		<tr>
+			<td><?echo GetMessage("KIT_IX_SAVE_DISAPPEARED_TAGS"); ?>: <span id="hint_SAVE_DISAPPEARED_TAGS"></span><script>BX.hint_replace(BX('hint_SAVE_DISAPPEARED_TAGS'), '<?echo GetMessage("KIT_IX_SAVE_DISAPPEARED_TAGS_HINT"); ?>');</script></td>
+			<td>
+				<input type="checkbox" name="SETTINGS_DEFAULT[SAVE_DISAPPEARED_TAGS]" value="Y" <?if($SETTINGS_DEFAULT['SAVE_DISAPPEARED_TAGS']=='Y'){echo 'checked';}?>>
+			</td>
+		</tr>
+		
+		<tr>
+			<td><?echo GetMessage("KIT_IX_NOT_USE_XML_READER"); ?>: <span id="hint_NOT_USE_XML_READER"></span><script>BX.hint_replace(BX('hint_NOT_USE_XML_READER'), '<?echo GetMessage("KIT_IX_NOT_USE_XML_READER_HINT"); ?>');</script></td>
+			<td>
+				<input type="checkbox" name="SETTINGS_DEFAULT[NOT_USE_XML_READER]" value="Y" <?if($SETTINGS_DEFAULT['NOT_USE_XML_READER']=='Y'){echo 'checked';}?>>
+			</td>
+		</tr>
+		
+		<tr>
+			<td><?echo GetMessage("KIT_IX_AUTO_FIX_XML_ERRORS"); ?>: <span id="hint_AUTO_FIX_XML_ERRORS"></span><script>BX.hint_replace(BX('hint_AUTO_FIX_XML_ERRORS'), '<?echo GetMessage("KIT_IX_AUTO_FIX_XML_ERRORS_HINT"); ?>');</script></td>
+			<td>
+				<table cellspacing="0"><tr>
+				<td style="padding-left: 0px;"><input type="checkbox" name="SETTINGS_DEFAULT[AUTO_FIX_XML_ERRORS]" value="Y" <?if($SETTINGS_DEFAULT['AUTO_FIX_XML_ERRORS']=='Y'){echo 'checked';}?> onchange="if(this.checked){$('#fix_xml_errors_params').show();}else{$('#fix_xml_errors_params').hide();}"></td>
+				<td>&nbsp; &nbsp;</td>
+				<td id="fix_xml_errors_params"<?if($SETTINGS_DEFAULT['AUTO_FIX_XML_ERRORS']!='Y'){echo ' style="display: none;"';}?>>
+					<div>
+						<div><?echo GetMessage("KIT_IX_AUTO_FIX_XML_ERRORS_TAGS"); ?>:</div>
+						<div><input type="text" name="SETTINGS_DEFAULT[AUTO_FIX_XML_CDATA]" value="<?echo htmlspecialcharsbx($SETTINGS_DEFAULT['AUTO_FIX_XML_CDATA'])?>" size="65"></div>
+					</div>
+					<div style="margin-top: 7px;">
+						<input type="checkbox" name="SETTINGS_DEFAULT[AUTO_FIX_XML_NUMTAGS]" value="Y" <?if($SETTINGS_DEFAULT['AUTO_FIX_XML_NUMTAGS']=='Y'){echo 'checked';}?> id="kit_ix_auto_fix_xml_numtags">
+						<label for="kit_ix_auto_fix_xml_numtags"><?echo GetMessage("KIT_IX_AUTO_FIX_XML_ERRORS_NUM_TAGS"); ?></label>
+					</div>
+					<div style="margin-top: 7px;">
+						<input type="checkbox" name="SETTINGS_DEFAULT[AUTO_FIX_XML_NAMESPACES]" value="Y" <?if($SETTINGS_DEFAULT['AUTO_FIX_XML_NAMESPACES']=='Y'){echo 'checked';}?> id="kit_ix_auto_fix_xml_namespaces">
+						<label for="kit_ix_auto_fix_xml_namespaces"><?echo GetMessage("KIT_IX_AUTO_FIX_XML_ERRORS_NAMESPACES"); ?></label>
+					</div>
+				</td>
+				</tr></table>
+			</td>
+		</tr>
+		
+		<tr>
+			<td><?echo GetMessage("KIT_IX_MAX_READ_FILE_TIME"); ?>: <span id="hint_MAX_READ_FILE_TIME"></span><script>BX.hint_replace(BX('hint_MAX_READ_FILE_TIME'), '<?echo GetMessage("KIT_IX_MAX_READ_FILE_TIME_HINT"); ?>');</script></td>
+			<td>
+				<select name="SETTINGS_DEFAULT[MAX_READ_FILE_TIME]">
+					<?
+					for($ii=10;$ii<=60;$ii=$ii+10)
+					{
+						echo '<option value="'.$ii.'"'.($SETTINGS_DEFAULT['MAX_READ_FILE_TIME']==$ii ? ' selected' : '').'>'.$ii.' '.GetMessage("KIT_IX_MAX_READ_FILE_TIME_SEC").'</option>';
+					}
+					echo '<option value="0"'.((string)$SETTINGS_DEFAULT['MAX_READ_FILE_TIME']==='0' ? ' selected' : '').'>'.GetMessage("KIT_IX_MAX_READ_FILE_TIME_NOLIMIT").'</option>';
+					?>
+				</select>
+			</td>
+		</tr>
 		
 		<tr class="heading">
 			<td colspan="2"><?echo GetMessage("KIT_IX_SETTINGS_ADDITONAL"); ?> <a href="javascript:void(0)" onclick="EProfile.ToggleAdditionalSettings(this)" class="kit_ix_head_more show" id="kda-head-more-link"><?echo GetMessage("KIT_IX_SETTINGS_ADDITONAL_SHOW_HIDE"); ?></a></td>
 		</tr>
-		
-		<?/*?>
-		<tr>
-			<td><?echo GetMessage("KIT_IX_STAT_SAVE"); ?>:</td>
-			<td>
-				<input type="checkbox" name="SETTINGS_DEFAULT[STAT_SAVE]" value="Y" <?if($SETTINGS_DEFAULT['STAT_SAVE']=='Y'){echo 'checked';}?>>
-			</td>
-		</tr>
-		<?*/?>
 		
 		<tr>
 			<td><?echo GetMessage("KIT_IX_REMOVE_COMPOSITE_CACHE"); ?>: <span id="hint_REMOVE_COMPOSITE_CACHE"></span><script>BX.hint_replace(BX('hint_REMOVE_COMPOSITE_CACHE'), '<?echo GetMessage("KIT_IX_REMOVE_COMPOSITE_CACHE_HINT"); ?>');</script></td>
@@ -1052,71 +1461,73 @@ if ($STEP == 1)
 			</td>
 		</tr>
 		
-		<tr>
-			<td><?echo GetMessage("KIT_IX_HTML_ENTITY_DECODE"); ?>:</td>
-			<td>
-				<input type="hidden" name="SETTINGS_DEFAULT[HTML_ENTITY_DECODE]" value="N">
-				<input type="checkbox" name="SETTINGS_DEFAULT[HTML_ENTITY_DECODE]" value="Y" <?if($SETTINGS_DEFAULT['HTML_ENTITY_DECODE']=='Y' || $PROFILE_ID=='new'){echo 'checked';}?>>
-			</td>
-		</tr>
+		<?
+		/*if(isset($SETTINGS_DEFAULT['IBLOCK_ID']) && is_numeric($SETTINGS_DEFAULT['IBLOCK_ID']) && class_exists('\Bitrix\Iblock\IblockTable'))
+		{
+			$arIblock = \Bitrix\Iblock\IblockTable::getList(array('filter'=>array('ID'=>(int)$SETTINGS_DEFAULT['IBLOCK_ID']), 'select'=>array('WORKFLOW')))->Fetch();
+			if($arIblock['WORKFLOW']=='Y' && CModule::IncludeModule('workflow'))
+			{
+				$arWfStatuses = array();
+				$dbRes = \CWorkflowStatus::GetList('s_c_sort', 'desc', array('ACTIVE'=>'Y'));
+				while($arr = $dbRes->Fetch())
+				{
+					$arWfStatuses[(int)$arr['ID']] = $arr['TITLE'];
+				}
+				?>
+			<tr>
+				<td><?echo GetMessage("KIT_IX_USE_WORKFLOW"); ?>:</td>
+				<td>
+					<table cellspacing="0"><tr>
+					<td style="padding-left: 0px;"><input type="checkbox" name="SETTINGS_DEFAULT[USE_WORKFLOW]" value="Y" <?if($SETTINGS_DEFAULT['USE_WORKFLOW']=='Y'){echo 'checked';}?> onchange="if(this.checked){$('#workflow_status').show();}else{$('#workflow_status').hide();}"></td>
+					<td>&nbsp; &nbsp;</td>
+					<td id="workflow_status"<?if($SETTINGS_DEFAULT['USE_WORKFLOW']!='Y'){echo ' style="display: none;"';}?>>
+						<?echo GetMessage("KIT_IX_WORKFLOW_STATUS"); ?>:<br>
+						<select name="SETTINGS_DEFAULT[WORKFLOW_STATUS]" style="width: 270px;">
+							<?
+							if(isset($arWfStatuses[1])){echo '<option value="1"'.($SETTINGS_DEFAULT['WORKFLOW_STATUS']==1 ? ' selected' : '').'>'.htmlspecialcharsbx($arWfStatuses[1]).'</option>';}
+							foreach($arWfStatuses as $k=>$v)
+							{
+								if($k==1) continue;
+								echo '<option value="'.htmlspecialcharsbx($k).'"'.($SETTINGS_DEFAULT['WORKFLOW_STATUS']==$k ? ' selected' : '').'>'.htmlspecialcharsbx($v).'</option>';
+							}
+							?>
+						</select>
+					</td>
+					</tr></table>
+				</td>
+			</tr>
+				<?
+			}
+		}*/
+		?>
+		
+		<?if($bCatalog){?>
+			<tr>
+				<td valign="top"><?echo GetMessage("KIT_IX_SEARCH_OFFERS_WO_PRODUCTS"); ?>: <span id="hint_SEARCH_OFFERS_WO_PRODUCTS"></span><script>BX.hint_replace(BX('hint_SEARCH_OFFERS_WO_PRODUCTS'), '<?echo GetMessage("KIT_IX_SEARCH_OFFERS_WO_PRODUCTS_HINT"); ?>');</script></td>
+				<td valign="top">
+					<input type="checkbox" name="SETTINGS_DEFAULT[SEARCH_OFFERS_WO_PRODUCTS]" value="Y" <?if($SETTINGS_DEFAULT['SEARCH_OFFERS_WO_PRODUCTS']=='Y'){echo 'checked';}?> onchange="if(this.checked){$('#create_new_offers_wrap').show();}else{$('#create_new_offers_wrap').hide();}">
+					<div id="create_new_offers_wrap" style="margin-top: 7px;<?if($SETTINGS_DEFAULT['SEARCH_OFFERS_WO_PRODUCTS']!='Y'){echo 'display: none;';}?>">
+						<input type="checkbox" name="SETTINGS_DEFAULT[CREATE_NEW_OFFERS]" value="Y" <?if($SETTINGS_DEFAULT['CREATE_NEW_OFFERS']=='Y'){echo 'checked';}?> id="create_new_offers_chb">
+						<label for="create_new_offers_chb"><?echo GetMessage("KIT_IX_CREATE_NEW_OFFERS"); ?></label>
+					</div>
+				</td>
+			</tr>
+		<?}?>
 		
 		<tr>
-			<td><?echo GetMessage("KIT_IX_SAVE_DISAPPEARED_TAGS"); ?>: <span id="hint_SAVE_DISAPPEARED_TAGS"></span><script>BX.hint_replace(BX('hint_SAVE_DISAPPEARED_TAGS'), '<?echo GetMessage("KIT_IX_SAVE_DISAPPEARED_TAGS_HINT"); ?>');</script></td>
-			<td>
-				<input type="checkbox" name="SETTINGS_DEFAULT[SAVE_DISAPPEARED_TAGS]" value="Y" <?if($SETTINGS_DEFAULT['SAVE_DISAPPEARED_TAGS']=='Y'){echo 'checked';}?>>
-			</td>
-		</tr>
-		
-		<tr>
-			<td><?echo GetMessage("KIT_IX_IMAGES_FORCE_UPDATE"); ?>: <span id="hint_ELEMENT_IMAGES_FORCE_UPDATE"></span><script>BX.hint_replace(BX('hint_ELEMENT_IMAGES_FORCE_UPDATE'), '<?echo GetMessage("KIT_IX_IMAGES_FORCE_UPDATE_HINT"); ?>');</script></td>
-			<td>
-				<input type="checkbox" name="SETTINGS_DEFAULT[ELEMENT_IMAGES_FORCE_UPDATE]" value="Y" <?if($SETTINGS_DEFAULT['ELEMENT_IMAGES_FORCE_UPDATE']=='Y'){echo 'checked';}?>>
-			</td>
-		</tr>
-		
-		<tr>
-			<td><?echo GetMessage("KIT_IX_NOT_CHECK_NAME_IMAGES"); ?>: <span id="hint_ELEMENT_NOT_CHECK_NAME_IMAGES"></span><script>BX.hint_replace(BX('hint_ELEMENT_NOT_CHECK_NAME_IMAGES'), '<?echo GetMessage("KIT_IX_NOT_CHECK_NAME_IMAGES_HINT"); ?>');</script></td>
-			<td>
-				<input type="checkbox" name="SETTINGS_DEFAULT[ELEMENT_NOT_CHECK_NAME_IMAGES]" value="Y" <?if($SETTINGS_DEFAULT['ELEMENT_NOT_CHECK_NAME_IMAGES']=='Y'){echo 'checked';}?>>
-			</td>
-		</tr>
-		
-		<tr>
-			<td><?echo GetMessage("KIT_IX_NOT_USE_XML_READER"); ?>: <span id="hint_NOT_USE_XML_READER"></span><script>BX.hint_replace(BX('hint_NOT_USE_XML_READER'), '<?echo GetMessage("KIT_IX_NOT_USE_XML_READER_HINT"); ?>');</script></td>
-			<td>
-				<input type="checkbox" name="SETTINGS_DEFAULT[NOT_USE_XML_READER]" value="Y" <?if($SETTINGS_DEFAULT['NOT_USE_XML_READER']=='Y'){echo 'checked';}?>>
-			</td>
-		</tr>
-		
-		<tr>
-			<td><?echo GetMessage("KIT_IX_AUTO_FIX_XML_ERRORS"); ?>: <span id="hint_AUTO_FIX_XML_ERRORS"></span><script>BX.hint_replace(BX('hint_AUTO_FIX_XML_ERRORS'), '<?echo GetMessage("KIT_IX_AUTO_FIX_XML_ERRORS_HINT"); ?>');</script></td>
+			<td><?echo GetMessage("KIT_IX_BIND_PROPERTIES_TO_SECTIONS"); ?>: <span id="hint_BIND_PROPERTIES_TO_SECTIONS"></span><script>BX.hint_replace(BX('hint_BIND_PROPERTIES_TO_SECTIONS'), '<?echo GetMessage("KIT_IX_BIND_PROPERTIES_TO_SECTIONS_HINT"); ?>');</script></td>
 			<td>
 				<table cellspacing="0"><tr>
-				<td style="padding-left: 0px;"><input type="checkbox" name="SETTINGS_DEFAULT[AUTO_FIX_XML_ERRORS]" value="Y" <?if($SETTINGS_DEFAULT['AUTO_FIX_XML_ERRORS']=='Y'){echo 'checked';}?> onchange="if(this.checked){$('#fix_xml_errors_params').show();}else{$('#fix_xml_errors_params').hide();}"></td>
-				<td>&nbsp; &nbsp;</td>
-				<td id="fix_xml_errors_params"<?if($SETTINGS_DEFAULT['AUTO_FIX_XML_ERRORS']!='Y'){echo ' style="display: none;"';}?>>
-					<div>
-						<div><?echo GetMessage("KIT_IX_AUTO_FIX_XML_ERRORS_TAGS"); ?>:</div>
-						<div><input type="text" name="SETTINGS_DEFAULT[AUTO_FIX_XML_CDATA]" value="<?echo htmlspecialcharsex($SETTINGS_DEFAULT['AUTO_FIX_XML_CDATA'])?>" size="65"></div>
-					</div>
-					<br>
-					<div>
-						<input type="checkbox" name="SETTINGS_DEFAULT[AUTO_FIX_XML_NUMTAGS]" value="Y" <?if($SETTINGS_DEFAULT['AUTO_FIX_XML_NUMTAGS']=='Y'){echo 'checked';}?> id="kit_ix_auto_fix_xml_numtags">
-						<label for="kit_ix_auto_fix_xml_numtags"><?echo GetMessage("KIT_IX_AUTO_FIX_XML_ERRORS_NUM_TAGS"); ?></label>
-					</div>
+				<td><input type="checkbox" name="SETTINGS_DEFAULT[BIND_PROPERTIES_TO_SECTIONS]" value="Y" <?if($SETTINGS_DEFAULT['BIND_PROPERTIES_TO_SECTIONS']=='Y'){echo 'checked';}?> onchange="if(this.checked){$('#bind_properties_exclude').show();}else{$('#bind_properties_exclude').hide();}"></td>
+				<td id="bind_properties_exclude" style="padding-left: 30px;<?if($SETTINGS_DEFAULT['BIND_PROPERTIES_TO_SECTIONS']!='Y'){echo 'display: none;';}?>">
+				<?
+				echo '<div style="padding-bottom: 2px;">'.GetMessage("KIT_IX_BIND_PROPERTIES_TO_SECTIONS_EXCLUDE").'</div>';
+				$fl->ShowSelectPropertyList($SETTINGS_DEFAULT['IBLOCK_ID'], 'SETTINGS_DEFAULT[BIND_PROPERTIES_TO_SECTIONS_EXCLUDE][]', $SETTINGS_DEFAULT['BIND_PROPERTIES_TO_SECTIONS_EXCLUDE'], '', true);
+				?>
 				</td>
 				</tr></table>
 			</td>
 		</tr>
-		
-		<?if($bCatalog){?>
-			<tr>
-				<td><?echo GetMessage("KIT_IX_SEARCH_OFFERS_WO_PRODUCTS"); ?>: <span id="hint_SEARCH_OFFERS_WO_PRODUCTS"></span><script>BX.hint_replace(BX('hint_SEARCH_OFFERS_WO_PRODUCTS'), '<?echo GetMessage("KIT_IX_SEARCH_OFFERS_WO_PRODUCTS_HINT"); ?>');</script></td>
-				<td>
-					<input type="checkbox" name="SETTINGS_DEFAULT[SEARCH_OFFERS_WO_PRODUCTS]" value="Y" <?if($SETTINGS_DEFAULT['SEARCH_OFFERS_WO_PRODUCTS']=='Y'){echo 'checked';}?>>
-				</td>
-			</tr>
-		<?}?>
 		
 		<tr>
 			<td><?echo GetMessage("KIT_IX_PROPERTIES_REMOVE"); ?>: <span id="hint_ELEMENT_PROPERTIES_REMOVE"></span><script>BX.hint_replace(BX('hint_ELEMENT_PROPERTIES_REMOVE'), '<?echo GetMessage("KIT_IX_PROPERTIES_REMOVE_HINT"); ?>');</script></td>
@@ -1194,29 +1605,42 @@ if ($STEP == 3)
 				))?>
 			</div>
 		 </td><td>
-			<div class="detail_status">
+			<div class="detail_status" id="kit_ix_result_wrap">
 				<?echo CAdminMessage::ShowMessage(array(
 					"TYPE" => "PROGRESS",
 					"MESSAGE" => '<!--<div id="res_continue">'.GetMessage("KIT_IX_AUTO_REFRESH_CONTINUE").'</div><div id="res_finish" style="display: none;">'.GetMessage("KIT_IX_SUCCESS").'</div>-->',
 					"DETAILS" =>
-
-					GetMessage("KIT_IX_SU_ALL").' <b id="total_line">0</b><br>'
-					.GetMessage("KIT_IX_SU_CORR").' <b id="correct_line">0</b><br>'
-					.GetMessage("KIT_IX_SU_ER").' <b id="error_line">0</b><br>'
-					.GetMessage("KIT_IX_SU_ELEMENT_ADDED").' <b id="element_added_line">0</b><br>'
-					.GetMessage("KIT_IX_SU_ELEMENT_UPDATED").' <b id="element_updated_line">0</b><br>'
-					.($SETTINGS_DEFAULT['ONLY_DELETE_MODE']=='Y' ? (GetMessage("KIT_IX_SU_ELEMENT_DELETED").' <b id="element_removed_line">0</b><br>') : '')
-					.(!empty($SETTINGS_DEFAULT['ELEMENT_UID_SKU']) ? (GetMessage("KIT_IX_SU_SKU_ADDED").' <b id="sku_added_line">0</b><br>') : '')
-					.(!empty($SETTINGS_DEFAULT['ELEMENT_UID_SKU']) ? (GetMessage("KIT_IX_SU_SKU_UPDATED").' <b id="sku_updated_line">0</b><br>') : '')
-					.GetMessage("KIT_IX_SU_SECTION_ADDED").' <b id="section_added_line">0</b><br>'
-					.GetMessage("KIT_IX_SU_SECTION_UPDATED").' <b id="section_updated_line">0</b><br>'
-					.($SETTINGS_DEFAULT['CELEMENT_MISSING_DEACTIVATE']=='Y' ? (GetMessage("KIT_IX_SU_HIDED").' <b id="killed_line">0</b><br>') : '')
-					.($SETTINGS_DEFAULT['OFFER_MISSING_DEACTIVATE']=='Y' ? (GetMessage("KIT_IX_SU_OFFER_HIDED").' <b id="offer_killed_line">0</b><br>') : '')
-					.($SETTINGS_DEFAULT['CELEMENT_MISSING_TO_ZERO']=='Y' ? (GetMessage("KIT_IX_SU_ZERO_STOCK").' <b id="zero_stock_line">0</b><br>') : '')
-					.($SETTINGS_DEFAULT['OFFER_MISSING_TO_ZERO']=='Y' ? (GetMessage("KIT_IX_SU_OFFER_ZERO_STOCK").' <b id="offer_zero_stock_line">0</b><br>') : '')
-					.($SETTINGS_DEFAULT['CELEMENT_MISSING_REMOVE_ELEMENT']=='Y' ? (GetMessage("KIT_IX_SU_REMOVE_ELEMENT").' <b id="old_removed_line">0</b><br>') : '')
-					.($SETTINGS_DEFAULT['OFFER_MISSING_REMOVE_ELEMENT']=='Y' ? (GetMessage("KIT_IX_SU_OFFER_REMOVE_ELEMENT").' <b id="offer_old_removed_line">0</b><br>') : '')
-					.($SETTINGS_DEFAULT['STAT_SAVE']=='Y' ? ('<b><a target="_blank" href="/bitrix/admin/'.$moduleFilePrefix.'_event_log.php?lang='.LANGUAGE_ID.'&find_audit_type_id=KIT_IX_PROFILE_'.$PROFILE_ID.'">'.GetMessage("KIT_IX_STATISTIC_LINK").'</a></b>') : ''),
+					'<div class="kit-ix-result-block">'
+						.'<span>'.GetMessage("KIT_IX_SU_ALL").' <b id="total_line">0</b></span>'
+						.'<span>'.GetMessage("KIT_IX_SU_CORR").' <b id="correct_line">0</b></span>'
+						.'<span>'.GetMessage("KIT_IX_SU_ER").' <b id="error_line">0</b></span>'
+					.'</div>'
+					.'<div class="kit-ix-result-block">'
+						.'<span class="kit-ix-result-item-green">'.GetMessage("KIT_IX_SU_ELEMENT_ADDED").' <b id="element_added_line">0</b></span>'
+						.'<span>'.GetMessage("KIT_IX_SU_ELEMENT_UPDATED").' <b id="element_updated_line">0</b></span>'
+						.'<span>'.GetMessage("KIT_IX_SU_ELEMENT_CHANGED").' <b id="element_changed_line">0</b></span>'
+						.($SETTINGS_DEFAULT['ONLY_DELETE_MODE']=='Y' ? ('<span class="kit-ix-result-item-red">'.GetMessage("KIT_IX_SU_ELEMENT_DELETED").' <b id="element_removed_line">0</b></span>') : '')
+						.($SETTINGS_DEFAULT['CELEMENT_MISSING_DEACTIVATE']=='Y' ? ('<span class="kit-ix-result-item-red">'.GetMessage("KIT_IX_SU_HIDED").' <b id="killed_line">0</b></span>') : '')
+						.($SETTINGS_DEFAULT['CELEMENT_MISSING_TO_ZERO']=='Y' ? ('<span>'.GetMessage("KIT_IX_SU_ZERO_STOCK").' <b id="zero_stock_line">0</b></span>') : '')
+						.($SETTINGS_DEFAULT['CELEMENT_MISSING_REMOVE_ELEMENT']=='Y' ? ('<span class="kit-ix-result-item-red">'.GetMessage("KIT_IX_SU_REMOVE_ELEMENT").' <b id="old_removed_line">0</b></span>') : '')
+					.'</div>'
+					.'<div class="kit-ix-result-block">'
+						.(!empty($SETTINGS_DEFAULT['ELEMENT_UID_SKU']) ? ('<span class="kit-ix-result-item-green">'.GetMessage("KIT_IX_SU_SKU_ADDED").' <b id="sku_added_line">0</b></span>') : '')
+						.(!empty($SETTINGS_DEFAULT['ELEMENT_UID_SKU']) ? ('<span>'.GetMessage("KIT_IX_SU_SKU_UPDATED").' <b id="sku_updated_line">0</b></span>') : '')
+						.(!empty($SETTINGS_DEFAULT['ELEMENT_UID_SKU']) ? ('<span>'.GetMessage("KIT_IX_SU_SKU_CHANGED").' <b id="sku_changed_line">0</b></span>') : '')
+						.($SETTINGS_DEFAULT['OFFER_MISSING_DEACTIVATE']=='Y' ? ('<span class="kit-ix-result-item-red">'.GetMessage("KIT_IX_SU_OFFER_HIDED").' <b id="offer_killed_line">0</b></span>') : '')
+						.($SETTINGS_DEFAULT['OFFER_MISSING_TO_ZERO']=='Y' ? ('<span>'.GetMessage("KIT_IX_SU_OFFER_ZERO_STOCK").' <b id="offer_zero_stock_line">0</b></span>') : '')
+						.($SETTINGS_DEFAULT['OFFER_MISSING_REMOVE_ELEMENT']=='Y' ? ('<span class="kit-ix-result-item-red">'.GetMessage("KIT_IX_SU_OFFER_REMOVE_ELEMENT").' <b id="offer_old_removed_line">0</b></span>') : '')
+					.'</div>'
+					.'<div class="kit-ix-result-block">'
+						.'<span class="kit-ix-result-item-green">'.GetMessage("KIT_IX_SU_SECTION_ADDED").' <b id="section_added_line">0</b></span>'
+						.'<span>'.GetMessage("KIT_IX_SU_SECTION_UPDATED").' <b id="section_updated_line">0</b></span>'
+						.($SETTINGS_DEFAULT['SECTION_EMPTY_DEACTIVATE']=='Y' ? ('<span class="kit-ix-result-item-red">'.GetMessage("KIT_IX_SU_SECTION_EMPTY_DEACTIVATE").' <b id="section_deactivate_line">0</b></span>') : '')
+						.($SETTINGS_DEFAULT['SECTION_EMPTY_REMOVE']=='Y' ? ('<span class="kit-ix-result-item-red">'.GetMessage("KIT_IX_SU_SECTION_EMPTY_REMOVE").' <b id="section_remove_line">0</b></span>') : '')
+					.'</div>'
+					.'<div>'.GetMessage("KIT_IX_EXECUTION_TIME").' <b id="execution_time"></b></div>'
+					.($SETTINGS_DEFAULT['STAT_SAVE']=='Y' ? ('<b style="display: none; margin-top: 5px;"><a target="_blank" href="/bitrix/admin/'.$moduleFilePrefix.'_event_log.php?lang='.LANGUAGE_ID.'&find_profile_id='.($PROFILE_ID + 1).'&find_exec_id=" id="kit_ix_stat_profile_link">'.GetMessage("KIT_IX_STATISTIC_LINK").'</a></b>') : '')
+					.($SETTINGS_DEFAULT['STAT_SAVE']=='Y' ? ('<b style="display: none; margin-top: 5px;"><a target="_blank" href="/bitrix/admin/'.$moduleFilePrefix.'_rollback.php?lang='.LANGUAGE_ID.'&PROFILE_ID='.$PROFILE_ID.'&PROFILE_EXEC_ID=" id="kit_ix_rollback_profile_link">'.GetMessage("KIT_IX_ROLLBACk_LINK").'</a></b>') : ''),
 					"HTML" => true,
 				))?>
 			</div>
@@ -1280,6 +1704,12 @@ else
 </form>
 
 <?
+if(!class_exists('\XMLReader'))
+{
+	echo BeginNote();
+	echo GetMessage("KIT_IX_XMLREADER");
+	echo EndNote();
+}
 if($STEP == 2)
 {
 	echo BeginNote();
@@ -1293,7 +1723,7 @@ if($STEP == 2)
 			<p><?echo GetMessage("KIT_IX_LEGEND_TEXT1")?></p>
 			<ol>
 				<li>
-					<div class="kit-ix-legend-subtitle"><a href="#"><?echo GetMessage("KIT_IX_LEGEND_BLOCK_ELEMENT")?></a></div>
+					<div class="kit-ix-legend-subtitle"><a href="#"><?echo GetMessage("KIT_IX_LEGEND_BLOCK_ELEMENT")?></a></div> 
 					<div><?echo GetMessage("KIT_IX_LEGEND_BLOCK_ELEMENT_DESC")?><div class="kit-ix-legend-block-element"></div></div>
 				</li>
 				<li>
@@ -1332,15 +1762,29 @@ if($STEP == 2)
 <script language="JavaScript">
 <?if ($STEP < 2): 
 	$arFile = \Bitrix\KitImportxml\Utils::GetShowFileBySettings($SETTINGS_DEFAULT);
-	if($arFile['link'])
-	{
-		?>
-		$('#bx_file_data_file_cont .adm-input-file-name').attr('target', '_blank').attr('href', '<?echo htmlspecialcharsex($arFile['link'])?>');<?
-	}
 	if($arFile['path'])
 	{
 		?>
-		$('#bx_file_data_file_cont .adm-input-file-name').text('<?echo $arFile['path']?>');<?
+		function KitSetFilePath(l)
+		{
+			if($('#bx_file_data_file_cont .adm-input-file-name').length==0)
+			{
+				if($('#bx_file_data_file_cont .adm-input-file-new .adm-input-file').length > 0)
+				{
+					$('#bx_file_data_file_cont .adm-input-file-new .adm-input-file').removeClass('adm-input-file').addClass('adm-input-file-ex-wrap').html('<a href="javascript:void(0)" class="adm-input-file-name"></a>');
+				}
+				else if(l < 50) setTimeout(function(){KitSetFilePath(l+1);}, 50);
+			}
+			$('#bx_file_data_file_cont .adm-input-file-name').text("<?echo addslashes($arFile['path'])?>");<?
+			if($arFile['link'])
+			{
+				?>
+				$('#bx_file_data_file_cont .adm-input-file-name').attr("target", "_blank").attr("href", "<?echo addslashes($arFile['link'])?>");<?
+			}
+			?>
+		}
+		KitSetFilePath(0);
+		<?
 	}
 ?>
 tabControl.SelectTab("edit1");
@@ -1358,8 +1802,8 @@ tabControl.SelectTab("edit2");
 tabControl.DisableTab("edit1");
 tabControl.DisableTab("edit3");
 
-/*var admKDAMessages = {};
-admKDAMessages['lineActions'] = {<?echo implode(', ', $arMenu);?>};*/
+<?/*var admKDAMessages = {};
+admKDAMessages['lineActions'] = {<?echo implode(', ', $arMenu);?>};*/?>
 <?elseif ($STEP > 2): ?>
 tabControl.SelectTab("edit3");
 tabControl.DisableTab("edit1");
@@ -1367,7 +1811,7 @@ tabControl.DisableTab("edit2");
 
 <?
 $arPost = $_POST;
-unset($arPost['settings_json'], $arPost['defaultsettings_json'], $arPost['struct_json'], $arPost['struct_base64'], $arPost['SETTINGS']);
+unset($arPost['settings_json'], $arPost['defaultsettings_json'], $arPost['struct_json'], $arPost['struct_base64'], $arPost['SETTINGS'], $arPost['FORCE_UPDATE_FILE'], $arPost['DATA_FILE']);
 if(COption::GetOptionString($moduleId, 'SET_MAX_EXECUTION_TIME')=='Y')
 {
 	$delay = (int)COption::GetOptionString($moduleId, 'EXECUTION_DELAY');

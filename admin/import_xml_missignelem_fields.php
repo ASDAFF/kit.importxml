@@ -1,8 +1,5 @@
 <?
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
+if(!defined('NO_AGENT_CHECK')) define('NO_AGENT_CHECK', true);
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_before.php");
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/iblock/prolog.php");
 $moduleId = 'kit.importxml';
@@ -24,7 +21,9 @@ if(strpos($INPUT_ID, 'OFFER_')===0)
 }
 
 if($_POST['action']=='save')
-{	
+{
+	\CUtil::JSPostUnescape();
+	define('PUBLIC_AJAX_MODE', 'Y');
 	$APPLICATION->RestartBuffer();
 	if(ob_get_contents()) ob_end_clean();
 	
@@ -91,7 +90,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 		</tr>
 		<tr>
 			<td colspan="2" class="kit-ix-chosen-td">
-				<select name="prop_default" style="min-width: 200px;" class="kit-ix-chosen-multi" onchange="ESettings.AddDefaultProp(this)">
+				<select name="prop_default" style="min-width: 200px; max-width: 500px;" class="kit-ix-chosen-multi" onchange="ESettings.AddDefaultProp(this)">
 					<option value=""><?echo GetMessage('KIT_IX_PLACEHOLDER_CHOOSE');?></option>
 					<optgroup label="<?echo GetMessage('KIT_IX_LIST_SETTING_ELEMENT');?>">
 						<?
@@ -106,7 +105,7 @@ require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_popup_adm
 							<?
 							foreach($arDefaultProps as $prop)
 							{
-								echo '<option value="'.$prop['ID'].'">'.$prop['NAME'].'</option>';
+								echo '<option value="'.$prop['ID'].'">'.htmlspecialcharsbx($prop['NAME']).' ['.$prop['CODE'].']</option>';
 							}
 							?>
 						</optgroup>

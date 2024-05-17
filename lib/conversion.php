@@ -1,8 +1,4 @@
 <?php
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Localization\Loc;
@@ -16,18 +12,28 @@ class Conversion
 	protected $updateSectFields = array();
 	protected $disableConv = false;
 	protected $fieldSettings = array();
-	protected $fieldPrefixes = array('IE_', 'IP_PROP', 'ICAT_', 'IPROP_TEMP_');
-	protected $fieldSectPrefixes = array('ISECT_');
+	protected $fieldPrefixes = array('IE_', 'IP_PROP', 'ICAT_', 'IPROP_TEMP_', 'ISECT', 'PROFILE_');
+	protected $fieldSectPrefixes = array('ISECT_', 'PROFILE_');
 	protected $iblockId = 0;
 	protected $offersIblockId = 0;
 	protected $parentId = 0;
 	protected $elementId = 0;
+	protected $elementIsDuplicate = false;
 	protected $sectionId = 0;
 	protected $elementFields = null;
 	protected $sectionFields = array();
 	protected $isSku = false;
 	protected $isSection = false;
 	protected $allowLoad = true;
+	protected $arTmpConv = array();
+	protected $oldElementData = array();
+	protected $arFieldTypes = array(
+		'ELEMENT' => 'IE_',
+		'PROPS' => 'IP_PROP',
+		'PRODUCT' => 'ICAT_',
+		'PRICES' => 'ICAT_PRICE',
+		'STORES' => 'ICAT_STORE'
+	);
 	
 	public function __construct($ie=false, $iblockId=0, $fieldSettings = array(), $type='element')
 	{
@@ -75,6 +81,21 @@ class Conversion
 				}
 			}
 		}
+		
+		/*Property map*/
+		$propertyMap = (isset($this->ie->propertyMap['MAP']) ? $this->ie->propertyMap['MAP'] : array());
+		if(count($propertyMap) > 0)
+		{
+			$arMap2 = array();
+			foreach($propertyMap as $k=>$v)
+			{
+				foreach($v as $k2=>$v2)
+				{
+					if(!in_array($v2, $this->updateElemFields)) $this->updateElemFields[] = $v2;
+				}
+			}
+		}
+		/*/Property map*/
 	}
 	
 	public function Enable()
@@ -118,6 +139,11 @@ class Conversion
 	public function EndUpdateFields()
 	{
 		return $this->GetAllowLoad();
+	}
+	
+	public function GetLoadElemFields()
+	{
+		return $this->loadElemFields;
 	}
 
 	public function UpdateElementFields(&$arFieldsElement, $ID)
@@ -209,20 +235,98 @@ class Conversion
 		return $this->EndUpdateFields();
 	}
 	
+	public function UpdateDiscountFields(&$arFieldsProductDiscount, $ID)
+	{
+		if($this->disableConv || empty($this->updateElemFields)) return;
+		$this->BeginUpdateFields();
+		foreach($arFieldsProductDiscount as $fieldKey=>$fieldVal)
+		{
+			$fKey = 'ICAT_DISCOUNT_'.$fieldKey;
+			$arFieldsProductDiscount[$fieldKey] = $this->UpdateElementField($fKey, $fieldVal, $ID);
+			if($arFieldsProductDiscount[$fieldKey]===false) unset($arFieldsProductDiscount[$fieldKey]);
+		}
+		return $this->EndUpdateFields();
+	}
+	
+	public function UpdateRelProfiles(&$arRelProfiles, $ID)
+	{
+		if(empty($arRelProfiles) || $this->disableConv || empty($this->updateElemFields)) return;
+		$this->BeginUpdateFields();
+		foreach($arRelProfiles as $fieldKey=>$fieldVal)
+		{
+			$arRelProfiles[$fieldKey]['LINK'] = $this->ApplyExtraConversions($fieldKey, $fieldVal['LINK'], $ID);
+			if($arRelProfiles[$fieldKey]['LINK']===false) unset($arRelProfiles[$fieldKey]);
+		}
+		return $this->EndUpdateFields();
+	}
+	
 	public function UpdateElementField($fKey, $val, $ID)
 	{
+		if($fKey=='IE_SECTION_PATH')
+		{
+			$needSplit = (bool)(is_array($val) && count($val) > 1);
+			$this->JoinSectionPaths($val, $fKey);
+		}
 		if(is_array($val))
 		{
-			foreach($val as $k=>$v)
+			$fKey2 = $fKey;
+			if($this->isSku) $fKey2 = 'OFFER_'.$fKey2;
+			$fs = (isset($this->fieldSettings[$fKey2]) && is_array($this->fieldSettings[$fKey2]) ? $this->fieldSettings[$fKey2] : array());
+			if(isset($fs['REL_ELEMENT_EXTRA_FIELD']) && isset($fs['REL_ELEMENT_FIELD']) && isset($val[$fs['REL_ELEMENT_EXTRA_FIELD']]) && isset($val[$fs['REL_ELEMENT_EXTRA_FIELD']][$fs['REL_ELEMENT_FIELD']]))
 			{
-				$val[$k] = $this->ApplyExtraConversions($fKey, $v, $ID);
+				$val[$fs['REL_ELEMENT_EXTRA_FIELD']][$fs['REL_ELEMENT_FIELD']] = $newVal = $this->UpdateElementField($fKey, $val[$fs['REL_ELEMENT_EXTRA_FIELD']][$fs['REL_ELEMENT_FIELD']], $ID);
+				if($fs['REL_ELEMENT_EXTRA_FIELD']=='PRIMARY' && $newVal===false) return false;
+			}
+			else
+			{
+				foreach($val as $k=>$v)
+				{
+					$val[$k] = $this->ApplyExtraConversions($fKey, $v, $ID);
+					if($val[$k]===false)
+					{
+						$val = false;
+						break;
+					}
+				}
 			}
 		}
 		else
 		{
 			$val = $this->ApplyExtraConversions($fKey, $val, $ID);
 		}
+		if($fKey=='IE_SECTION_PATH') $this->SplitSectionPaths($val, $fKey, $needSplit);
 		return $val;
+	}
+	
+	public function JoinSectionPaths(&$val, $fKey)
+	{
+		$fs = $this->fieldSettings[$fKey];
+		$sep = ($fs['SECTION_PATH_SEPARATOR'] ? $fs['SECTION_PATH_SEPARATOR'] : '/');
+		if(is_array($val))
+		{
+			foreach($val as $k=>$v)
+			{
+				if(is_array($v))
+				{
+					$val[$k] = implode($sep, $v);
+				}
+			}
+			$val = implode($this->ie->params['ELEMENT_MULTIPLE_SEPARATOR'], $val);
+		}
+	}
+	
+	public function SplitSectionPaths(&$val, $fKey, $needSplit=false)
+	{
+		$fs = $this->fieldSettings[$fKey];
+		$sep = ($fs['SECTION_PATH_SEPARATOR'] ? $fs['SECTION_PATH_SEPARATOR'] : '/');
+		if($fs['SECTION_PATH_SEPARATED']=='Y' || $needSplit)
+			$arVals = explode($this->ie->params['ELEMENT_MULTIPLE_SEPARATOR'], $val);
+		else $arVals = array($val);
+		foreach($arVals as $k=>$subvalue)
+		{
+			$arVals[$k] = array_map('trim', explode($sep, $subvalue));
+		}
+		$val = $arVals;
 	}
 	
 	public function UpdateSectionFields(&$arFieldsSection, $ID)
@@ -256,34 +360,60 @@ class Conversion
 		return $val;
 	}
 	
+	public function ResetTmpConversion()
+	{
+		$this->arTmpConv = array();
+	}
+	
+	public function AddTmpConversion($fKey, $arConv)
+	{
+		if(!isset($this->arTmpConv[$fKey])) $this->arTmpConv[$fKey] = array();
+		$this->arTmpConv[$fKey][] = $arConv;
+		if(!in_array($fieldName, $this->updateElemFields)) $this->updateElemFields[] = $fKey;
+		if(preg_match('/^(OFFER_|PARENT_)?('.implode('|', $this->fieldPrefixes).')[A-Z0-9_]+$/', $arConv['CELL']) && !in_array($arConv['CELL'], $this->loadElemFields)) $this->loadElemFields[] = $arConv['CELL'];
+	}
+	
 	public function ApplyExtraConversions($fKey, $val, $ID)
 	{
 		if(is_array($val)) return $val;
-		if($this->isSku) $fKey = 'OFFER_'.$fKey;
-		$fs = $this->fieldSettings;
-		
-		if(isset($fs[$fKey]) && isset($fs[$fKey]['EXTRA_CONVERSION']) && is_array($fs[$fKey]['EXTRA_CONVERSION']))
+		if(is_numeric($fKey)) $fs = $this->ie->fparams;
+		else
+		{
+			$fs = $this->fieldSettings;
+			if($this->isSku) $fKey = 'OFFER_'.$fKey;
+		}
+		$arConv = (isset($fs[$fKey]) && isset($fs[$fKey]['EXTRA_CONVERSION']) && is_array($fs[$fKey]['EXTRA_CONVERSION']) ? $fs[$fKey]['EXTRA_CONVERSION'] : array());
+		if(isset($this->arTmpConv[$fKey]) && is_array($this->arTmpConv[$fKey])) $arConv = array_merge($arConv, $this->arTmpConv[$fKey]);
+		if(count($arConv) > 0)
 		{
 			$arFields = $this->GetElementFields($ID);
 			if($this->isSection)
 			{
 				$prefixPattern = '/^('.implode('|', $this->fieldSectPrefixes).')[A-Z0-9_]+$/';
-				$prefixPattern2 = '/(#(('.implode('|', $this->fieldSectPrefixes).')[A-Z0-9_]+)#|\$\{[\'"]#(('.implode('|', $this->fieldSectPrefixes).')[A-Z0-9_]+)#[\'"]\})/';
+				$prefixPattern2 = '/(#(('.implode('|', $this->fieldSectPrefixes).')[A-Z0-9_]+)#|\$\{[\'"]#(('.implode('|', $this->fieldSectPrefixes).')[A-Z0-9_]+)#[\'"]\}|#VAL#|#DATETIME#|'.implode('|', $this->ie->rcurrencies).')/';
 			}
 			else
 			{
 				$prefixPattern = '/^(PARENT_)?('.implode('|', $this->fieldPrefixes).')[A-Z0-9_]+$/';
-				$prefixPattern2 = '/(#(PARENT_)?(('.implode('|', $this->fieldPrefixes).')[A-Z0-9_]+)#|\$\{[\'"]#(PARENT_)?(('.implode('|', $this->fieldPrefixes).')[A-Z0-9_]+)#[\'"]\})/';
+				$prefixPattern2 = '/(#(PARENT_)?(('.implode('|', $this->fieldPrefixes).')[A-Z0-9_]+)#|\$\{[\'"]#(PARENT_)?(('.implode('|', $this->fieldPrefixes).')[A-Z0-9_]+)#[\'"]\}|#VAL#|#DATETIME#|'.implode('|', $this->ie->rcurrencies).')/';
 			}
-			$prefixPatternFile2 = '/(\{([^\s\}]*[\'"][^\'"\}]*[\'"])*[^\s\}]*\}|'.'\$\{[\'"]([^\s\}]*[\'"][^\'"\}]*[\'"])*[^\s\}]*[\'"]\})/';
+			$prefixPatternFile2 = '/(\{([^\s\'"\{\}]+[\'"][^\'"\{\}]*[\'"])*[^\s\'"\{\}]+\}|'.'\$\{[\'"]([^\s\}]*[\'"][^\'"\}]*[\'"])*[^\s\}]*[\'"]\})/';
 		
-			foreach($fs[$fKey]['EXTRA_CONVERSION'] as $k=>$v)
+			foreach($arConv as $k=>$v)
 			{
-				$condVal = $val;
-				if(strlen($v['CELL']) > 0 && preg_match($prefixPattern, $v['CELL']))
+				$this->currentItemFieldVal = $val;
+				$condVal = (string)$val;
+				if(strlen($v['CELL']) > 0)
 				{
-					if(isset($arFields[$v['CELL']])) $condVal = (string)$arFields[$v['CELL']];
-					else $condVal = '';
+					if(preg_match($prefixPattern, $v['CELL']))
+					{
+						if(isset($arFields[$v['CELL']])) $condVal = (string)$arFields[$v['CELL']];
+						else $condVal = '';
+					}
+					elseif(preg_match('/^\{(.*)\}$/', $v['CELL'], $m2))
+					{
+						$condVal = (string)$this->ie->GetValueByXpath($m2[1]);
+					}
 				}
 
 				if(strlen($v['FROM']) > 0)
@@ -293,21 +423,29 @@ class Conversion
 				}
 			
 				if($v['CELL']=='ELSE' || $v['CELL']=='LOADED') $v['WHEN'] = '';
+				$condValNum = $this->GetFloatVal($condVal);
 				if(($v['CELL']=='ELSE' && !$execConv)
 					|| ($v['CELL']=='LOADED' && $this->IsAlreadyLoaded($ID))
-					|| ($v['WHEN']=='EQ' && $condVal==$v['FROM'])
-					|| ($v['WHEN']=='NEQ' && $condVal!=$v['FROM'])
-					|| ($v['WHEN']=='GT' && $condVal > $v['FROM'])
-					|| ($v['WHEN']=='LT' && $condVal < $v['FROM'])
-					|| ($v['WHEN']=='GEQ' && $condVal >= $v['FROM'])
-					|| ($v['WHEN']=='LEQ' && $condVal <= $v['FROM'])
-					|| ($v['WHEN']=='CONTAIN' && strpos($condVal, $v['FROM'])!==false)
-					|| ($v['WHEN']=='NOT_CONTAIN' && strpos($condVal, $v['FROM'])===false)
-					|| ($v['WHEN']=='REGEXP' && preg_match('/'.$v['FROM'].'/', $condVal))
-					|| ($v['WHEN']=='NOT_REGEXP' && !preg_match('/'.$v['FROM'].'/', $condVal))
-					|| ($v['WHEN']=='EMPTY' && strlen($condVal)==0)
-					|| ($v['WHEN']=='NOT_EMPTY' && strlen($condVal) > 0)
-					|| ($v['WHEN']=='ANY'))
+					|| ($v['CELL']=='DUPLICATE' && $this->elementIsDuplicate)
+					|| (!in_array($v['CELL'], array('ELSE', 'LOADED', 'DUPLICATE'))
+						&& (($v['WHEN']=='EQ' && $condVal==$v['FROM'])
+							|| ($v['WHEN']=='NEQ' && $condVal!=$v['FROM'])
+							|| ($v['WHEN']=='GT' && $condValNum > $this->GetFloatValWithCalc($v['FROM']))
+							|| ($v['WHEN']=='LT' && $condValNum < $this->GetFloatValWithCalc($v['FROM']))
+							|| ($v['WHEN']=='GEQ' && $condValNum >= $this->GetFloatValWithCalc($v['FROM']))
+							|| ($v['WHEN']=='LEQ' && $condValNum <= $this->GetFloatValWithCalc($v['FROM']))
+							|| ($v['WHEN']=='BETWEEN' && $condValNum >= $this->GetFloatVal(explode('-', $v['FROM'])[0]) && $condValNum <= $this->GetFloatVal(explode('-', $v['FROM'])[1]))
+							|| ($v['WHEN']=='CONTAIN' && strpos($condVal, $v['FROM'])!==false)
+							|| ($v['WHEN']=='NOT_CONTAIN' && strpos($condVal, $v['FROM'])===false)
+							|| ($v['WHEN']=='BEGIN_WITH' && strpos($condVal, $v['FROM'])===0)
+							|| ($v['WHEN']=='ENDS_IN' && mb_substr($condVal, -mb_strlen($v['FROM']))===$v['FROM'])
+							|| ($v['WHEN']=='REGEXP' && preg_match('/'.$v['FROM'].'/'.Utils::getUtfModifier(), $condVal))
+							|| ($v['WHEN']=='NOT_REGEXP' && !preg_match('/'.$v['FROM'].'/'.Utils::getUtfModifier(), $condVal))
+							|| ($v['WHEN']=='EMPTY' && strlen($condVal)==0)
+							|| ($v['WHEN']=='NOT_EMPTY' && strlen($condVal) > 0)
+							|| ($v['WHEN']=='ANY')
+						)
+					))
 				{
 					if(strlen($v['TO']) > 0)
 					{
@@ -316,24 +454,44 @@ class Conversion
 					}
 					if($v['THEN']=='REPLACE_TO') $val = $v['TO'];
 					elseif($v['THEN']=='REMOVE_SUBSTRING' && strlen($v['TO']) > 0) $val = str_replace($v['TO'], '', $val);
-					elseif($v['THEN']=='REPLACE_SUBSTRING_TO' && strlen($v['FROM']) > 0) $val = str_replace($v['FROM'], $v['TO'], $val);
+					elseif($v['THEN']=='REPLACE_SUBSTRING_TO' && strlen($v['FROM']) > 0)
+					{
+						if($v['WHEN']=='REGEXP')
+						{
+							if(preg_match('/'.$v['FROM'].'/i'.Utils::getUtfModifier(), $val)) $val = preg_replace('/'.$v['FROM'].'/i'.Utils::getUtfModifier(), $v['TO'], $val);
+							else $val = preg_replace('/'.ToLower($v['FROM']).'/i'.Utils::getUtfModifier(), $v['TO'], $val);
+						}
+						else $val = str_replace($v['FROM'], $v['TO'], $val);
+					}
 					elseif($v['THEN']=='ADD_TO_BEGIN') $val = $v['TO'].$val;
 					elseif($v['THEN']=='ADD_TO_END') $val = $val.$v['TO'];
 					elseif($v['THEN']=='LCASE') $val = ToLower($val);
 					elseif($v['THEN']=='UCASE') $val = ToUpper($val);
-					elseif($v['THEN']=='UFIRST') $val = preg_replace_callback('/^(\s*)(.*)$/', create_function('$m', 'return $m[1].ToUpper(substr($m[2], 0, 1)).ToLower(substr($m[2], 1));'), $val);
-					elseif($v['THEN']=='UWORD') $val = implode(' ', array_map(create_function('$m', 'return ToUpper(substr($m, 0, 1)).ToLower(substr($m, 1));'), explode(' ', $val)));
-					elseif($v['THEN']=='MATH_ROUND') $val = round($this->GetFloatVal($val));
-					elseif($v['THEN']=='MATH_MULTIPLY') $val = $this->GetFloatVal($val) * $this->GetFloatVal($v['TO']);
-					elseif($v['THEN']=='MATH_DIVIDE') $val = $this->GetFloatVal($val) / $this->GetFloatVal($v['TO']);
-					elseif($v['THEN']=='MATH_ADD') $val = $this->GetFloatVal($val) + $this->GetFloatVal($v['TO']);
-					elseif($v['THEN']=='MATH_SUBTRACT') $val = $this->GetFloatVal($val) - $this->GetFloatVal($v['TO']);
+					elseif($v['THEN']=='UFIRST') $val = preg_replace_callback('/^(\s*)(.*)$/', array('\Bitrix\KitImportxml\Conversion', 'UFirstCallback'), $val);
+					elseif($v['THEN']=='UWORD') $val = implode(' ', array_map(array('\Bitrix\KitImportxml\Conversion', 'UWordCallback'), explode(' ', $val)));
+					elseif($v['THEN']=='MATH_ROUND') $val = round($this->GetFloatVal($val), $this->GetFloatVal($v['TO']));
+					elseif($v['THEN']=='MATH_MULTIPLY') $val = \Bitrix\KitImportxml\Utils::GetFloatRoundVal($this->GetFloatVal($val) * $this->GetFloatVal($v['TO']));
+					elseif($v['THEN']=='MATH_DIVIDE') $val = ($this->GetFloatVal($v['TO'])==0 ? 0 : \Bitrix\KitImportxml\Utils::GetFloatRoundVal($this->GetFloatVal($val) / $this->GetFloatVal($v['TO'])));
+					elseif($v['THEN']=='MATH_ADD') $val = \Bitrix\KitImportxml\Utils::GetFloatRoundVal($this->GetFloatVal($val) + $this->GetFloatVal($v['TO']));
+					elseif($v['THEN']=='MATH_SUBTRACT') $val = \Bitrix\KitImportxml\Utils::GetFloatRoundVal($this->GetFloatVal($val) - $this->GetFloatVal($v['TO']));
+					elseif($v['THEN']=='MATH_ADD_PERCENT') $val = (strlen($val) > 0 ? \Bitrix\KitImportxml\Utils::GetFloatRoundVal($this->GetFloatVal($val) * (1 + $this->GetFloatVal($v['TO'])/100)) : '');
+					elseif($v['THEN']=='MATH_SUBTRACT_PERCENT') $val = (strlen($val) > 0 ? \Bitrix\KitImportxml\Utils::GetFloatRoundVal($this->GetFloatVal($val) * (1 - $this->GetFloatVal($v['TO'])/100)) : '');
+					elseif($v['THEN']=='MATH_FORMULA') $val = $this->CalcFloatValue($v['TO']);
 					elseif($v['THEN']=='EXPRESSION') $val = $this->ExecuteFilterExpression($ID, $val, $v['TO'], '');
 					elseif($v['THEN']=='STRIP_TAGS') $val = strip_tags($val);
 					elseif($v['THEN']=='CLEAR_TAGS') $val = preg_replace('/<([a-z][a-z0-9:]*)[^>]*(\/?)>/i','<$1$2>', $val);
 					elseif($v['THEN']=='TRANSLIT')
 					{
+						if(strlen($v['TO']) > 0) $val = $v['TO'];
 						$val = \CUtil::translit($val, LANGUAGE_ID);
+					}
+					elseif($v['THEN']=='DOWNLOAD_BY_LINK')
+					{
+						$val = \Bitrix\KitImportxml\Utils::DownloadTextTextByLink($val, $v['TO']);
+					}
+					elseif($v['THEN']=='DOWNLOAD_IMAGES')
+					{
+						$val = \Bitrix\KitImportxml\Utils::DownloadImagesFromText($val, $v['TO']);
 					}
 					elseif($v['THEN']=='NOT_LOAD') $val = false;
 					elseif($v['THEN']=='NOT_LOAD_ELEMENT')
@@ -360,10 +518,26 @@ class Conversion
 			$paramName = $m2[2];
 			$isVar = true;
 		}
-		$key = substr($paramName, 1, -1);
+		$key = mb_substr($paramName, 1, -1);
 		
-		$arFields = $this->GetElementFields();
-		if(isset($arFields[$key])) $value = $arFields[$key];
+		if($key=='DATETIME')
+		{
+			$value = ConvertTimeStamp(false, 'FULL');
+		}
+		elseif($key=='VAL')
+		{
+			$value = $this->currentItemFieldVal;
+		}
+		elseif(in_array($paramName, $this->ie->rcurrencies))
+		{
+			$arRates = $this->ie->GetCurrencyRates();
+			$value = (isset($arRates[$key]) ? floatval($arRates[$key]) : 1);
+		}
+		else
+		{
+			$arFields = $this->GetElementFields();
+			if(isset($arFields[$key])) $value = $arFields[$key];
+		}
 		
 		if($isVar)
 		{
@@ -405,26 +579,8 @@ class Conversion
 	
 	public function IsAlreadyLoaded($ID)
 	{
-		if(!$this->ie) return false;
-		if(!$this->isSku) $fn = $this->ie->fileElementsId;
-		else $fn = $this->ie->fileOffersId;
-		
-		$find = false;
-		if($fn && file_exists($fn))
-		{
-			$handle = fopen($fn, 'r');
-			while(!feof($handle) && !$find)
-			{
-				$buffer = trim(fgets($handle, 128));
-				if($buffer && ($ID == (int)$buffer))
-				{
-					$find = true;
-				}
-			}
-			fclose($handle);
-		}
-		
-		return $find;
+		$oProfile = \Bitrix\KitImportxml\Profile::getInstance();
+		return $oProfile->IsAlreadyLoaded($ID, ($this->isSku ? 'O' : 'E'));
 	}
 	
 	public function GetSectionFields($ID = 0)
@@ -471,12 +627,14 @@ class Conversion
 		return $this->sectionFields;
 	}
 	
-	public function SetElementId($ID = 0)
+	public function SetElementId($ID = 0, $duplicate = false, $arData=array())
 	{
 		if($ID!=$this->elementId)
 		{
+			$this->oldElementData = $arData;
 			$this->elementId = $ID;
 			$this->elementFields = null;
+			$this->elementIsDuplicate = $duplicate;
 		}
 		return true;
 	}
@@ -496,7 +654,7 @@ class Conversion
 		if($this->isSku)
 		{
 			$loadElemParentFields2 = preg_grep('/^PARENT_/', $this->loadElemFields);
-			$loadElemParentFields = array_map(create_function('$n', 'return substr($n, 7);'), $loadElemParentFields2);
+			$loadElemParentFields = array_map(array(__CLASS__, 'RemoveParentPrefix'), $loadElemParentFields2);
 			$loadElemFields = array_diff($this->loadElemFields, $loadElemParentFields2);
 			$arFilter = array('ID' => $ID, 'IBLOCK_ID' => $this->offersIblockId);
 			$arElement2 = $this->GetElementFieldsEx($arFilter, $loadElemFields);
@@ -521,11 +679,24 @@ class Conversion
 		return $this->elementFields;
 	}
 	
+	public function GetOldField(&$arElement2, $type, $field, $index=false)
+	{
+		if(isset($this->oldElementData[$type]) && is_array($this->oldElementData[$type]))
+		{
+			$arData = $this->oldElementData[$type];
+			if($index!==false && array_key_exists($index, $arData) && is_array($arData[$index])) $arData = $arData[$index];
+			if(!array_key_exists($field, $arData) && array_key_exists(0, $arData)) $arData = $arData[0];
+			if(array_key_exists($field, $arData)) $arElement2[$this->arFieldTypes[$type].($index!==false ? $index.'_' : '').$field] = $arData[$field];
+		}
+
+	}
+	
 	public function GetElementFieldsEx($arFilter, $loadElemFields)
 	{
 		if(empty($loadElemFields)) return array();
 		
-		$arElementFields = array('ID', 'IBLOCK_ID');
+		$arElement2 = array();
+		$arElementFields = array('ID', 'IBLOCK_ID', 'IBLOCK_SECTION_ID');
 		$arElementNameFields = array();
 		$arPropsFields = array();
 		$arFieldsProduct = array();
@@ -537,50 +708,68 @@ class Conversion
 			{
 				$key = substr($field, 3);
 				$arElementNameFields[] = $key;
+				$this->GetOldField($arElement2, $key, 'ELEMENT');
 				if($key=='PREVIEW_PICTURE_DESCRIPTION' || $key=='DETAIL_PICTURE_DESCRIPTION')
 				{
 					$key = substr($key, 0, -12);
 				}
-				if(!in_array($key, $arElementFields)) $arElementFields[] = $key;
+				if(!in_array($key, $arElementFields))
+				{
+					$arElementFields[] = $key;
+					$this->GetOldField($arElement2, 'ELEMENT', $key);
+				}
 			}
 			elseif(strpos($field, 'ICAT_PRICE')===0)
 			{
 				$arPrice = explode('_', substr($field, 10), 2);
 				$arFieldsPrices[$arPrice[0]][] = $arPrice[1];
+				$this->GetOldField($arElement2, 'PRICES', $arPrice[1], $arPrice[0]);
 			}
 			elseif(strpos($field, 'ICAT_STORE')===0)
 			{
 				$arStore = explode('_', substr($field, 10), 2);
 				$arFieldsProductStores[$arStore[0]][] = $arStore[1];
+				$this->GetOldField($arElement2, 'STORES', $arStore[1], $arStore[0]);
 			}
 			elseif(strpos($field, 'ICAT_')===0)
 			{
-				$arFieldsProduct[] = substr($field, 5);
+				$fieldKey = substr($field, 5);
+				$arFieldsProduct[] = $fieldKey;
+				$this->GetOldField($arElement2, 'PRODUCT', $fieldKey);
 			}
 			elseif(strpos($field, 'IP_PROP')===0)
 			{
 				$fieldKey = substr($field, 7);
 				$arPropsFields[] = $fieldKey;
-				if(substr($fieldKey, -12)=='_DESCRIPTION')
+				//$this->GetOldField($arElement2, 'PROPS', $fieldKey);
+				if(strpos($fieldKey, '_')!==false)
 				{
-					$arPropsFields[] = substr($fieldKey, 0, -12);
+					$arPropsFields[] = current(explode('_', $fieldKey));
+					//$this->GetOldField($arElement2, 'PROPS', $fieldKey);
 				}
+			}
+			elseif(strpos($field, 'ISECT_')===0)
+			{
+				$arFieldsSection[] = substr($field, 6);
 			}
 		}
 		
-		$arSelectElementFields = $arElementFields;
-		if(in_array('IBLOCK_SECTION_IDS', $arElementNameFields) || in_array('IBLOCK_SECTION_PARENT_IDS', $arElementNameFields))
+		if(count($arElement2)>=count($loadElemFields))
 		{
-			$arSelectElementFields[] = 'IBLOCK_SECTION_ID';
+			return $arElement2;
 		}
+		
+		$arSelectElementFields = $arElementFields;
+
 		if(!empty($arFieldsPrices))
 		{
 			$arPriceIds = array();
 			foreach($arFieldsPrices as $k=>$v)
 			{
 				$arPriceIds[] = $k;
+				$arSelectElementFields[] = 'CATALOG_GROUP_'.$k;
 			}
-			$arPriceCodes = array();
+			/*$arPriceCodes = array();
 			$dbRes = \CCatalogGroup::GetList(array(), array('ID'=>$arPriceIds), false, false, array('ID', 'NAME'));
 			while($arCatalogGroup = $dbRes->Fetch())
 			{
@@ -592,14 +781,13 @@ class Conversion
 			{
 				$arGroupPrices[$k]['CAN_VIEW'] = 1;
 				$arSelectElementFields[] = $v['SELECT'];
-			}
+			}*/
 		}
 		
-		$arElement2 = array();
 		//$dbResElements = \CIblockElement::GetList(array(), $arFilter, false, array('nTopCount'=>1), $arSelectElementFields);
-		$dbResElements = \Bitrix\KitImportxml\DataManager\IblockElement::GetList($arFilter, $arSelectElementFields, array(), 1);
+		$dbResElements = \Bitrix\KitImportxml\DataManager\IblockElementTable::GetListComp($arFilter, $arSelectElementFields, array(), 1);
 		if($arElement = $dbResElements->Fetch())
-		{			
+		{
 			foreach($arElement as $k=>$v)
 			{
 				if(in_array($k, $arElementFields))
@@ -632,26 +820,31 @@ class Conversion
 			}
 			if(in_array('IBLOCK_SECTION_PARENT_IDS', $arElementNameFields))
 			{
-				$arSectionIds = array();
-				$dbRes = \Bitrix\Iblock\SectionTable::GetList(array(
-					'filter'=>array('ID'=>$arElement['IBLOCK_SECTION_ID']),
-					'runtime' => array(new \Bitrix\Main\Entity\ReferenceField(
-						'SECTION2',
-						'\Bitrix\Iblock\SectionTable',
-						array(
-							'>=this.LEFT_MARGIN' => 'ref.LEFT_MARGIN',
-							'<=this.RIGHT_MARGIN' => 'ref.RIGHT_MARGIN',
-							'this.IBLOCK_ID' => 'ref.IBLOCK_ID'
-						)
-					)), 
-					'select'=>array('SID'=>'SECTION2.ID'), 
-					'order'=>array('SECTION2.DEPTH_LEVEL'=>'ASC')
-				));
-				while($arSection = $dbRes->Fetch())
+				if(!isset($this->sectionParentIds)) $this->sectionParentIds = array();
+				if(!array_key_exists($arElement['IBLOCK_SECTION_ID'], $this->sectionParentIds))
 				{
-					$arSectionIds[] = $arSection['SID'];
+					$arSectionIds = array();
+					$dbRes = \Bitrix\Iblock\SectionTable::GetList(array(
+						'filter'=>array('ID'=>$arElement['IBLOCK_SECTION_ID']),
+						'runtime' => array(new \Bitrix\Main\Entity\ReferenceField(
+							'SECTION2',
+							'\Bitrix\Iblock\SectionTable',
+							array(
+								'>=this.LEFT_MARGIN' => 'ref.LEFT_MARGIN',
+								'<=this.RIGHT_MARGIN' => 'ref.RIGHT_MARGIN',
+								'this.IBLOCK_ID' => 'ref.IBLOCK_ID'
+							)
+						)), 
+						'select'=>array('SID'=>'SECTION2.ID'), 
+						'order'=>array('SECTION2.DEPTH_LEVEL'=>'ASC')
+					));
+					while($arSection = $dbRes->Fetch())
+					{
+						$arSectionIds[] = $arSection['SID'];
+					}
+					$this->sectionParentIds[$arElement['IBLOCK_SECTION_ID']] = implode(',', $arSectionIds);
 				}
-				$arElement2['IE_IBLOCK_SECTION_PARENT_IDS'] = implode(',', $arSectionIds);
+				$arElement2['IE_IBLOCK_SECTION_PARENT_IDS'] = $this->sectionParentIds[$arElement['IBLOCK_SECTION_ID']];
 			}
 			
 			if(!empty($arPropsFields))
@@ -662,13 +855,24 @@ class Conversion
 					if(in_array($arProp['ID'], $arPropsFields))
 					{
 						$fieldKey = 'IP_PROP'.$arProp['ID'];
+						$arRelFields = array();
 						$val = $arProp['VALUE'];
 						if($arProp['PROPERTY_TYPE']=='L')
 						{
+							$arRelFieldKeys = array_map(array(__CLASS__, 'GetRelElemField'), preg_grep('/^'.$arProp['ID'].'_/', $arPropsFields));
+							foreach($arRelFieldKeys as $k=>$v)
+							{
+								$arRelFields[$v] = $this->GetPropertyListValue($arProp, $val, $v);
+							}
 							$val = $this->GetPropertyListValue($arProp, $val);
 						}
 						elseif($arProp['PROPERTY_TYPE']=='E')
 						{
+							$arRelFieldKeys = array_map(array(__CLASS__, 'GetRelElemField'), preg_grep('/^'.$arProp['ID'].'_/', $arPropsFields));
+							foreach($arRelFieldKeys as $k=>$v)
+							{
+								$arRelFields[$v] = $this->GetPropertyElementValue($arProp, $val, $v);
+							}
 							$val = $this->GetPropertyElementValue($arProp, $val);
 						}
 						elseif($arProp['PROPERTY_TYPE']=='G')
@@ -681,6 +885,11 @@ class Conversion
 						}
 						elseif($arProp['PROPERTY_TYPE']=='S' && $arProp['USER_TYPE']=='directory')
 						{
+							$arRelFieldKeys = array_map(array(__CLASS__, 'GetRelElemField'), preg_grep('/^'.$arProp['ID'].'_/', $arPropsFields));
+							foreach($arRelFieldKeys as $k=>$v)
+							{
+								$arRelFields[$v] = $this->GetHighloadBlockValue($arProp, $val, $v);
+							}
 							$val = $this->GetHighloadBlockValue($arProp, $val);
 						}
 						elseif($arProp['PROPERTY_TYPE']=='S' && $arProp['USER_TYPE']=='HTML')
@@ -703,10 +912,18 @@ class Conversion
 						if($arProp['MULTIPLE']=='Y' && isset($arElement2[$fieldKey]) && strlen($arElement2[$fieldKey]) > 0)
 						{
 							$arElement2[$fieldKey] .= $this->ie->params['ELEMENT_MULTIPLE_SEPARATOR'].$val;
+							foreach($arRelFields as $k=>$v)
+							{
+								$arElement2[$fieldKey.'_'.$k] .= $this->ie->params['ELEMENT_MULTIPLE_SEPARATOR'].$v;
+							}
 						}
 						else
 						{
 							$arElement2[$fieldKey] = $val;
+							foreach($arRelFields as $k=>$v)
+							{
+								$arElement2[$fieldKey.'_'.$k] = $v;
+							}
 						}
 					}
 					
@@ -715,16 +932,14 @@ class Conversion
 						$val = $arProp['DESCRIPTION'];
 						$key = 'IP_PROP'.$arProp['ID'].'_DESCRIPTION';
 						
-						/*if($arProp['MULTIPLE']=='Y')
+						if($arProp['MULTIPLE']=='Y' && isset($arElement2[$key]) && strlen($arElement2[$key]) > 0)
 						{
-							if(!isset($arElement2[$key])) $arElement2[$key] = array();
-							$arElement2[$key][] = $val;
+							$arElement2[$key] .= $this->ie->params['ELEMENT_MULTIPLE_SEPARATOR'].$val;
 						}
 						else
 						{
 							$arElement2[$key] = $val;
-						}*/
-						$arElement2[$key] = $val;
+						}
 					}
 				}
 			}
@@ -843,6 +1058,19 @@ class Conversion
 					}
 				}
 			}
+			
+			if(!empty($arFieldsSection) && $arElement['IBLOCK_SECTION_ID'] > 0)
+			{
+				$dbRes2 = \CIblockSection::GetList(array(), array('ID'=>$arElement['IBLOCK_SECTION_ID'], 'IBLOCK_ID'=>$arElement['IBLOCK_ID']), false, $arFieldsSection);
+				if($arSection = $dbRes2->Fetch())
+				{
+					foreach($arSection as $k=>$v)
+					{
+						$elemKey = 'ISECT_'.$k;
+						$arElement2[$elemKey] = $v;
+					}
+				}
+			}
 		}
 		return $arElement2;
 	}
@@ -881,23 +1109,29 @@ class Conversion
 		return $val;
 	}
 	
-	public function GetPropertyListValue($arProp, $val)
+	public function GetPropertyListValue($arProp, $val, $relField = '')
 	{
 		if($val)
 		{
-			if(!isset($this->propVals[$arProp['ID']][$val]))
+			$selectField = 'VALUE';
+			if($relField)
+			{
+				$selectField = $relField;
+			}
+			
+			if(!isset($this->propVals[$arProp['ID']][$selectField][$val]))
 			{
 				$dbRes = \CIBlockPropertyEnum::GetList(array(), array("PROPERTY_ID"=>$arProp['ID'], "ID"=>$val));
 				if($arPropEnum = $dbRes->Fetch())
 				{
-					$this->propVals[$arProp['ID']][$val] = $arPropEnum['VALUE'];
+					$this->propVals[$arProp['ID']][$selectField][$val] = $arPropEnum[$selectField];
 				}
 				else
 				{
-					$this->propVals[$arProp['ID']][$val] = '';
+					$this->propVals[$arProp['ID']][$selectField][$val] = '';
 				}
 			}
-			$val = $this->propVals[$arProp['ID']][$val];
+			$val = $this->propVals[$arProp['ID']][$selectField][$val];
 		}
 		return $val;
 	}
@@ -909,6 +1143,7 @@ class Conversion
 			$selectField = 'NAME';
 			if($relField)
 			{
+				$selectField = $relField;
 				if(strpos($relField, 'IE_')===0)
 				{
 					$selectField = substr($relField, 3);
@@ -922,7 +1157,7 @@ class Conversion
 			if(!isset($this->propVals[$arProp['ID']][$selectField][$val]))
 			{
 				//$dbRes = \CIBlockElement::GetList(array(), array("ID"=>$val), false, false, array($selectField));
-				$dbRes = \Bitrix\KitImportxml\DataManager\IblockElement::GetList(array("ID"=>$val), array($selectField));
+				$dbRes = \Bitrix\KitImportxml\DataManager\IblockElementTable::GetListComp(array("ID"=>$val), array($selectField));
 				if($arElem = $dbRes->Fetch())
 				{
 					$selectedField = $selectField;
@@ -967,31 +1202,57 @@ class Conversion
 		return $val;
 	}
 	
-	public function GetHighloadBlockValue($arProp, $val)
+	public function GetHighloadBlockValue($arProp, $val, $relField = '')
 	{
 		if($val && \CModule::IncludeModule('highloadblock') && $arProp['USER_TYPE_SETTINGS']['TABLE_NAME'])
 		{
-			if(!isset($this->propVals[$arProp['ID']][$val]))
+			$selectField = 'UF_NAME';
+			if($relField)
 			{
-				if(!$this->hlbl[$arProp['ID']])
+				$selectField = $relField;
+			}
+			
+			if(!isset($this->propVals[$arProp['ID']][$selectField][$val]))
+			{
+				if(!$this->hlbl[$arProp['ID']] || !$this->hlblFields[$arProp['ID']])
 				{
 					$hlblock = \Bitrix\Highloadblock\HighloadBlockTable::getList(array('filter'=>array('TABLE_NAME'=>$arProp['USER_TYPE_SETTINGS']['TABLE_NAME'])))->fetch();
-					$entity = \Bitrix\Highloadblock\HighloadBlockTable::compileEntity($hlblock);
-					$this->hlbl[$arProp['ID']] = $entity->getDataClass();
+					if(!$hlblock) return '';
+					if(!$this->hlbl[$arProp['ID']])
+					{
+						$entity = \Bitrix\Highloadblock\HighloadBlockTable::compileEntity($hlblock);
+						$this->hlbl[$arProp['ID']] = $entity->getDataClass();
+					}
+					if(!$this->hlblFields[$arProp['ID']])
+					{
+						$dbRes = \CUserTypeEntity::GetList(array(), array('ENTITY_ID'=>'HLBLOCK_'.$hlblock['ID']));
+						$arHLFields = array();
+						while($arHLField = $dbRes->Fetch())
+						{
+							$arHLFields[$arHLField['FIELD_NAME']] = $arHLField;
+						}
+						$this->hlblFields[$arProp['ID']] = $arHLFields;
+					}
 				}
 				$entityDataClass = $this->hlbl[$arProp['ID']];
-				
-				$dbRes2 = $entityDataClass::GetList(array('filter'=>array("UF_XML_ID"=>$val), 'select'=>array('ID', 'UF_NAME'), 'limit'=>1));
+				$arHLFields = $this->hlblFields[$arProp['ID']];
+				if(!array_key_exists($selectField, $arHLFields)) return '';
+				$dbRes2 = $entityDataClass::GetList(array('filter'=>array("UF_XML_ID"=>$val), 'select'=>array('ID', $selectField), 'limit'=>1));
 				if($arr2 = $dbRes2->Fetch())
 				{
-					$this->propVals[$arProp['ID']][$val] = $arr2['UF_NAME'];
+					$v = $arr2[$selectField];
+					if(is_array($arHLFields[$selectField]) && $arHLFields[$selectField]['USER_TYPE_ID']=='file')
+					{
+						$v = $this->GetFileValue($v);
+					}
+					$this->propVals[$arProp['ID']][$selectField][$val] = $v;
 				}
 				else
 				{
-					$this->propVals[$arProp['ID']][$val] = '';
+					$this->propVals[$arProp['ID']][$selectField][$val] = '';
 				}
 			}
-			return $this->propVals[$arProp['ID']][$val];
+			return $this->propVals[$arProp['ID']][$selectField][$val];
 		}
 		return $val;
 	}
@@ -1007,8 +1268,38 @@ class Conversion
 		return floatval(preg_replace('/[^\d\.\-]+/', '', str_replace(',', '.', $val)));
 	}
 	
+	public function CalcFloatValue($val)
+	{
+		return $this->ie->CalcFloatValue($val);
+	}
+	
+	public function GetFloatValWithCalc($val)
+	{
+		return $this->ie->GetFloatValWithCalc($val);
+	}
+	
 	public function ExecuteFilterExpression($ID, $val, $expression, $altReturn = true)
 	{
 		return $this->ie->ExecuteFilterExpression($val, $expression, $altReturn, array('ID'=>$ID));
+	}
+	
+	public static function UFirstCallback($m)
+	{
+		return $m[1].ToUpper(mb_substr($m[2], 0, 1)).ToLower(mb_substr($m[2], 1));
+	}
+	
+	public static function UWordCallback($m)
+	{
+		return ToUpper(mb_substr($m, 0, 1)).ToLower(mb_substr($m, 1));
+	}
+	
+	public static function RemoveParentPrefix($n)
+	{
+		return substr($n, 7);
+	}
+	
+	public static function GetRelElemField($n)
+	{
+		return end(explode("_", $n, 2));
 	}
 }

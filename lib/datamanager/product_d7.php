@@ -1,8 +1,4 @@
 <?php
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 namespace Bitrix\KitImportxml\DataManager;
 
 use Bitrix\Main\Loader;
@@ -22,7 +18,7 @@ class ProductD7 extends Product
 	public function GetList($arOrder = array(), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields = array())
 	{
 		$arParams = array();
-		if(!empty($arOrder)) $arParams['order'] = $arParams;
+		if(!empty($arOrder)) $arParams['order'] = $arOrder;
 		if(!empty($arFilter)) $arParams['filter'] = $arFilter;
 		if(is_array($arGroupBy) && !empty($arGroupBy)) $arParams['group'] = $arGroupBy;
 		if(is_array($arNavStartParams) && !empty($arNavStartParams))

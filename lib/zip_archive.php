@@ -1,8 +1,4 @@
 <?php
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 namespace Bitrix\KitImportxml;
 
 class ZipArchive
@@ -35,14 +31,10 @@ class ZipArchive
 		\Bitrix\Main\IO\Directory::createDirectory($this->tmpDir);
 		$this->tmpDir .= '/';
 		
-		if(class_exists('\ZipArchive'))
+		if(class_exists('\ZipArchive') && ($zipObj = new \ZipArchive) && ($zipObj->open($pFilename) === true) && $zipObj->numFiles > 0)
 		{
-			$zipObj = new \ZipArchive;
-			if ($zipObj->open($pFilename) === true)
-			{
-				$zipObj->extractTo($this->tmpDir);
-				$zipObj->close();
-			}
+			$zipObj->extractTo($this->tmpDir);
+			$zipObj->close();
 		}
 		else
 		{
@@ -68,8 +60,7 @@ class ZipArchive
 			return new \SimpleXMLElement('<d></d>');
 		}
 		
-		$xml = new \XMLReader();
-		$res = $xml->open($fn);
+		$xml = Utils::GetXmlReaderObject($fn);
 
 		$xmlObj = new \SimpleXMLElement('<d></d>');
 		$arObjects = array();

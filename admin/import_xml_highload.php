@@ -1,14 +1,12 @@
 <?
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
+if(!defined('NO_AGENT_CHECK')) define('NO_AGENT_CHECK', true);
 require_once ($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_before.php");
 $moduleId = 'kit.importxml';
 $moduleFilePrefix = 'kit_import_xml';
 $moduleJsId = str_replace('.', '_', $moduleId);
 $moduleDemoExpiredFunc = $moduleJsId.'_demo_expired';
 $moduleShowDemoFunc = $moduleJsId.'_show_demo';
+$moduleRunnerClass = 'CKitImportXMLRunner';
 CModule::IncludeModule("iblock");
 CModule::IncludeModule($moduleId);
 CModule::IncludeModule("highloadblock");
@@ -17,15 +15,22 @@ require_once ($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/iblock/prolog.php");
 IncludeModuleLangFile(__FILE__);
 
 include_once(dirname(__FILE__).'/../install/demo.php');
-if ($moduleDemoExpiredFunc()) {
+if (call_user_func($moduleDemoExpiredFunc)) {
 	require ($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_after.php");
-	$moduleShowDemoFunc();
+	call_user_func($moduleShowDemoFunc);
 	require ($DOCUMENT_ROOT."/bitrix/modules/main/include/epilog_admin.php");
 	die();
 }
 
 $MODULE_RIGHT = $APPLICATION->GetGroupRight($moduleId);
 if($MODULE_RIGHT < "W") $APPLICATION->AuthForm(GetMessage("ACCESS_DENIED"));
+
+$SETTINGS_DEFAULT = $SETTINGS = null;
+if($_POST)
+{
+	if(isset($_POST['SETTINGS'])) $SETTINGS = $_POST['SETTINGS'];
+	if(isset($_POST['SETTINGS_DEFAULT'])) $SETTINGS_DEFAULT = $_POST['SETTINGS_DEFAULT'];
+}
 
 //$oProfile = new \Bitrix\KitImportxml\Profile('highload');
 $oProfile = \Bitrix\KitImportxml\Profile::getInstance('highload');
@@ -48,7 +53,7 @@ if(strlen($PROFILE_ID) > 0 && $PROFILE_ID!=='new')
 $SHOW_FIRST_LINES = 10;
 $SETTINGS_DEFAULT['HIGHLOADBLOCK_ID'] = intval($SETTINGS_DEFAULT['HIGHLOADBLOCK_ID']);
 $STEP = intval($STEP);
-if ($STEP <= 0)
+if ($STEP<=0)
 	$STEP = 1;
 
 $notRewriteFile = false;
@@ -64,12 +69,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST")
 
 }
 
-$strError = $oProfile->GetErrors();
+$strErrorProfile = $oProfile->GetErrors();
+$strError = '';
 $io = CBXVirtualIo::GetInstance();
 
 /////////////////////////////////////////////////////////////////////
 if ($REQUEST_METHOD == "POST" && $MODE=='AJAX')
 {
+	define('PUBLIC_AJAX_MODE', 'Y');
 	if($ACTION=='DELETE_TMP_DIRS')
 	{
 		\Bitrix\KitImportxml\Utils::RemoveTmpFiles(5, 'highload');
@@ -134,6 +141,8 @@ if ($REQUEST_METHOD == "POST" && $MODE=='AJAX')
 
 if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 {
+	if($ACTION) define('PUBLIC_AJAX_MODE', 'Y');
+	
 	//*****************************************************************//	
 	if ($STEP > 1)
 	{
@@ -152,7 +161,7 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 					elseif($SETTINGS_DEFAULT["EXT_DATA_FILE"]) $_POST['DATA_FILE'] = $SETTINGS_DEFAULT["EXT_DATA_FILE"];
 					elseif($SETTINGS_DEFAULT['EMAIL_DATA_FILE'])
 					{
-						$fileId = \Bitrix\KitImportxml\SMail::GetNewFile($SETTINGS_DEFAULT['EMAIL_DATA_FILE']);
+						$fileId = \Bitrix\KitImportxml\SMail::GetNewFile($SETTINGS_DEFAULT['EMAIL_DATA_FILE'], 0, 'kit_importxml_hl'.$PROFILE_ID);
 						if($fileId > 0)
 						{
 							if($_POST['OLD_DATA_FILE'])
@@ -176,8 +185,9 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 				$fid = 0;
 				if(isset($_FILES["DATA_FILE"]) && is_uploaded_file($_FILES["DATA_FILE"]["tmp_name"]))
 				{
-					//$fid = \Bitrix\KitImportxml\Utils::SaveFile($_FILES["DATA_FILE"], $moduleId);
 					$arFile = \Bitrix\KitImportxml\Utils::MakeFileArray($_FILES["DATA_FILE"]);
+					$arFile['external_id'] = 'kit_importxml_hl'.$PROFILE_ID;
+					$arFile['del_old'] = 'Y';
 					$fid = \Bitrix\KitImportxml\Utils::SaveFile($arFile, $moduleId);
 				}
 				elseif(isset($_POST['DATA_FILE']) && strlen($_POST['DATA_FILE']) > 0)
@@ -219,6 +229,8 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 						if($arFile['name'])
 						{
 							if(strpos($arFile['name'], '.')===false) $arFile['name'] .= '.xml';
+							$arFile['external_id'] = 'kit_importxml_hl'.$PROFILE_ID;
+							$arFile['del_old'] = 'Y';
 							$fid = \Bitrix\KitImportxml\Utils::SaveFile($arFile, $moduleId);
 						}
 					}
@@ -315,7 +327,7 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 			$oProfile = new \Bitrix\KitImportxml\Profile('highload');
 			if($PROFILE_ID === 'new')
 			{
-				$PID = $oProfile->Add($NEW_PROFILE_NAME);
+				$PID = $oProfile->Add($NEW_PROFILE_NAME, $SETTINGS_DEFAULT["DATA_FILE"]);
 				if($PID===false)
 				{
 					if($ex = $APPLICATION->GetException())
@@ -362,10 +374,10 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 		
 		echo '<div class="kit_ix_xml_settings">';
 		echo '<input type="hidden" name="SETTINGS[XPATHS_MULTI]" value="'.base64_encode(serialize($arXPathsMulti)).'">';
-		echo '<input type="hidden" name="defaultsettings_json" value="'.htmlspecialcharsex(CUtil::PhpToJSObject($SETTINGS_DEFAULT)).'">';
-		echo '<input type="hidden" name="settings_json" value="'.htmlspecialcharsex(CUtil::PhpToJSObject($SETTINGS)).'">';
-		echo '<input type="hidden" name="extrasettings_json" value="'.htmlspecialcharsex(CUtil::PhpToJSObject($EXTRASETTINGS)).'">';
-		//echo '<input type="hidden" name="struct_json" value="'.htmlspecialcharsex(CUtil::PhpToJSObject($arStruct)).'">';
+		echo '<input type="hidden" name="defaultsettings_json" value="'.htmlspecialcharsbx(CUtil::PhpToJSObject($SETTINGS_DEFAULT)).'">';
+		echo '<input type="hidden" name="settings_json" value="'.htmlspecialcharsbx(CUtil::PhpToJSObject($SETTINGS)).'">';
+		echo '<input type="hidden" name="extrasettings_json" value="'.htmlspecialcharsbx(CUtil::PhpToJSObject($EXTRASETTINGS)).'">';
+		//echo '<input type="hidden" name="struct_json" value="'.htmlspecialcharsbx(CUtil::PhpToJSObject($arStruct)).'">';
 		echo '<input type="hidden" name="struct_base64" value="'.base64_encode(serialize($arStruct)).'">';
 		$fl->ShowSelectFieldsHighload($SETTINGS_DEFAULT['HIGHLOADBLOCK_ID'], 'element_fields');
 		echo '</div>';
@@ -389,18 +401,18 @@ if ($REQUEST_METHOD == "POST" && $STEP > 1 && check_bitrix_sessid())
 		$sess = $_SESSION;
 		session_write_close();
 		$_SESSION = $sess;
-		$arResult = \CKitImportXMLRunner::ImportHighloadblock($DATA_FILE_NAME, $params, $EXTRASETTINGS, $stepparams, $PROFILE_ID);
+		$arResult = $moduleRunnerClass::ImportHighloadblock($DATA_FILE_NAME, $params, $EXTRASETTINGS, $stepparams, $PROFILE_ID);
 		$APPLICATION->RestartBuffer();
 		if(ob_get_contents()) ob_end_clean();
-		echo CUtil::PhpToJSObject($arResult);
+		echo '<!--module_return_data-->'.CUtil::PhpToJSObject($arResult).'<!--/module_return_data-->';
 		die();
 	}
 	
 	/*Profile update*/
 	if(strlen($PROFILE_ID) > 0 && $PROFILE_ID!=='new')
 	{
-		$oProfile->Update($PROFILE_ID, $SETTINGS_DEFAULT, $SETTINGS);
-		if(is_array($EXTRASETTINGS)) $oProfile->UpdateExtra($PROFILE_ID, $EXTRASETTINGS);
+		$oProfile->Update($PROFILE_ID, $SETTINGS_DEFAULT, $SETTINGS, $EXTRASETTINGS);
+		//if(is_array($EXTRASETTINGS)) $oProfile->UpdateExtra($PROFILE_ID, $EXTRASETTINGS);
 	}
 	/*/Profile update*/
 	
@@ -422,8 +434,8 @@ require ($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_admin_af
 /********************  BODY  *****************************************/
 /*********************************************************************/
 
-if (!$moduleDemoExpiredFunc()) {
-	$moduleShowDemoFunc();
+if (!call_user_func($moduleDemoExpiredFunc)) {
+	call_user_func($moduleShowDemoFunc);
 }
 
 $arSubMenu = array();
@@ -440,16 +452,18 @@ $arSubMenu[] = array(
 );
 $aMenu = array(
 	array(
-		"TEXT"=>GetMessage("KIT_IX_MENU_HELP"),
+		/*"TEXT"=>GetMessage("KIT_IX_MENU_HELP"),
 		"TITLE"=>GetMessage("KIT_IX_MENU_HELP"),
 		"ONCLICK" => "EHelper.ShowHelp();",
-		"ICON" => "",
+		"ICON" => "",*/
+		"HTML" => '<a href="https://esolutions.su/solutions/'.$moduleId.'/?tab=video" target="blank" class="adm-btn" title="'.GetMessage("KIT_IX_MENU_VIDEO").'">'.GetMessage("KIT_IX_MENU_VIDEO").'</a>'
 	),
 	array(
-		"TEXT"=>GetMessage("KIT_IX_MENU_FAQ"),
+		/*"TEXT"=>GetMessage("KIT_IX_MENU_FAQ"),
 		"TITLE"=>GetMessage("KIT_IX_MENU_FAQ"),
 		"ONCLICK" => "EHelper.ShowHelp(1);",
-		"ICON" => "",
+		"ICON" => "",*/
+		"HTML" => '<a href="https://esolutions.su/solutions/'.$moduleId.'/?tab=faq" target="blank" class="adm-btn" title="'.GetMessage("KIT_IX_MENU_FAQ").'">'.GetMessage("KIT_IX_MENU_FAQ").'</a>'
 	),
 	array(
 		"TEXT"=>GetMessage("KIT_IX_TOOLS_LIST"),
@@ -492,10 +506,13 @@ if ($STEP < 2)
 	));	
 }*/
 
-CAdminMessage::ShowMessage($strError);
+if(strlen($strErrorProfile.$strError) > 0)
+{
+	CAdminMessage::ShowMessage($strErrorProfile.$strError);
+}
 ?>
 
-<form method="POST" action="<?echo $sDocPath ?>?lang=<?echo LANG ?>" ENCTYPE="multipart/form-data" name="dataload" id="dataload">
+<form method="POST" action="<?echo $sDocPath ?>?<?if(strlen($PROFILE_ID) > 0){echo 'PROFILE_ID='.$PROFILE_ID.'&';}?>lang=<?echo LANG ?>" ENCTYPE="multipart/form-data" name="dataload" id="dataload" class="kit-ix-s1-form">
 
 <?
 $arProfile = (strlen($PROFILE_ID) > 0 ? $oProfile->GetFieldsByID($PROFILE_ID) : array());
@@ -558,14 +575,32 @@ if ($STEP == 1)
 	<tr id="new_profile_name">
 		<td><?echo GetMessage("KIT_IX_NEW_PROFILE_NAME"); ?>:</td>
 		<td>
-			<input type="text" name="NEW_PROFILE_NAME" value="<?echo htmlspecialcharsbx($NEW_PROFILE_NAME)?>">
+			<input type="text" name="NEW_PROFILE_NAME" value="<?echo htmlspecialcharsbx($NEW_PROFILE_NAME)?>" size="50">
 		</td>
 	</tr>
 
 	<?
 	if(strlen($PROFILE_ID) > 0)
 	{
+		$isDescription = (bool)(strlen(trim($SETTINGS_DEFAULT['PROFILE_DESCRIPTION'])) > 0);
+		if(!$isDescription)
+		{
 	?>
+		<tr>
+			<td class="kit-ix-settings-margin-container" colspan="2" align="center">
+				<a class="kit-ix-grey" href="javascript:void(0)" onclick="ESettings.AddProfileDescription(this)"><?echo GetMessage("KIT_IX_PROFILE_DESCRIPTION_ADD");?></a>
+			</td>
+		</tr>
+		<?
+		}
+		?>
+		<tr <?if(!$isDescription){echo ' style="display: none;"';}?>>
+			<td><?echo GetMessage("KIT_IX_PROFILE_DESCRIPTION"); ?>:</td>
+			<td>
+				<textarea name="SETTINGS_DEFAULT[PROFILE_DESCRIPTION]" cols="50" rows="3"><?echo htmlspecialcharsbx($SETTINGS_DEFAULT['PROFILE_DESCRIPTION'])?></textarea>
+			</td>
+		</tr>
+		
 		<tr class="heading">
 			<td colspan="2"><?echo GetMessage("KIT_IX_DEFAULT_SETTINGS"); ?></td>
 		</tr>
@@ -680,6 +715,13 @@ if ($STEP == 1)
 			</td>
 		</tr>
 		
+		<tr>
+			<td colspan="2" align="center">
+				<input type="hidden" id="ELEMENT_MISSING_FILTER" name="SETTINGS_DEFAULT[ELEMENT_MISSING_FILTER]" value="<?echo htmlspecialcharsbx($SETTINGS_DEFAULT['ELEMENT_MISSING_FILTER']);?>">
+				<a href="javascript:void(0)" onclick="EProfile.OpenMissignElementFilter(this)"><?echo GetMessage("KIT_IX_ELEMENT_MISSING_SET_FILTER"); ?></a>
+			</td>
+		</tr>
+		
 		<tr class="heading">
 			<td colspan="2"><?echo GetMessage("KIT_IX_SETTINGS_ADDITONAL"); ?> <a href="javascript:void(0)" onclick="EProfile.ToggleAdditionalSettings(this)" class="kit_ix_head_more show" id="kda-head-more-link"><?echo GetMessage("KIT_IX_SETTINGS_ADDITONAL_SHOW_HIDE"); ?></a></td>
 		</tr>
@@ -758,11 +800,11 @@ if ($STEP == 3)
 		<td id="resblock" class="kit-ix-result">
 		 <table width="100%"><tr><td width="50%">
 			<div id="progressbar"><span class="pline"></span><span class="presult load"><b>0%</b><span 
-				data-prefix="<?echo GetMessage("KIT_IX_READ_LINES"); ?>"
-				data-import_sections="<?echo GetMessage("KIT_IX_STATUS_IMPORT_SECTIONS"); ?>"
-				data-import="<?echo GetMessage("KIT_IX_STATUS_IMPORT"); ?>"
-				data-deactivate_elements="<?echo GetMessage("KIT_IX_STATUS_DEACTIVATE_ELEMENTS"); ?>"
-				data-deactivate_sections="<?echo GetMessage("KIT_IX_STATUS_DEACTIVATE_SECTIONS"); ?>"
+				data-prefix="<?echo GetMessage("KIT_IX_READ_LINES"); ?>" 
+				data-import_sections="<?echo GetMessage("KIT_IX_STATUS_IMPORT_SECTIONS"); ?>" 
+				data-import="<?echo GetMessage("KIT_IX_STATUS_IMPORT"); ?>" 
+				data-deactivate_elements="<?echo GetMessage("KIT_IX_STATUS_DEACTIVATE_ELEMENTS"); ?>" 
+				data-deactivate_sections="<?echo GetMessage("KIT_IX_STATUS_DEACTIVATE_SECTIONS"); ?>" 
 			><?echo GetMessage("KIT_IX_IMPORT_INIT"); ?></span></span></div>
 
 			<div id="block_error_import" style="display: none;">
@@ -871,15 +913,29 @@ else
 <script language="JavaScript">
 <?if ($STEP < 2): 
 	$arFile = \Bitrix\KitImportxml\Utils::GetShowFileBySettings($SETTINGS_DEFAULT);
-	if($arFile['link'])
-	{
-		?>
-		$('#bx_file_data_file_cont .adm-input-file-name').attr('target', '_blank').attr('href', '<?echo htmlspecialcharsex($arFile['link'])?>');<?
-	}
 	if($arFile['path'])
 	{
 		?>
-		$('#bx_file_data_file_cont .adm-input-file-name').text('<?echo $arFile['path']?>');<?
+		function KitSetFilePath(l)
+		{
+			if($('#bx_file_data_file_cont .adm-input-file-name').length==0)
+			{
+				if($('#bx_file_data_file_cont .adm-input-file-new .adm-input-file').length > 0)
+				{
+					$('#bx_file_data_file_cont .adm-input-file-new .adm-input-file').removeClass('adm-input-file').addClass('adm-input-file-ex-wrap').html('<a href="javascript:void(0)" class="adm-input-file-name"></a>');
+				}
+				else if(l < 50) setTimeout(function(){KitSetFilePath(l+1);}, 50);
+			}
+			$('#bx_file_data_file_cont .adm-input-file-name').text("<?echo addslashes($arFile['path'])?>");<?
+			if($arFile['link'])
+			{
+				?>
+				$('#bx_file_data_file_cont .adm-input-file-name').attr("target", "_blank").attr("href", "<?echo addslashes($arFile['link'])?>");<?
+			}
+			?>
+		}
+		KitSetFilePath(0);
+		<?
 	}
 ?>
 tabControl.SelectTab("edit1");
@@ -897,8 +953,8 @@ tabControl.SelectTab("edit2");
 tabControl.DisableTab("edit1");
 tabControl.DisableTab("edit3");
 
-/*var admKDAMessages = {};
-admKDAMessages['lineActions'] = {<?echo implode(', ', $arMenu);?>};*/
+<?/*var admKDAMessages = {};
+admKDAMessages['lineActions'] = {<?echo implode(', ', $arMenu);?>};*/?>
 <?elseif ($STEP > 2): ?>
 tabControl.SelectTab("edit3");
 tabControl.DisableTab("edit1");

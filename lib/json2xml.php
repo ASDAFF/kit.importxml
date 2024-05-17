@@ -1,8 +1,4 @@
 <?php
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Loader;
@@ -21,7 +17,7 @@ class Json2Xml
 		$this->siteEncoding = \Bitrix\KitImportxml\Utils::getSiteEncoding();
 	}
 	
-	public function Convert($fileJson, $fileXml)
+	public function Convert($fileJson, $fileXml, $hct='')
 	{
 		if(!file_exists($fileJson)) return false;
 		$this->fileJson = $fileJson;
@@ -30,13 +26,18 @@ class Json2Xml
 		$json = file_get_contents($this->fileJson);
 		$substr = substr($json, 0, 262144);
 		$fileEncoding = 'utf-8';
-		if(!(\CUtil::DetectUTF8($substr)) && (!function_exists('iconv') || iconv('CP1251', 'CP1251', $substr)==$substr)) $fileEncoding = 'windows-1251';
+		if(stripos($hct, 'utf-8')!==false) $fileEncoding = 'utf-8';
+		elseif(!(Utils::DetectUTF8($substr)) && (!function_exists('iconv') || iconv('CP1251', 'CP1251', $substr)==$substr)) $fileEncoding = 'windows-1251';
 		if($fileEncoding!=$this->siteEncoding)
 		{
 			$json = \Bitrix\Main\Text\Encoding::convertEncoding($json, $fileEncoding, $this->siteEncoding);
-		}		
+		}
+		if(strpos($json, "\xEF\xBB\xBF")===0)
+		{
+			$json = mb_substr($json, 3, null, 'CP1251');
+		}
 		
-		if(function_exists('json_decode'))
+		if(function_exists('json_decode') && $this->siteEncoding!='windows-1251')
 		{
 			$arItem = json_decode($json, true);
 			if(!$arItem) $arItem = \CUtil::JsObjectToPhp($json);
@@ -57,17 +58,25 @@ class Json2Xml
 		return false;
 	}
 	
-	public function ConvertItem($arItem, $itemName, $level = 1)
+	public function ConvertItem($arItem, $itemName, $itemId='', $level = 1)
 	{
 		$itemName = ToLower($itemName);
-		fwrite($this->xmlHandle, str_repeat("\t", $level-1).'<'.$itemName.'>');
+		$itemName = preg_replace('/[\s,;#?!\.&\*@\$%^\(\)\[\]\{\}<>\/\\\\]/', '_', $itemName);
+		if(preg_match('/^[\d\-]/', $itemName)) $itemName = 'd'.$itemName;
+		if(strlen($itemName)==0) $itemName = 'd';
+		fwrite($this->xmlHandle, str_repeat("\t", $level-1).'<'.$itemName.(strlen($itemId!=='') ? ' itemID="'.$this->GetValueForXml($itemId).'"' : '').'>');
 		if(is_array($arItem))
 		{
 			fwrite($this->xmlHandle, "\r\n");
 			foreach($arItem as $itemKey=>$itemVal)
 			{
-				if(is_numeric($itemKey)) $itemKey = 'item';
-				$this->ConvertItem($itemVal, $itemKey, $level+1);
+				$itemId = '';
+				if(is_numeric($itemKey))
+				{
+					$itemId = $itemKey;
+					$itemKey = 'item';
+				}
+				$this->ConvertItem($itemVal, $itemKey, $itemId, $level+1);
 			}
 			fwrite($this->xmlHandle, str_repeat("\t", $level-1));
 		}
@@ -82,10 +91,10 @@ class Json2Xml
 	{
 		$value = htmlspecialchars($value, ENT_QUOTES, $this->siteEncoding);
 		$value = preg_replace('/[\x00-\x09\x0b-\x0c\x0e-\x1f]/', '', $value);
-		if($this->siteEncoding=='windows-1251' && \CUtil::DetectUTF8($value))
+		/*if($this->siteEncoding=='windows-1251' && \CUtil::DetectUTF8($value))
 		{
 			$value = \Bitrix\Main\Text\Encoding::convertEncoding($value, 'UTF-8', $this->siteEncoding);
-		}
+		}*/
 		return $value;
 	}
 }

@@ -1,34 +1,23 @@
 <?php
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 Loc::loadMessages(__FILE__);
 
-class Importer {
-	protected static $moduleId = 'kit.importxml';
-	var $rcurrencies = array('#USD#', '#EUR#');
-	var $xmlParts = array();
-	var $xmlPartsValues = array();
-	var $xmlSingleElems = array();
-	var $arTmpImageDirs = array();
-	var $arTmpImages = array();
-	var $tagIblocks = array();
-	var $offerParentId = null;
-	
+class Importer extends ImporterData {
 	function __construct($filename, $params, $fparams, $stepparams, $pid = false)
 	{
-		$this->filename = $_SERVER['DOCUMENT_ROOT'].$filename;
+		parent::__construct($filename, $params);
 		$this->params = $params;
 		$this->fparams = $fparams;
 		$this->sections = array();
 		$this->sectionIds = array();
+		$this->sectionStruct = array();
 		$this->sectionsTmp = array();
+		$this->sectionTmpMap = null;
 		$this->propertyIds = array();
+		$this->propertyValIds = array();
 		$this->propVals = array();
 		$this->hlbl = array();
 		$this->errors = array();
@@ -44,27 +33,55 @@ class Importer {
 		$this->stepparams['offer_killed_line'] = intval($this->stepparams['offer_killed_line']);
 		$this->stepparams['element_added_line'] = intval($this->stepparams['element_added_line']);
 		$this->stepparams['element_updated_line'] = intval($this->stepparams['element_updated_line']);
+		$this->stepparams['element_changed_line'] = intval($this->stepparams['element_changed_line']);
 		$this->stepparams['element_removed_line'] = intval($this->stepparams['element_removed_line']);
 		$this->stepparams['sku_added_line'] = intval($this->stepparams['sku_added_line']);
 		$this->stepparams['sku_updated_line'] = intval($this->stepparams['sku_updated_line']);
+		$this->stepparams['sku_changed_line'] = intval($this->stepparams['sku_changed_line']);
 		$this->stepparams['section_added_line'] = intval($this->stepparams['section_added_line']);
 		$this->stepparams['section_updated_line'] = intval($this->stepparams['section_updated_line']);
+		$this->stepparams['section_deactivate_line'] = intval($this->stepparams['section_deactivate_line']);
 		$this->stepparams['zero_stock_line'] = intval($this->stepparams['zero_stock_line']);
 		$this->stepparams['offer_zero_stock_line'] = intval($this->stepparams['offer_zero_stock_line']);
 		$this->stepparams['old_removed_line'] = intval($this->stepparams['old_removed_line']);
 		$this->stepparams['offer_old_removed_line'] = intval($this->stepparams['offer_old_removed_line']);
 		$this->stepparams['xmlCurrentRow'] = intval($this->stepparams['xmlCurrentRow']);
 		$this->stepparams['xmlSectionCurrentRow'] = intval($this->stepparams['xmlSectionCurrentRow']);
+		$this->stepparams['section_struct_root_id'] = strval($this->stepparams['section_struct_root_id']);
 		$this->stepparams['total_file_line'] = 1;
+		$this->fieldSettings = array();
+		
+		if(!isset($this->stepparams['bound_properties']) || !is_array($this->stepparams['bound_properties'])) $this->stepparams['bound_properties'] = array();
+		if(!isset($this->params['BIND_PROPERTIES_TO_SECTIONS_EXCLUDE']) || !is_array($this->params['BIND_PROPERTIES_TO_SECTIONS_EXCLUDE'])) $this->params['BIND_PROPERTIES_TO_SECTIONS_EXCLUDE'] = array();
 
 		if(!$this->params['SECTION_UID']) $this->params['SECTION_UID'] = 'NAME';
+		if($this->params['ELEMENT_IMAGES_FORCE_UPDATE']!='Y' && $this->params['CHECK_CHANGES']=='N')
+		{
+			$this->params['ELEMENT_IMAGES_FORCE_UPDATE'] = 'Y';
+		}
 
-		//$this->fileEncoding = \Bitrix\KitImportxml\Utils::GetXmlEncoding($this->filename);
+		//$this->fileEncoding = \Bitrix\KitImportxml\Utils::GetXmlEncoding($this->GetFileName());
 		$this->fileEncoding = 'utf-8';
 		$this->siteEncoding = \Bitrix\KitImportxml\Utils::getSiteEncoding();
 		$this->xpathMulti = ($this->params['XPATHS_MULTI'] ? unserialize(base64_decode($this->params['XPATHS_MULTI'])) : array());
 		if(!is_array($this->xpathMulti)) $this->xpathMulti = array();
 		$this->xpathMulti = \Bitrix\KitImportxml\Utils::ConvertDataEncoding($this->xpathMulti, $this->fileEncoding, $this->siteEncoding);
+		
+		if(!is_array($this->params['FIELDS'])) $this->params['FIELDS'] = array();
+		if(is_array($this->params['OLD_FIELDS']))
+		{
+			foreach($this->params['OLD_FIELDS'] as $fieldKey)
+			{
+				unset($this->params['FIELDS'][$fieldKey]);
+			}
+		}
+		if(is_array($this->params['OLD_GROUPS']))
+		{
+			foreach($this->params['OLD_GROUPS'] as $fieldKey)
+			{
+				unset($this->params['GROUPS'][$fieldKey]);
+			}
+		}
 		
 		$this->skuInElement = (bool)(isset($this->params['GROUPS']['OFFER']) && strpos($this->params['GROUPS']['OFFER'], $this->params['GROUPS']['ELEMENT'].'/')===0);
 		if($this->skuInElement)
@@ -89,37 +106,109 @@ class Importer {
 			$this->arSkuDuplicateFields = $arSkuDuplicateFields;
 		}		
 		$this->subSectionInSection = (bool)(isset($this->params['GROUPS']['SUBSECTION']) && strpos($this->params['GROUPS']['SUBSECTION'], $this->params['GROUPS']['SECTION'].'/')===0);
+		$this->subSectionInSectionLevels = array();
+		if($this->subSectionInSection)
+		{
+			$this->subSectionInSectionLevels[1] = true;
+			for($i=2; $i<5; $i++)
+			{
+				$this->subSectionInSectionLevels[$i] = (bool)(isset($this->params['GROUPS'][str_repeat('SUB', $i).'SECTION']) && strpos($this->params['GROUPS'][str_repeat('SUB', $i).'SECTION'], $this->params['GROUPS'][str_repeat('SUB', $i-1).'SECTION'].'/')===0);
+			}
+			if(count(array_diff($this->subSectionInSectionLevels, array(false))) < 2) $this->subSectionInSectionLevels = array();
+		}
 		$this->sectionInElement = (bool)(isset($this->params['GROUPS']['SECTION']) && strpos($this->params['GROUPS']['SECTION'], $this->params['GROUPS']['ELEMENT'].'/')===0);
 		$this->elementInSection = (bool)(isset($this->params['GROUPS']['ELEMENT']) && strpos($this->params['GROUPS']['ELEMENT'], $this->params['GROUPS']['SECTION'].'/')===0);
 		if($this->elementInSection)
 		{
 			if(strpos($this->params['GROUPS']['ELEMENT'], $this->params['GROUPS']['SUBSECTION'].'/')===0)
 			{
-				$this->xpathElementInSection = trim(substr($this->params['GROUPS']['ELEMENT'], strlen($this->params['GROUPS']['SUBSECTION'])), '/');
+				$this->xpathElementInSection = trim(mb_substr($this->params['GROUPS']['ELEMENT'], mb_strlen($this->params['GROUPS']['SUBSECTION'])), '/');
 			}
 			else
 			{
-				$this->xpathElementInSection = trim(substr($this->params['GROUPS']['ELEMENT'], strlen($this->params['GROUPS']['SECTION'])), '/');
+				$this->xpathElementInSection = trim(mb_substr($this->params['GROUPS']['ELEMENT'], mb_strlen($this->params['GROUPS']['SECTION'])), '/');
 			}
 		}
+		$this->reststoreInElement = (bool)(isset($this->params['GROUPS']['RESTSTORE']) && strpos($this->params['GROUPS']['RESTSTORE'], $this->params['GROUPS']['ELEMENT'].'/')===0);
+		$this->propvalInProp = (bool)(isset($this->params['GROUPS']['IBPROPVAL']) && strpos($this->params['GROUPS']['IBPROPVAL'], $this->params['GROUPS']['IBPROPERTY'].'/')===0);
 		$this->propertyInOffer = (bool)(isset($this->params['GROUPS']['OFFER']) && isset($this->params['GROUPS']['PROPERTY']) && strpos($this->params['GROUPS']['PROPERTY'], $this->params['GROUPS']['OFFER'].'/')===0);
 		$this->propertyInElement = (bool)(!$this->propertyInOffer && isset($this->params['GROUPS']['PROPERTY']) && strpos($this->params['GROUPS']['PROPERTY'], $this->params['GROUPS']['ELEMENT'].'/')===0);
-		$this->useSectionPathByLink = (bool)(!$this->sectionInElement && !$this->elementInSection && $this->params['GROUPS']['SECTION'] && count(preg_grep('/IE_SECTION_PATH/', $this->params['FIELDS'])) > 0 && count(preg_grep('/IE_IBLOCK_SECTION_TMP_ID/', $this->params['FIELDS'])) == 0 && count(preg_grep('/ISECT_NAME/', $this->params['FIELDS'])) > 0 && count(preg_grep('/ISECT_TMP_ID/', $this->params['FIELDS'])) > 0);
+		if(isset($this->params['GROUPS']['OFFPROPERTY']) && strlen($this->params['GROUPS']['OFFPROPERTY']) > 0) $this->propertyInOffer = true;
+		$this->useSectionTmpId = (bool)(count(preg_grep('/ISECT_TMP_ID/', $this->params['FIELDS'])) > 0);
+		$this->useSectionPathByLink = (bool)(!$this->sectionInElement && !$this->elementInSection && $this->params['GROUPS']['SECTION'] && count(preg_grep('/IE_SECTION_PATH/', $this->params['FIELDS'])) > 0 && count(preg_grep('/IE_IBLOCK_SECTION_TMP_ID/', $this->params['FIELDS'])) == 0 && count(preg_grep('/ISECT_NAME/', $this->params['FIELDS'])) > 0 && $this->useSectionTmpId);
 		
-		if(is_array($this->params['OLD_FIELDS']))
+		/*Section map*/
+		$this->sectionMap = unserialize(base64_decode($this->params['SECTION_MAP']));
+		if(!is_array($this->sectionMap)) $this->sectionMap = array();
+		$this->sectionLoadMode = false;
+		if(isset($this->params['GROUPS']['SECTION']) && isset($this->sectionMap['SECTION_LOAD_MODE']) && strlen($this->sectionMap['SECTION_LOAD_MODE']) > 0)
 		{
-			foreach($this->params['OLD_FIELDS'] as $fieldKey)
-			{
-				unset($this->params['FIELDS'][$fieldKey]);
-			}
+			$this->sectionLoadMode = $this->sectionMap['SECTION_LOAD_MODE'];
+			$this->params['NOT_LOAD_ELEMENTS_WO_SECTION'] = 'Y';
 		}
-		if(is_array($this->params['OLD_GROUPS']))
+		if(!isset($this->sectionMap['MAP']) || !is_array($this->sectionMap['MAP'])) $this->sectionMap['MAP'] = array();
+		if(count($this->sectionMap['MAP']) > 0)
 		{
-			foreach($this->params['OLD_GROUPS'] as $fieldKey)
+			$arMap2 = array();
+			foreach($this->sectionMap['MAP'] as $k=>$v)
 			{
-				unset($this->params['GROUPS'][$fieldKey]);
+				if(!array_key_exists($v['XML_ID'], $arMap2)) $arMap2[$v['XML_ID']] = array();
+				$arMap2[$v['XML_ID']][] = $v['ID'];
 			}
+			$this->sectionMap['MAP'] = $arMap2;
 		}
+		/*/Section map*/
+		
+		/*Property map*/
+		$this->propertyMap = unserialize(base64_decode($this->params['PROPERTY_MAP']));
+		if(!is_array($this->propertyMap)) $this->propertyMap = array();
+		if(!isset($this->propertyMap['MAP']) || !is_array($this->propertyMap['MAP'])) $this->propertyMap['MAP'] = array();
+		$this->isPropertyMap = false;
+		if(count($this->propertyMap['MAP']) > 0)
+		{
+			$arMap2 = array();
+			foreach($this->propertyMap['MAP'] as $k=>$v)
+			{
+				if(!array_key_exists($v['XML_ID'], $arMap2)) $arMap2[$v['XML_ID']] = array();
+				$arMap2[$v['XML_ID']][] = $v['ID'];
+				$fieldKey = count($arMap2[$v['XML_ID']]) - 1;
+				$this->fieldSettings[$v['ID']] = $this->fparams[$v['XML_ID'].'_'.$fieldKey] = $this->fparams[$v['XML_ID'].'-'.$fieldKey] = (is_array($v['EXTRA']) ? $v['EXTRA'] : \CUtil::JsObjectToPhp($v['EXTRA']));
+				if(!is_array($this->fieldSettings[$v['ID']])) $this->fieldSettings[$v['ID']] = $this->fparams[$v['XML_ID'].'_'.$fieldKey] = array();
+				if(strpos($v['ID'], '|')!==false)
+				{
+					list($field, $adata) = explode('|', $v['ID']);
+					$this->fieldSettings[$field] = $this->fieldSettings[$v['ID']];
+				}
+			}
+			$this->propertyMap['MAP'] = $arMap2;
+			$this->isPropertyMap = true;
+		}
+		/*/Property map*/
+
+		/*Offer property map*/
+		$this->offerPropertyMap = unserialize(base64_decode($this->params['OFFPROPERTY_MAP']));
+		if(!is_array($this->offerPropertyMap)) $this->offerPropertyMap = array();
+		if(!isset($this->offerPropertyMap['MAP']) || !is_array($this->offerPropertyMap['MAP'])) $this->offerPropertyMap['MAP'] = array();
+		$this->isOfferPropertyMap = false;
+		if(count($this->offerPropertyMap['MAP']) > 0)
+		{
+			$arMap2 = array();
+			foreach($this->offerPropertyMap['MAP'] as $k=>$v)
+			{
+				if(!array_key_exists($v['XML_ID'], $arMap2)) $arMap2[$v['XML_ID']] = array();
+				$arMap2[$v['XML_ID']][] = $v['ID'];
+				$this->fieldSettings[$v['ID']] = (is_array($v['EXTRA']) ? $v['EXTRA'] : \CUtil::JsObjectToPhp($v['EXTRA']));
+				if(!is_array($this->fieldSettings[$v['ID']])) $this->fieldSettings[$v['ID']] = array();
+				if(strpos($v['ID'], '|')!==false)
+				{
+					list($field, $adata) = explode('|', $v['ID']);
+					$this->fieldSettings[$field] = $this->fieldSettings[$v['ID']];
+				}
+			}
+			$this->offerPropertyMap['MAP'] = $arMap2;
+			$this->isOfferPropertyMap = true;
+		}
+		/*/Offer property map*/
 		
 		if(strlen(trim($this->params['INACTIVE_FIELDS'])) > 0)
 		{
@@ -130,12 +219,28 @@ class Importer {
 			}
 		}
 		
-		$saveStat = (bool)($params['STAT_SAVE']=='Y');
-		$this->logger = new \Bitrix\KitImportxml\Logger($saveStat, $pid);
+		if($this->params['PACKET_IMPORT']=='Y' && /*!$this->skuInElement && */!$this->elementInSection && !$this->sectionInElement)
+		{
+			$this->isPacket = true;
+			$this->params['PACKET_SIZE'] = trim($this->params['PACKET_SIZE']);
+			if(is_numeric($this->params['PACKET_SIZE']))
+			{
+				$this->packetSize = max(5, min(5000, $this->params['PACKET_SIZE']));
+			}
+			if($this->maxStepRows < $this->packetSize) $this->maxStepRows = $this->packetSize;
+		}
+		
+		$this->logger = new \Bitrix\KitImportxml\Logger($params, $pid);
+		if(!isset($stepparams['NOT_CHANGE_PROFILE']) || $stepparams['NOT_CHANGE_PROFILE']!='Y')
+		{
+			if(!isset($this->stepparams['loggerExecId'])) $this->stepparams['loggerExecId'] = 0;
+			$this->logger->SetExecId($this->stepparams['loggerExecId']);
+		}
 		$this->fl = new \Bitrix\KitImportxml\FieldList();
 		$this->conv = new \Bitrix\KitImportxml\Conversion($this);
 		$this->cloud = new \Bitrix\KitImportxml\Cloud();
 		$this->sftp = new \Bitrix\KitImportxml\Sftp();
+		$this->el = new \Bitrix\KitImportxml\DataManager\IblockElementTable($params);
 		
 		$this->useProxy = false;
 		$this->proxySettings = array(
@@ -147,6 +252,19 @@ class Importer {
 		if($this->proxySettings['proxyHost'] && $this->proxySettings['proxyPort'])
 		{
 			$this->useProxy = true;
+		}
+		
+		if(empty($this->rcurrencies))
+		{
+			$this->rcurrencies = array('#USD#', '#EUR#');
+			if(Loader::includeModule('currency') && is_callable(array('\Bitrix\Currency\CurrencyTable', 'getList')))
+			{
+				$dbRes = \Bitrix\Currency\CurrencyTable::getList(array('select'=>array('CURRENCY')));
+				while($arr = $dbRes->Fetch())
+				{
+					if(!in_array('#'.$arr['CURRENCY'].'#', $this->rcurrencies)) $this->rcurrencies[] = '#'.$arr['CURRENCY'].'#';
+				}
+			}
 		}
 		
 		$this->saveProductWithOffers = (bool)(Loader::includeModule('catalog') && \Bitrix\Main\Config\Option::get('catalog', 'show_catalog_tab_with_offers') == 'Y');
@@ -174,10 +292,8 @@ class Importer {
 		CheckDirPath($this->archivedir);
 		
 		$this->tmpfile = $this->tmpdir.'params.txt';
-		$this->fileElementsId = $this->tmpdir.'elements_id.txt';
-		$this->fileOffersId = $this->tmpdir.'offers_id.txt';
 		$oProfile = \Bitrix\KitImportxml\Profile::getInstance();
-		$oProfile->SetImportParams($pid, $this->tmpdir, $stepparams);
+		$oProfile->SetImportParams($pid, $this->tmpdir, $stepparams, $this->params);
 		/*/Temp folders*/
 		
 		if(file_exists($this->tmpfile) && filesize($this->tmpfile) > 0)
@@ -196,10 +312,20 @@ class Importer {
 			$this->propertyIds = $this->stepparams['propertyIds'];
 			unset($this->stepparams['propertyIds']);
 		}
+		if(isset($this->stepparams['propertyValIds']))
+		{
+			$this->propertyValIds = $this->stepparams['propertyValIds'];
+			unset($this->stepparams['propertyValIds']);
+		}
 		if(isset($this->stepparams['sectionsTmp']))
 		{
 			$this->sectionsTmp = $this->stepparams['sectionsTmp'];
 			unset($this->stepparams['sectionsTmp']);
+		}
+		if(isset($this->stepparams['notLoadSections']))
+		{
+			$this->notLoadSections = $this->stepparams['notLoadSections'];
+			unset($this->stepparams['notLoadSections']);
 		}
 		
 		if(!isset($this->params['MAX_EXECUTION_TIME']) || $this->params['MAX_EXECUTION_TIME']!==0)
@@ -223,9 +349,17 @@ class Importer {
 		{
 			$this->params['ONLY_UPDATE_MODE_ELEMENT'] = $this->params['ONLY_UPDATE_MODE_SECTION'] = 'Y';
 		}
+		if($this->params['ONLY_UPDATE_MODE_SEP']!='Y')
+		{
+			$this->params['ONLY_UPDATE_MODE_PRODUCT'] = $this->params['ONLY_UPDATE_MODE_OFFER'] = $this->params['ONLY_UPDATE_MODE_ELEMENT'];
+		}
 		if($this->params['ONLY_CREATE_MODE']=='Y')
 		{
 			$this->params['ONLY_CREATE_MODE_ELEMENT'] = $this->params['ONLY_CREATE_MODE_SECTION'] = 'Y';
+		}
+		if($this->params['ONLY_CREATE_MODE_SEP']!='Y')
+		{
+			$this->params['ONLY_CREATE_MODE_PRODUCT'] = $this->params['ONLY_CREATE_MODE_OFFER'] = $this->params['ONLY_CREATE_MODE_ELEMENT'];
 		}
 		
 		if($pid!==false)
@@ -235,12 +369,41 @@ class Importer {
 			if((int)$this->stepparams['import_started'] < 1)
 			{
 				$oProfile = \Bitrix\KitImportxml\Profile::getInstance();
-				$oProfile->OnStartImport();
+				if(!isset($stepparams['NOT_CHANGE_PROFILE']) || $stepparams['NOT_CHANGE_PROFILE']!='Y')
+				{
+					if(!class_exists('\Bitrix\Main\SystemException'))
+					{
+						if($oProfile->OnStartImport()===false) $this->breakByEvent = true;
+					}
+					else
+					{
+						try
+						{
+							if($oProfile->OnStartImport()===false) $this->breakByEvent = true;
+						}
+						catch(\Bitrix\Main\SystemException $exception)
+						{
+							$this->errors[] = $exception->getMessage();
+							$this->breakByEvent = true;
+						}
+					}
+					if($this->breakByEvent) $this->stepparams['import_started'] = 1;
+				}
 				
 				if(file_exists($this->procfile)) unlink($this->procfile);
 				if(file_exists($this->errorfile)) unlink($this->errorfile);
 			}
 			$this->pid = $pid;
+			
+			if(!isset($this->stepparams['api_page']))
+			{
+				$this->stepparams['api_page'] = 1;
+				if(array_key_exists('EXT_DATA_FILE', $this->params) && strpos($this->params['EXT_DATA_FILE'], '/')===0)
+				{
+					$this->stepparams['api_page'] = 0;
+					$this->GetNextImportFile();
+				}
+			}
 		}
 	}
 	
@@ -249,15 +412,9 @@ class Importer {
 		if(isset($arFields['PROPERTY_VALUES'])) unset($arFields['PROPERTY_VALUES']);
 	}
 	
-	public function CheckTimeEnding($time = 0)
-	{
-		if($time==0) $time = $this->timeBeginImport;
-		$this->ClearIblocksTagCache(true);
-		return ($this->params['MAX_EXECUTION_TIME'] && (time()-$time >= $this->params['MAX_EXECUTION_TIME']));
-	}
-	
 	public function Import()
 	{
+		if($this->breakByEvent) return $this->GetBreakParams('finish');
 		register_shutdown_function(array($this, 'OnShutdown'));
 		set_error_handler(array($this, "HandleError"));
 		set_exception_handler(array($this, "HandleException"));
@@ -265,8 +422,19 @@ class Importer {
 		$this->SaveStatusImport();
 		
 		if(is_callable(array('\CIBlock', 'disableClearTagCache'))) \CIBlock::disableClearTagCache();
-		$time = $this->timeBeginImport = $this->timeBeginTagCache = time();
+		$time = $this->timeBeginImport = $this->timeBeginTagCache = $this->timeSaveResult = time();
 		
+		$i=0;
+		while(0==$i++ || $this->GetNextImportFile())
+		{
+			if(!$this->ImportStep()) return $this->GetBreakParams();
+		}
+		
+		return $this->EndOfLoading($time);
+	}
+	
+	public function ImportStep()
+	{
 		if($this->stepparams['curstep'] == 'import_props')
 		{
 			if($this->params['GROUPS']['IBPROPERTY'])
@@ -276,14 +444,26 @@ class Importer {
 				while($arItem = $this->GetNextIbPropRecord($time))
 				{
 					if(is_array($arItem)) $this->SaveIbPropRecord($arItem);
-					if($this->CheckTimeEnding($time))
-					{
-						return $this->GetBreakParams();
-					}
+					if($this->CheckTimeEnding($time)) return false;
+				}
+			}
+			$this->stepparams['curstep'] = 'import_stores';
+			if($this->CheckTimeEnding($time)) return false;
+		}
+		
+		if($this->stepparams['curstep'] == 'import_stores')
+		{
+			if($this->params['GROUPS']['STORE'])
+			{
+				$this->InitImport('store');
+				while($arItem = $this->GetNextStoreRecord($time))
+				{
+					if(is_array($arItem)) $this->SaveStoreRecord($arItem);
+					if($this->CheckTimeEnding($time)) return false;
 				}
 			}
 			$this->stepparams['curstep'] = 'import_sections';
-			if($this->CheckTimeEnding($time)) return $this->GetBreakParams();
+			if($this->CheckTimeEnding($time)) return false;
 		}
 		
 		if($this->stepparams['curstep'] == 'import_sections')
@@ -309,16 +489,17 @@ class Importer {
 						if(is_array($arItem)) $this->SaveSectionRecord($arItem);
 						if($this->CheckTimeEnding($time))
 						{
-							if($this->elementInSection && $this->stepparams['xmlCurrentRowInSection'] > 0)
+							if(($this->elementInSection && isset($this->stepparams['xmlCurrentRowInSection'])) || ($this->subSectionInSection && $this->stepparams['xmlSubsectionCurrentRowInSection'] > 0))
 							{
 								$this->xmlSectionCurrentRow--;
 							}
-							return $this->GetBreakParams();
+							return false;
 						}
+						if(isset($this->stepparams['xmlCurrentRowInSection'])) unset($this->stepparams['xmlCurrentRowInSection']);
 					}
 				}
 				$this->stepparams['curstep'] = 'import';
-				if($this->CheckTimeEnding($time)) return $this->GetBreakParams();
+				if($this->CheckTimeEnding($time)) return false;
 			}
 		}
 		
@@ -328,29 +509,60 @@ class Importer {
 			{
 				$this->InitImport('element');
 
-				while($arItem = $this->GetNextRecord($time))
+				if($this->isPacket)
 				{
-					if(is_array($arItem)) $this->SaveRecord($arItem);
-					if($this->CheckTimeEnding($time))
+					$arPacket = $this->arPacketOffers = array();
+					$i = 0;
+					while(($arItem = $this->GetNextRecord($time)) || is_array($arItem))
 					{
-						return $this->GetBreakParams();
+						if(!is_array($arItem)) continue;
+						$record = $this->SaveRecord($arItem, 0, true);
+						if(is_array($record) && !empty($record)) $arPacket[$this->xmlCurrentRow] = array($record);
+						if(++$i>=$this->packetSize)
+						{
+							if($this->SaveRecordMass($arPacket)===false) return false;
+							$arPacket = $this->arPacketOffers = array();
+							$i = 0;
+						}
+					}
+					if($i > 0)
+					{
+						if($this->SaveRecordMass($arPacket)===false) return false;
+					}
+				}
+				else
+				{
+					while(($arItem = $this->GetNextRecord($time)) || is_array($arItem))
+					{
+						if(is_array($arItem)) $this->SaveRecord($arItem);
+						if($this->CheckTimeEnding($time)) return false;
 					}
 				}
 			}
-			if($this->CheckTimeEnding($time)) return $this->GetBreakParams();
+			if($this->CheckTimeEnding($time)) return false;
 		}
-		return $this->EndOfLoading($time);
+		return true;
 	}
 	
 	public function EndOfLoading($time)
 	{
+		$this->conv->Disable();
+		if($this->stepparams['section_added_line'] > 0 && (!isset($this->stepparams['deactivate_element_first']) || (int)$this->stepparams['deactivate_element_first']==0))
+		{
+			\CIBlockSection::ReSort($this->params['IBLOCK_ID']);
+		}
+		
 		$arElemDefaults = array();
 		if($this->params['CELEMENT_MISSING_DEFAULTS'])
 		{
-			$arElemDefaults = unserialize(base64_decode($this->params['CELEMENT_MISSING_DEFAULTS']));
-			if(!is_array($arElemDefaults)) $arElemDefaults = array();
+			$arElemDefaults = $this->GetMissingDefaultVals($this->params['CELEMENT_MISSING_DEFAULTS']);
 		}
-		$bSetDefaultProps = (bool)(count($arElemDefaults) > 0);
+		$arOfferDefaults = array();
+		if($this->params['OFFER_MISSING_DEFAULTS'])
+		{
+			$arOfferDefaults = $this->GetMissingDefaultVals($this->params['OFFER_MISSING_DEFAULTS']);
+		}
+		$bSetDefaultProps = (bool)(count($arElemDefaults) > 0 || count($arOfferDefaults) > 0);
 
 		$bElemDeactivate = (bool)($this->params['ELEMENT_MISSING_DEACTIVATE']=='Y' || $this->params['ELEMENT_MISSING_TO_ZERO']=='Y' || $this->params['ELEMENT_MISSING_REMOVE_PRICE']=='Y' || $this->params['CELEMENT_MISSING_DEACTIVATE']=='Y' || $this->params['CELEMENT_MISSING_TO_ZERO']=='Y' || $this->params['CELEMENT_MISSING_REMOVE_PRICE']=='Y' || $this->params['CELEMENT_MISSING_REMOVE_ELEMENT']=='Y' || $this->params['OFFER_MISSING_DEACTIVATE']=='Y' || $this->params['OFFER_MISSING_TO_ZERO']=='Y' || $this->params['OFFER_MISSING_REMOVE_PRICE']=='Y' || $this->params['OFFER_MISSING_REMOVE_ELEMENT']=='Y');
 		
@@ -362,9 +574,10 @@ class Importer {
 				$this->SaveStatusImport();
 				if($this->CheckTimeEnding($time)) return $this->GetBreakParams();
 				$this->stepparams['curstep'] = 'deactivate_elements';
-				$this->stepparams['deactivate_element_last'] = \Bitrix\KitImportxml\Utils::SortFileIds($this->fileElementsId);
-				$this->stepparams['deactivate_offer_last'] = \Bitrix\KitImportxml\Utils::SortFileIds($this->fileOffersId);
-				$this->stepparams['deactivate_element_first'] = 0;
+				$oProfile = \Bitrix\KitImportxml\Profile::getInstance();
+				$this->stepparams['deactivate_element_last'] = $oProfile->GetLastImportId('E');
+				$this->stepparams['deactivate_offer_last'] = $oProfile->GetLastImportId('O');
+				$this->stepparams['deactivate_element_first'] = ($this->stepparams['deactivate_element_last']===0 && $this->stepparams['correct_line'] > 0 ? -1 : 0);
 				$this->stepparams['deactivate_element_processed'] = 0;
 				$this->stepparams['deactivate_offer_first'] = 0;
 				$this->SaveStatusImport();
@@ -372,6 +585,7 @@ class Importer {
 			}
 			
 			$arFieldsList = array();
+			$arOfferFilter = array();
 			$offersExists = false;			
 			if(count(preg_grep('/;OFFER_/', $this->params['FIELDS'])) > 0)
 			{
@@ -391,6 +605,7 @@ class Importer {
 				$propsDef = $this->GetIblockProperties($this->params['IBLOCK_ID']);
 				foreach($this->fparams as $k2=>$ffilter)
 				{
+					if(!is_array($ffilter)) $ffilter = array();
 					if(isset($this->stepparams['fparams'][$k2]) && $ffilter['USE_FILTER_FOR_DEACTIVATE']=='Y')
 					{
 						$ffilter2 = $this->stepparams['fparams'][$k2];
@@ -407,88 +622,16 @@ class Importer {
 					}
 					if($ffilter['USE_FILTER_FOR_DEACTIVATE']=='Y' && (!empty($ffilter['UPLOAD_VALUES']) || !empty($ffilter['NOT_UPLOAD_VALUES'])))
 					{
-						$fieldName = '';
 						$fieldFull = $this->params['FIELDS'][$k2];
 						list($xpath, $field) = explode(';', $fieldFull, 2);
-						
-						if(strpos($field, 'IE_')===0)
+						if(strpos($field, 'OFFER_')===0)
 						{
-							$fieldName = substr($field, 3);
-							if(strpos($fieldName, '|')!==false) $fieldName = current(explode('|', $fieldName));
+							$arOfferIblock = $this->GetCachedOfferIblock($this->params['IBLOCK_ID']);
+							$this->GetMissingFilterByField($arOfferFilter, substr($field, 6), $arOfferIblock['OFFERS_IBLOCK_ID'], $ffilter);
 						}
-						elseif(strpos($field, 'IP_PROP')===0)
+						else
 						{
-							$propId = substr($field, 7);
-							$fieldName = 'PROPERTY_'.$propId;
-							if($propsDef[$propId]['PROPERTY_TYPE']=='L')
-							{
-								$fieldName .= '_VALUE';
-							}
-							elseif($propsDef[$propId]['PROPERTY_TYPE']=='S' && $propsDef[$propId]['USER_TYPE']=='directory')
-							{
-								if(is_array($ffilter['UPLOAD_VALUES']))
-								{
-									foreach($ffilter['UPLOAD_VALUES'] as $k3=>$v3)
-									{
-										$ffilter['UPLOAD_VALUES'][$k3] = $this->GetHighloadBlockValue($propsDef[$propId], $v3);
-									}
-								}
-								if(is_array($ffilter['NOT_UPLOAD_VALUES']))
-								{
-									foreach($ffilter['NOT_UPLOAD_VALUES'] as $k3=>$v3)
-									{
-										$ffilter['NOT_UPLOAD_VALUES'][$k3] = $this->GetHighloadBlockValue($propsDef[$propId], $v3);
-									}
-								}
-							}
-							elseif($propsDef[$propId]['PROPERTY_TYPE']=='E')
-							{
-								if(is_array($ffilter['UPLOAD_VALUES']))
-								{
-									foreach($ffilter['UPLOAD_VALUES'] as $k3=>$v3)
-									{
-										$ffilter['UPLOAD_VALUES'][$k3] = $this->GetIblockElementValue($propsDef[$propId], $v3, $ffilter);
-									}
-								}
-								if(is_array($ffilter['NOT_UPLOAD_VALUES']))
-								{
-									foreach($ffilter['NOT_UPLOAD_VALUES'] as $k3=>$v3)
-									{
-										$ffilter['NOT_UPLOAD_VALUES'][$k3] = $this->GetIblockElementValue($propsDef[$propId], $v3, $ffilter);
-									}
-								}
-							}
-						}
-						if(strlen($fieldName) > 0)
-						{
-							if(!empty($ffilter['UPLOAD_VALUES']))
-							{
-								//$arFieldsList[$fieldName] = $ffilter['UPLOAD_VALUES'];
-								$keys = (isset($ffilter['UPLOAD_KEYS']) && is_array($ffilter['UPLOAD_KEYS']) ? $ffilter['UPLOAD_KEYS'] : array());
-								foreach($ffilter['UPLOAD_VALUES'] as $ukey=>$uval)
-								{
-									$key = (isset($keys[$ukey]) ? $keys[$ukey] : '');
-									$op = '';
-									$this->GetUVFilterParams($uval, $op, $key);
-									$arSubFilter[] = array($op.$fieldName => $uval);
-								}
-								if(count($arSubFilter) > 1) $arFieldsList[] = array_merge(array('LOGIC'=>'OR'), $arSubFilter);
-								else $arFieldsList = array_merge($arFieldsList, current($arSubFilter));
-							}
-							elseif(!empty($ffilter['NOT_UPLOAD_VALUES']))
-							{
-								//$arFieldsList['!'.$fieldName] = $ffilter['NOT_UPLOAD_VALUES'];
-								$keys = (isset($ffilter['NOT_UPLOAD_KEYS']) && is_array($ffilter['NOT_UPLOAD_KEYS']) ? $ffilter['NOT_UPLOAD_KEYS'] : array());
-								foreach($ffilter['NOT_UPLOAD_VALUES'] as $ukey=>$uval)
-								{
-									$key = (isset($keys[$ukey]) ? $keys[$ukey] : '');
-									$op = '!';
-									$this->GetUVFilterParams($uval, $op, $key);
-									$arSubFilter[] = array($op.$fieldName => $uval);
-								}
-								if(count($arSubFilter) > 1) $arFieldsList[] = array_merge(array('LOGIC'=>'AND'), $arSubFilter);
-								else $arFieldsList = array_merge($arFieldsList, current($arSubFilter));
-							}
+							$this->GetMissingFilterByField($arFieldsList, $field, $this->params['IBLOCK_ID'], $ffilter);
 						}
 					}
 				}
@@ -497,11 +640,12 @@ class Importer {
 		
 			while($this->stepparams['deactivate_element_first'] < $this->stepparams['deactivate_element_last'])
 			{
-				$arUpdatedIds = \Bitrix\KitImportxml\Utils::GetPartIdsFromFile($this->fileElementsId, $this->stepparams['deactivate_element_first']);
+				$oProfile = \Bitrix\KitImportxml\Profile::getInstance();
+				$arUpdatedIds = $oProfile->GetUpdatedIds('E', $this->stepparams['deactivate_element_first']);
 				if(empty($arUpdatedIds))
 				{
 					$this->stepparams['deactivate_element_first'] = $this->stepparams['deactivate_element_last'];
-					continue;
+					if($this->stepparams['deactivate_element_last'] > 0) continue;
 				}
 				$lastElement = end($arUpdatedIds);
 				
@@ -519,12 +663,26 @@ class Importer {
 					$OFFERS_IBLOCK_ID = $arOfferIblock['OFFERS_IBLOCK_ID'];
 					$OFFERS_PROPERTY_ID = $arOfferIblock['OFFERS_PROPERTY_ID'];
 					$arOfferFields = array("IBLOCK_ID" => $OFFERS_IBLOCK_ID);
+					if(count($arOfferFilter) > 0) $arOfferFields = $arOfferFields + $arOfferFilter;
 					$arSubOfferFields = $this->GetMissingFilter(true, $OFFERS_IBLOCK_ID);
 					if(!empty($arSubOfferFields))
 					{
 						if(count($arSubOfferFields) > 1) $arOfferFields[] = array_merge(array('LOGIC' => 'OR'), $arSubOfferFields);
 						else $arOfferFields = array_merge($arOfferFields, $arSubOfferFields);
-						$arSubFields['ID'] = \CIBlockElement::SubQuery('PROPERTY_'.$OFFERS_PROPERTY_ID, $arOfferFields);
+						$offerSubQuery = \CIBlockElement::SubQuery('PROPERTY_'.$OFFERS_PROPERTY_ID, $arOfferFields);	
+						if(array_key_exists('ID', $arSubFields))
+						{
+							$arSubFields[] = array('LOGIC' => 'OR', array('ID'=>$arSubFields['ID']), array('ID'=>$offerSubQuery));
+							unset($arSubFields['ID']);
+						}
+						else
+						{
+							$arSubFields['ID'] = $offerSubQuery;	
+						}
+					}
+					elseif($this->params['OFFER_MISSING_REMOVE_ELEMENT']=='Y' && count($arSubFields) > 0 && defined('\Bitrix\Catalog\ProductTable::TYPE_SKU'))
+					{
+						$arSubFields['CATALOG_TYPE'] = \Bitrix\Catalog\ProductTable::TYPE_SKU;
 					}
 				}
 				
@@ -534,7 +692,8 @@ class Importer {
 				$arFields['!ID'] = $arUpdatedIds;
 				if($this->stepparams['deactivate_element_first'] > 0) $arFields['>ID'] = $this->stepparams['deactivate_element_first'];
 				if($lastElement < $this->stepparams['deactivate_element_last']) $arFields['<=ID'] = $lastElement;
-				$dbRes = \CIblockElement::GetList(array('ID'=>'ASC'), $arFields, false, false, array('ID'));
+				//$dbRes = \CIblockElement::GetList(array('ID'=>'ASC'), $arFields, false, false, array('ID'));
+				$dbRes = \Bitrix\KitImportxml\DataManager\IblockElementTable::GetListComp($arFields, array('ID'), array('ID'=>'ASC'));
 				while($arr = $dbRes->Fetch())
 				{
 					if($arr['ID'] <= $this->stepparams['deactivate_element_processed']) continue;
@@ -542,7 +701,7 @@ class Importer {
 					{
 						if($offersExists)
 						{
-							$this->DeactivateAllOffersByProductId($arr['ID'], $arFields['IBLOCK_ID'], $time, true);
+							$this->DeactivateAllOffersByProductId($arr['ID'], $arFields['IBLOCK_ID'], $arOfferFilter, $time, true);
 						}
 						\CIblockElement::Delete($arr['ID']);
 						$this->AddTagIblock($arFields['IBLOCK_ID']);
@@ -554,7 +713,7 @@ class Importer {
 
 						if($offersExists)
 						{
-							$this->DeactivateAllOffersByProductId($arr['ID'], $arFields['IBLOCK_ID'], $time);
+							$this->DeactivateAllOffersByProductId($arr['ID'], $arFields['IBLOCK_ID'], $arOfferFilter, $time);
 						}
 					}
 					
@@ -567,7 +726,7 @@ class Importer {
 				}
 				if($offersExists)
 				{
-					$ret = $this->DeactivateOffersByProductIds($arUpdatedIds, $arFields['IBLOCK_ID'], $time);
+					$ret = $this->DeactivateOffersByProductIds($arUpdatedIds, $arFields['IBLOCK_ID'], $arOfferFilter, $time);
 					if(is_array($ret)) return $ret;
 				}
 
@@ -578,75 +737,62 @@ class Importer {
 		}
 		
 		if($this->CheckTimeEnding($time)) return $this->GetBreakParams();
+		if($this->params['SECTION_EMPTY_REMOVE']=='Y' && class_exists('\Bitrix\Iblock\SectionElementTable'))
+		{
+			$this->stepparams['curstep'] = 'deactivate_sections';
+			$sectionId = (int)$this->params['SECTION_ID'];
+			$arSectionsRes = $this->GetFESections((int)$this->params['IBLOCK_ID'], $sectionId);
+			
+			if(!empty($arSectionsRes['INACTIVE']))
+			{
+				$dbRes = \CIBlockSection::GetList(array(), array('ID'=>$arSectionsRes['INACTIVE'], '!ID'=>$sectionId, 'CHECK_PERMISSIONS'=>'N'), false, array('ID', 'IBLOCK_ID'));
+				while($arr = $dbRes->Fetch())
+				{
+					$this->BeforeSectionSave($sectId, "update");
+					$this->DeleteSection($arr['ID'], $arr['IBLOCK_ID']);
+					$this->stepparams['section_remove_line']++;
+					$this->SaveStatusImport();
+					if($this->CheckTimeEnding($time)) return $this->GetBreakParams();
+				}
+			}
+		}
 		if(($this->params['SECTION_EMPTY_DEACTIVATE']=='Y' || $this->params['SECTION_NOTEMPTY_ACTIVATE']=='Y') && class_exists('\Bitrix\Iblock\SectionElementTable'))
 		{
 			$this->stepparams['curstep'] = 'deactivate_sections';
-
-			$sectionId = (int)$this->params['SECTION_ID'];
-			$arFilterSections  = array('IBLOCK_ID' => $this->params['IBLOCK_ID'], 'CHECK_PERMISSIONS' => 'N');
-			$arFilterSE = array('IBLOCK_SECTION.IBLOCK_ID' => $this->params['IBLOCK_ID'], 'IBLOCK_ELEMENT.ACTIVE' => 'Y');
-			
-			if($sectionId)
-			{
-				$dbRes = \CIBlockSection::GetList(array(), array('ID'=>$sectionId, 'CHECK_PERMISSIONS' => 'N'), false, array('LEFT_MARGIN', 'RIGHT_MARGIN'));
-				if($arr = $dbRes->Fetch())
-				{
-					$arFilterSections['>=LEFT_MARGIN'] = $arr['LEFT_MARGIN'];
-					$arFilterSections['<=RIGHT_MARGIN'] = $arr['RIGHT_MARGIN'];
-					$arFilterSE['>=IBLOCK_SECTION.LEFT_MARGIN'] = $arr['LEFT_MARGIN'];
-					$arFilterSE['<=IBLOCK_SECTION.RIGHT_MARGIN'] = $arr['RIGHT_MARGIN'];
-				}
-			}
-			
-			$arListSections = array();
-			$dbRes = \CIBlockSection::GetList(array('DEPTH_LEVEL'=>'DESC'), $arFilterSections, false, array('ID', 'IBLOCK_SECTION_ID'));
-			while($arr = $dbRes->Fetch())
-			{
-				$arListSections[$arr['ID']] = ($sectionId==$arr['ID'] ? false : $arr['IBLOCK_SECTION_ID']);
-			}
-			
-			$arActiveSections = array();
-			$dbRes = \Bitrix\Iblock\SectionElementTable::GetList(array('filter'=>$arFilterSE, 'group'=>array('IBLOCK_SECTION_ID'), 'select'=>array('IBLOCK_SECTION_ID')));
-			while($arr = $dbRes->Fetch())
-			{
-				$sid = $arr['IBLOCK_SECTION_ID'];
-				$arActiveSections[] = $sid;
-				while($sid = $arListSections[$sid])
-				{
-					$arActiveSections[] = $sid;
-				}
-			}
+			$arSectionsRes = $this->GetFESections((int)$this->params['IBLOCK_ID'], (int)$this->params['SECTION_ID'], array('ACTIVE' => 'Y'));
 			
 			$sect = new \CIBlockSection();
-			if($this->params['SECTION_NOTEMPTY_ACTIVATE']=='Y')
+			if($this->params['SECTION_NOTEMPTY_ACTIVATE']=='Y' && !empty($arSectionsRes['ACTIVE']))
 			{
-				if(!empty($arActiveSections))
+				$dbRes = \CIBlockSection::GetList(array(), array('ID'=>$arSectionsRes['ACTIVE'], 'ACTIVE'=>'N', 'CHECK_PERMISSIONS'=>'N'), false, array('ID', 'IBLOCK_ID', 'ACTIVE'));
+				while($arr = $dbRes->Fetch())
 				{
-					$dbRes = \CIBlockSection::GetList(array(), array('ID'=>$arActiveSections, 'ACTIVE'=>'N', 'CHECK_PERMISSIONS' => 'N'), false, array('ID'));
-					while($arr = $dbRes->Fetch())
-					{
-						$sect->Update($arr['ID'], array('ACTIVE'=>'Y'));
-						$this->AddTagIblock($arFilterSections['IBLOCK_ID']);
-						$this->SaveStatusImport();
-						if($this->CheckTimeEnding($time)) return $this->GetBreakParams();						
-					}
+					$this->UpdateSection($arr['ID'], $arr['IBLOCK_ID'], array('ACTIVE'=>'Y'), $arr);
+					$this->SaveStatusImport();
+					if($this->CheckTimeEnding($time)) return $this->GetBreakParams();						
 				}
 			}
 			
-			if($this->params['SECTION_EMPTY_DEACTIVATE']=='Y')
+			if($this->params['SECTION_EMPTY_DEACTIVATE']=='Y' && !empty($arSectionsRes['INACTIVE']))
 			{
-				$arInactiveSections = array_diff(array_keys($arListSections), $arActiveSections);
-				if(!empty($arInactiveSections))
+				$dbRes = \CIBlockSection::GetList(array(), array('ID'=>$arSectionsRes['INACTIVE'], 'ACTIVE'=>'Y', 'CHECK_PERMISSIONS'=>'N'), false, array('ID', 'IBLOCK_ID', 'ACTIVE'));
+				while($arr = $dbRes->Fetch())
 				{
-					$dbRes = \CIBlockSection::GetList(array(), array('ID'=>$arInactiveSections, 'ACTIVE'=>'Y', 'CHECK_PERMISSIONS' => 'N'), false, array('ID'));
-					while($arr = $dbRes->Fetch())
-					{
-						$sect->Update($arr['ID'], array('ACTIVE'=>'N'));
-						$this->AddTagIblock($arFilterSections['IBLOCK_ID']);
-						$this->SaveStatusImport();
-						if($this->CheckTimeEnding($time)) return $this->GetBreakParams();						
-					}
+					$this->UpdateSection($arr['ID'], $arr['IBLOCK_ID'], array('ACTIVE'=>'N'), $arr);
+					$this->stepparams['section_deactivate_line']++;
+					$this->SaveStatusImport();
+					if($this->CheckTimeEnding($time)) return $this->GetBreakParams();						
 				}
+			}
+		}
+		
+		if($this->params['BIND_PROPERTIES_TO_SECTIONS']=='Y' && count($this->stepparams['bound_properties']) > 0)
+		{
+			foreach($this->stepparams['bound_properties'] as $k=>$k2)
+			{
+				$this->UpdateSectionPropertyLinks($this->params['IBLOCK_ID'], $k2);
+				unset($this->stepparams['bound_properties'][$k]);
+				if($this->CheckTimeEnding($time)) return $this->GetBreakParams();	
 			}
 		}
 		
@@ -704,8 +850,9 @@ class Importer {
 		
 		$this->SaveStatusImport(true);
 		
+		$this->logger->FinishExec($this->stepparams);
 		$oProfile = \Bitrix\KitImportxml\Profile::getInstance();
-		$arEventData = $oProfile->OnEndImport($this->filename, $this->stepparams);
+		$arEventData = $oProfile->OnEndImport($this->GetFileName(), $this->stepparams, $this->errors, $this->params);
 		
 		foreach(GetModuleEvents(static::$moduleId, "OnEndImport", true) as $arEvent)
 		{
@@ -726,25 +873,75 @@ class Importer {
 		return $this->GetBreakParams('finish');
 	}
 	
-	public function GetUVFilterParams(&$val, &$op, $key)
+	public function GetMissingDefaultVals($vals)
 	{
-		if($val=='{empty}'){$val = false;}
-		elseif($val=='{not_empty}'){$op .= '!'; $val = false;}
-		elseif(!$key){$op .= '=';}
-		elseif($key=='contain'){$op .= '%';}
-		elseif($key=='begin'){$val = $val.'%';}
-		elseif($key=='end'){$val = '%'.$val;}
-		elseif($key=='gt'){$op .= '>';}
-		elseif($key=='lt'){$op .= '<';}
-		
-		if($op=='!!') $op = '';
-		elseif($op=='!>') $op = '<';
-		elseif($op=='!<') $op = '>';
+		$arVals = unserialize(base64_decode($vals));
+		if(!is_array($arVals)) $arVals = array();
+		$pattern = '/(#DATETIME#)/';
+		foreach($arVals as $k=>$v)
+		{
+			if(!is_array($v) && !is_bool($v))
+			{
+				$arVals[$k] = preg_replace_callback($pattern, array($this, 'ConversionReplaceValues'), $v);
+			}
+		}
+		return $arVals;
 	}
 	
-	public function DeactivateAllOffersByProductId($ID, $IBLOCK_ID, $time, $deleteMode = false)
+	public function GetFESections($IBLOCK_ID, $SECTION_ID=0, $arElemFilter=array())
+	{
+		$arFilterSections  = array('IBLOCK_ID' => $IBLOCK_ID, 'CHECK_PERMISSIONS' => 'N');
+		$arFilterSE = array('IBLOCK_SECTION.IBLOCK_ID' => $IBLOCK_ID, 'IBLOCK_ELEMENT.IBLOCK_ID' => $IBLOCK_ID);
+		foreach($arElemFilter as $k=>$v)
+		{
+			$arFilterSE['IBLOCK_ELEMENT.'.$k] = $v;
+		}
+		
+		if($SECTION_ID)
+		{
+			$dbRes = \CIBlockSection::GetList(array(), array('ID'=>$SECTION_ID, 'CHECK_PERMISSIONS'=>'N'), false, array('LEFT_MARGIN', 'RIGHT_MARGIN'));
+			if($arr = $dbRes->Fetch())
+			{
+				$arFilterSections['>=LEFT_MARGIN'] = $arr['LEFT_MARGIN'];
+				$arFilterSections['<=RIGHT_MARGIN'] = $arr['RIGHT_MARGIN'];
+				$arFilterSE['>=IBLOCK_SECTION.LEFT_MARGIN'] = $arr['LEFT_MARGIN'];
+				$arFilterSE['<=IBLOCK_SECTION.RIGHT_MARGIN'] = $arr['RIGHT_MARGIN'];
+			}
+			else
+			{
+				return array();
+			}
+		}
+		
+		$arListSections = array();
+		$dbRes = \CIBlockSection::GetList(array('DEPTH_LEVEL'=>'DESC'), $arFilterSections, false, array('ID', 'IBLOCK_SECTION_ID'));
+		while($arr = $dbRes->Fetch())
+		{
+			$arListSections[$arr['ID']] = ($SECTION_ID==$arr['ID'] ? false : $arr['IBLOCK_SECTION_ID']);
+		}
+		
+		$arActiveSections = array();
+		$dbRes = \Bitrix\Iblock\SectionElementTable::GetList(array('filter'=>$arFilterSE, 'group'=>array('IBLOCK_SECTION_ID'), 'select'=>array('IBLOCK_SECTION_ID')));
+		while($arr = $dbRes->Fetch())
+		{
+			$sid = $arr['IBLOCK_SECTION_ID'];
+			$arActiveSections[] = $sid;
+			while($sid = $arListSections[$sid])
+			{
+				$arActiveSections[] = $sid;
+			}
+		}
+		$arInactiveSections = array_diff(array_keys($arListSections), $arActiveSections);
+		return array(
+			'ACTIVE' => $arActiveSections,
+			'INACTIVE' => $arInactiveSections
+		);
+	}
+	
+	public function DeactivateAllOffersByProductId($ID, $IBLOCK_ID, $arFilter, $time, $deleteMode = false)
 	{
 		if(!($arOfferIblock = $this->GetCachedOfferIblock($IBLOCK_ID))) return false;
+		if($this->params['OFFER_MISSING_REMOVE_ELEMENT']=='Y') $deleteMode = true;
 		$OFFERS_IBLOCK_ID = $arOfferIblock['OFFERS_IBLOCK_ID'];
 		$OFFERS_PROPERTY_ID = $arOfferIblock['OFFERS_PROPERTY_ID'];
 		
@@ -753,15 +950,16 @@ class Importer {
 			'PROPERTY_'.$OFFERS_PROPERTY_ID => $ID,
 			'CHECK_PERMISSIONS' => 'N'
 		);
-		
+		if(is_array($arFilter)) $arFields = $arFields + $arFilter;
 		$arSubFields = $this->GetMissingFilter(true, $OFFERS_IBLOCK_ID);
 		
-		if(!empty($arSubFields))
+		if(!empty($arSubFields) || $deleteMode)
 		{
 			if(count($arSubFields) > 1) $arFields[] = array_merge(array('LOGIC' => 'OR'), $arSubFields);
 			else $arFields = array_merge($arFields, $arSubFields);
 						
-			$dbRes = \CIblockElement::GetList(array('ID'=>'ASC'), $arFields, false, false, array('ID'));
+			//$dbRes = \CIblockElement::GetList(array('ID'=>'ASC'), $arFields, false, false, array('ID'));
+			$dbRes = \Bitrix\KitImportxml\DataManager\IblockElementTable::GetListComp($arFields, array('ID'), array('ID'=>'ASC'));
 			while($arr = $dbRes->Fetch())
 			{
 				if($deleteMode)
@@ -782,7 +980,7 @@ class Importer {
 		}
 	}
 	
-	public function DeactivateOffersByProductIds(&$arElementIds, $IBLOCK_ID, $time)
+	public function DeactivateOffersByProductIds(&$arElementIds, $IBLOCK_ID, $arFilter, $time)
 	{
 		if(!($arOfferIblock = $this->GetCachedOfferIblock($IBLOCK_ID))) return false;
 		$OFFERS_IBLOCK_ID = $arOfferIblock['OFFERS_IBLOCK_ID'];
@@ -790,7 +988,8 @@ class Importer {
 		
 		while($this->stepparams['deactivate_offer_first'] < $this->stepparams['deactivate_offer_last'])
 		{
-			$arUpdatedIds = \Bitrix\KitImportxml\Utils::GetPartIdsFromFile($this->fileOffersId, $this->stepparams['deactivate_offer_first']);
+			$oProfile = \Bitrix\KitImportxml\Profile::getInstance();
+			$arUpdatedIds = $oProfile->GetUpdatedIds('O', $this->stepparams['deactivate_offer_first']);
 			if(empty($arUpdatedIds))
 			{
 				$this->stepparams['deactivate_offer_first'] = $this->stepparams['deactivate_offer_last'];
@@ -804,6 +1003,11 @@ class Importer {
 				'!ID' => $arUpdatedIds,
 				'CHECK_PERMISSIONS' => 'N'
 			);
+			if(is_array($arFilter) && !empty($arFilter))
+			{
+				unset($arFields['PROPERTY_'.$OFFERS_PROPERTY_ID]);
+				$arFields = $arFields + $arFilter;
+			}
 			
 			$arSubFields = $this->GetMissingFilter(true, $OFFERS_IBLOCK_ID);
 			if(!empty($arSubFields))
@@ -818,7 +1022,8 @@ class Importer {
 			}
 			if($this->stepparams['deactivate_offer_first'] > 0) $arFields['>ID'] = $this->stepparams['deactivate_offer_first'];
 			if($lastElement < $this->stepparams['deactivate_offer_last']) $arFields['<=ID'] = $lastElement;
-			$dbRes = \CIblockElement::GetList(array('ID'=>'ASC'), $arFields, false, false, array('ID'));
+			//$dbRes = \CIblockElement::GetList(array('ID'=>'ASC'), $arFields, false, false, array('ID'));
+			$dbRes = \Bitrix\KitImportxml\DataManager\IblockElementTable::GetListComp($arFields, array('ID'), array('ID'=>'ASC'));
 			while($arr = $dbRes->Fetch())
 			{
 				if($this->params['OFFER_MISSING_REMOVE_ELEMENT']=='Y')
@@ -848,46 +1053,50 @@ class Importer {
 		if(!$ID) return;
 		if($isOffer) $this->SetSkuMode(true, $ID, $IBLOCK_ID);
 		$prefix = ($isOffer ? 'OFFER' : 'CELEMENT');
-		$updateElement = false;
+		$this->BeforeElementSave($ID, 'update');
+		$arElementFields = array();
+		$arProps = array();
+		$arProduct = array();
+		$arStores = array();
+		$arPrices = array();
+		if($this->params['ELEMENT_MISSING_DEACTIVATE']=='Y' || $this->params[$prefix.'_MISSING_DEACTIVATE']=='Y')
+		{
+			$arElementFields['ACTIVE'] = 'N';
+			if($isOffer) $this->stepparams['offer_killed_line']++;
+			else $this->stepparams['killed_line']++;
+		}
 		if($this->params['ELEMENT_MISSING_TO_ZERO']=='Y' || $this->params[$prefix.'_MISSING_TO_ZERO']=='Y')
 		{
-			//\CCatalogProduct::Update($ID, array('QUANTITY'=>0));
-			$this->productor->Update($ID, $IBLOCK_ID, array('QUANTITY'=>0));
-			$dbRes2 = \CCatalogStoreProduct::GetList(array(), array('PRODUCT_ID'=>$ID, '>AMOUNT'=>0), false, false, array('ID'));
+			$arProduct['QUANTITY'] = $arProduct['QUANTITY_RESERVED'] = 0;
+			$dbRes2 = \CCatalogStoreProduct::GetList(array(), array('PRODUCT_ID'=>$ID/*, '>AMOUNT'=>'0'*/), false, false, array('ID', 'STORE_ID'));
 			while($arStore = $dbRes2->Fetch())
 			{
-				\CCatalogStoreProduct::Update($arStore["ID"], array('AMOUNT'=>0));
+				$arStores[$arStore["STORE_ID"]] = array('AMOUNT' => '');
 			}
 			if($isOffer) $this->stepparams['offer_zero_stock_line']++;
 			else $this->stepparams['zero_stock_line']++;
 		}
 		if($this->params['ELEMENT_MISSING_REMOVE_PRICE']=='Y' || $this->params[$prefix.'_MISSING_REMOVE_PRICE']=='Y')
 		{
-			$dbRes = $this->pricer->GetList(array(), array('PRODUCT_ID'=>$ID), false, false, $arKeys);
-			while($arPrice = $dbRes->Fetch())
+			$dbRes = \CCatalogGroup::GetList(array("SORT" => "ASC"));
+			while($arPriceType = $dbRes->Fetch())
 			{
-				$this->pricer->Delete($arPrice["ID"]);
+				$arPrices[$arPriceType["ID"]] = array('PRICE' => '-');
 			}
 		}
 		
 		$arDefaults = array();
 		if($this->params[$prefix.'_MISSING_DEFAULTS'])
 		{
-			$arDefaults = unserialize(base64_decode($this->params[$prefix.'_MISSING_DEFAULTS']));
-			if(!is_array($arDefaults)) $arDefaults = array();
+			$arDefaults = $this->GetMissingDefaultVals($this->params[$prefix.'_MISSING_DEFAULTS']);
 		}
 		if(!empty($arDefaults))
 		{
-			$arElemVals = array();
-			$arProps = array();
-			$arStores = array();
-			$arPrices = array();
-			$arProduct = array();
 			foreach($arDefaults as $propKey=>$propVal)
 			{
 				if(strpos($propKey, 'IE_')===0)
 				{
-					$arElemVals[substr($propKey, 3)] = $propVal;
+					$arElementFields[substr($propKey, 3)] = $propVal;
 				}
 				elseif(preg_match('/ICAT_STORE(\d+)_AMOUNT/', $propKey, $m))
 				{
@@ -906,116 +1115,222 @@ class Importer {
 					$arProps[$propKey] = $propVal;
 				}
 			}
-			if(!empty($arProduct) || !empty($arPrices) || !empty($arStores))
-			{
-				$this->SaveProduct($ID, $IBLOCK_ID, $arProduct, $arPrices, $arStores);
-			}
-			if(!empty($arProps))
-			{
-				$this->SaveProperties($ID, $IBLOCK_ID, $arProps);
-			}
-			if(!empty($arElemVals))
-			{
-				$el = new \CIblockElement();
-				$el->Update($ID, $arElemVals);
-				$updateElement = true;
-				$this->AddTagIblock($IBLOCK_ID);
-			}
 		}
 		
-		$el = new \CIblockElement();
-		if($this->params['ELEMENT_MISSING_DEACTIVATE']=='Y' || $this->params[$prefix.'_MISSING_DEACTIVATE']=='Y')
+		if(!empty($arProduct) || !empty($arPrices) || !empty($arStores))
 		{
-			$el->Update($ID, array('ACTIVE'=>'N'));
-			$updateElement = true;
-			$this->AddTagIblock($IBLOCK_ID);
-			if($isOffer) $this->stepparams['offer_killed_line']++;
-			else $this->stepparams['killed_line']++;
+			$this->SaveProduct($ID, $IBLOCK_ID, $arProduct, $arPrices, $arStores);
 		}
+		if(!empty($arProps))
+		{
+			$this->SaveProperties($ID, $IBLOCK_ID, $arProps);
+		}
+		$this->AfterSaveProduct($arElementFields, $ID, $IBLOCK_ID, true, $isOffer);
 		
-		if(!$updateElement && $this->params['ELEMENT_NOT_UPDATE_WO_CHANGES']!='Y')
+		$arKeys = array_merge(array_keys($arElementFields), array('ID', 'MODIFIED_BY'));
+		$arFilter = array('ID'=>$ID, 'IBLOCK_ID'=>$IBLOCK_ID, 'CHECK_PERMISSIONS' => 'N');
+		$dbRes = \Bitrix\KitImportxml\DataManager\IblockElementTable::GetListComp($arFilter, $arKeys);
+		if($arElement = $dbRes->Fetch())
 		{
-			$el->Update($ID, array('ID'=>$ID));
+			if($this->UpdateElement($ID, $IBLOCK_ID, $arElementFields, $arElement))
+			{
+				//$this->logger->SaveElementChanges($ID);
+			}
+			$this->logger->SaveElementChanges($ID);
 		}
+		//$this->OnAfterSaveElement($ID);
 		if($isOffer) $this->SetSkuMode(false);
+	}
+	
+	public function GetMissingFilterByField(&$arFilter, $field, $iblockId, $ffilter)
+	{		
+		$fieldName = '';
+		if(strpos($field, 'IE_')===0)
+		{
+			$fieldName = substr($field, 3);
+			if(strpos($fieldName, '|')!==false) $fieldName = current(explode('|', $fieldName));
+		}
+		elseif(strpos($field, 'IP_PROP')===0)
+		{			
+			$propsDef = $this->GetIblockProperties($iblockId);
+			$propId = substr($field, 7);
+			$fieldName = 'PROPERTY_'.$propId;
+			if($propsDef[$propId]['PROPERTY_TYPE']=='L')
+			{
+				$fieldName .= '_VALUE';
+			}
+			elseif($propsDef[$propId]['PROPERTY_TYPE']=='S' && $propsDef[$propId]['USER_TYPE']=='directory')
+			{
+				if(is_array($ffilter['UPLOAD_VALUES']))
+				{
+					foreach($ffilter['UPLOAD_VALUES'] as $k3=>$v3)
+					{
+						$ffilter['UPLOAD_VALUES'][$k3] = $this->GetHighloadBlockValue($propsDef[$propId], $v3);
+					}
+				}
+				if(is_array($ffilter['NOT_UPLOAD_VALUES']))
+				{
+					foreach($ffilter['NOT_UPLOAD_VALUES'] as $k3=>$v3)
+					{
+						$ffilter['NOT_UPLOAD_VALUES'][$k3] = $this->GetHighloadBlockValue($propsDef[$propId], $v3);
+					}
+				}
+			}
+			elseif($propsDef[$propId]['PROPERTY_TYPE']=='E')
+			{
+				if(is_array($ffilter['UPLOAD_VALUES']))
+				{
+					foreach($ffilter['UPLOAD_VALUES'] as $k3=>$v3)
+					{
+						$ffilter['UPLOAD_VALUES'][$k3] = $this->GetIblockElementValue($propsDef[$propId], $v3, $ffilter);
+					}
+				}
+				if(is_array($ffilter['NOT_UPLOAD_VALUES']))
+				{
+					foreach($ffilter['NOT_UPLOAD_VALUES'] as $k3=>$v3)
+					{
+						$ffilter['NOT_UPLOAD_VALUES'][$k3] = $this->GetIblockElementValue($propsDef[$propId], $v3, $ffilter);
+					}
+				}
+			}
+		}
+		if(strlen($fieldName) > 0)
+		{
+			if(!empty($ffilter['UPLOAD_VALUES']))
+			{
+				$arSubFilter = array();
+				$keys = (isset($ffilter['UPLOAD_KEYS']) && is_array($ffilter['UPLOAD_KEYS']) ? $ffilter['UPLOAD_KEYS'] : array());
+				foreach($ffilter['UPLOAD_VALUES'] as $ukey=>$uval)
+				{
+					$key = (isset($keys[$ukey]) ? $keys[$ukey] : '');
+					$op = '';
+					$this->GetUVFilterParams($uval, $op, $key);
+					$arSubFilter[] = array($op.$fieldName => $uval);
+				}
+				if(count($arSubFilter) > 1) $arFilter[] = array_merge(array('LOGIC'=>'OR'), $arSubFilter);
+				else $arFilter = array_merge($arFilter, current($arSubFilter));
+			}
+			elseif(!empty($ffilter['NOT_UPLOAD_VALUES']))
+			{
+				$arSubFilter = array();
+				$keys = (isset($ffilter['NOT_UPLOAD_KEYS']) && is_array($ffilter['NOT_UPLOAD_KEYS']) ? $ffilter['NOT_UPLOAD_KEYS'] : array());
+				foreach($ffilter['NOT_UPLOAD_VALUES'] as $ukey=>$uval)
+				{
+					$key = (isset($keys[$ukey]) ? $keys[$ukey] : '');
+					$op = '!';
+					$this->GetUVFilterParams($uval, $op, $key);
+					$arSubFilter[] = array($op.$fieldName => $uval);
+				}
+				if(count($arSubFilter) > 1) $ffilter[] = array_merge(array('LOGIC'=>'AND'), $arSubFilter);
+				else $ffilter = array_merge($ffilter, current($arSubFilter));
+			}
+		}
 	}
 	
 	public function GetMissingFilter($isOffer = false, $IBLOCK_ID = 0, $arUpdatedIds=array())
 	{
 		$arSubFields = array();
 		$prefix = ($isOffer ? 'OFFER' : 'CELEMENT');
-		if($this->params[$prefix.'_MISSING_REMOVE_ELEMENT']=='Y') return $arSubFields;
+		if($this->params[$prefix.'_MISSING_REMOVE_ELEMENT']=='Y') return ($isOffer ? $arSubFields : array('!ID'=>false));
 		if($this->params['ELEMENT_MISSING_DEACTIVATE']=='Y' || $this->params[$prefix.'_MISSING_DEACTIVATE']=='Y') $arSubFields['ACTIVE'] = 'Y';
-		if($this->params['ELEMENT_MISSING_TO_ZERO']=='Y' || $this->params[$prefix.'_MISSING_TO_ZERO']=='Y') $arSubFields['>CATALOG_QUANTITY'] = 0;
+		if($this->params['ELEMENT_MISSING_TO_ZERO']=='Y' || $this->params[$prefix.'_MISSING_TO_ZERO']=='Y') $arSubFields[] = array('LOGIC'=>'OR', array('>CATALOG_QUANTITY'=>'0'), array('>QUANTITY_RESERVED'=>'0'));
 		if($this->params['ELEMENT_MISSING_REMOVE_PRICE']=='Y' || $this->params[$prefix.'_MISSING_REMOVE_PRICE']=='Y') $arSubFields['!CATALOG_PRICE_'.$this->pricer->GetBasePriceId()] = false;
 		
 		$arDefaults = array();
 		if($this->params[$prefix.'_MISSING_DEFAULTS'])
 		{
-			$arDefaults = unserialize(base64_decode($this->params[$prefix.'_MISSING_DEFAULTS']));
-			if(!is_array($arDefaults)) $arDefaults = array();
+			$arDefaults = $this->GetMissingDefaultVals($this->params[$prefix.'_MISSING_DEFAULTS']);
 		}
 		if($IBLOCK_ID > 0 && !empty($arDefaults))
 		{
 			$arProductFields = array();
 			$propsDef = $this->GetIblockProperties($IBLOCK_ID);
-			foreach($arDefaults as $uid=>$valUid)
-			{				
-				if(strpos($uid, 'IE_')===0)
+			foreach($arDefaults as $origUid=>$arValUid)
+			{
+				if(isset($propsDef[$origUid]) && $propsDef[$origUid]['MULTIPLE']=='Y')
 				{
-					$uid = substr($uid, 3);
+					$this->GetMultiplePropertyChange($arValUid);
 				}
-				elseif(preg_match('/ICAT_STORE(\d+)_AMOUNT/', $uid, $m))
+				if(!is_array($arValUid)) $arValUid = array($arValUid);
+				foreach($arValUid as $keyUid=>$valUid)
 				{
-					$uid = 'CATALOG_STORE_AMOUNT_'.$m[1];
-				}
-				elseif(preg_match('/ICAT_PRICE(\d+)_PRICE/', $uid, $m))
-				{
-					$uid = 'CATALOG_PRICE_'.$m[1];
-					if($valUid=='-') $valUid = false;
-				}
-				elseif(strpos($uid, 'ICAT_')===0)
-				{
-					$field = substr($uid, 5);
-					if(in_array($field, array('QUANTITY_TRACE', 'CAN_BUY_ZERO', 'NEGATIVE_AMOUNT_TRACE', 'SUBSCRIBE')) && class_exists('\Bitrix\Catalog\ProductTable'))
+					$uid = $origUid;
+					if(strpos($uid, 'IE_')===0)
 					{
-						if($field=='NEGATIVE_AMOUNT_TRACE') $configName = 'allow_negative_amount';
-						else $configName = 'default_'.ToLower($field);
-						if($field=='SUBSCRIBE') $defaultVal = ((string)\Bitrix\Main\Config\Option::get('catalog', $configName) == 'N' ? 'N' : 'Y');
-						else $defaultVal = ((string)\Bitrix\Main\Config\Option::get('catalog', $configName) == 'Y' ? 'Y' : 'N');
-						$valUid = trim(ToUpper($valUid));
-						if($valUid!='D') $valUid = $this->GetBoolValue($valUid);
-						if($valUid==$defaultVal) $arProductFields['!'.$field] = array($valUid, 'D');
-						else $arProductFields['!'.$field] = $valUid;
+						$uid = substr($uid, 3);
 					}
-					continue;
-				}
-				elseif($propsDef[$uid]['PROPERTY_TYPE']=='L')
-				{
-					if(strlen($valUid)==0) $valUid = false;
-					$uid = 'PROPERTY_'.$uid.'_VALUE';
-				}
-				else
-				{
-					if($propsDef[$uid]['PROPERTY_TYPE']=='S' && $propsDef[$uid]['USER_TYPE']=='directory')
+					elseif(preg_match('/ICAT_STORE(\d+)_AMOUNT/', $uid, $m))
 					{
-						$valUid = $this->GetHighloadBlockValue($propsDef[$uid], $valUid);
+						$uid = 'CATALOG_STORE_AMOUNT_'.$m[1];
+						if(strlen($valUid)==0 || $valUid=='-') $valUid = false;
 					}
-					elseif($propsDef[$uid]['PROPERTY_TYPE']=='E')
+					elseif(preg_match('/ICAT_PRICE(\d+)_PRICE/', $uid, $m))
 					{
-						$valUid = $this->GetIblockElementValue($propsDef[$uid], $valUid, array());
+						$uid = 'CATALOG_PRICE_'.$m[1];
+						if($valUid=='-') $valUid = false;
 					}
-					if(strlen($valUid)==0) $valUid = false;
-					$uid = 'PROPERTY_'.$uid;
+					elseif($uid=='ICAT_QUANTITY')
+					{
+						$uid = 'CATALOG_QUANTITY';
+					}
+					elseif(strpos($uid, 'ICAT_')===0)
+					{
+						$field = substr($uid, 5);
+						if(class_exists('\Bitrix\Catalog\ProductTable'))
+						{
+							if(in_array($field, array('QUANTITY_TRACE', 'CAN_BUY_ZERO', 'NEGATIVE_AMOUNT_TRACE', 'SUBSCRIBE')))
+							{
+								if($field=='NEGATIVE_AMOUNT_TRACE') $configName = 'allow_negative_amount';
+								else $configName = 'default_'.ToLower($field);
+								if($field=='SUBSCRIBE') $defaultVal = ((string)\Bitrix\Main\Config\Option::get('catalog', $configName) == 'N' ? 'N' : 'Y');
+								else $defaultVal = ((string)\Bitrix\Main\Config\Option::get('catalog', $configName) == 'Y' ? 'Y' : 'N');
+								$valUid = trim(ToUpper($valUid));
+								if($valUid!='D') $valUid = $this->GetBoolValue($valUid);
+								if($valUid==$defaultVal) $arProductFields['!'.$field] = array($valUid, 'D');
+								else $arProductFields['!'.$field] = $valUid;
+							}
+							else
+							{
+								if(strlen($valUid)==0 || $valUid=='-') $valUid = false;
+								$arProductFields['!'.$field] = $valUid;
+							}
+						}
+						continue;
+					}
+					elseif($propsDef[$uid]['PROPERTY_TYPE']=='L')
+					{
+						if(strlen($valUid)==0) $valUid = false;
+						$uid = 'PROPERTY_'.$uid.'_VALUE';
+					}
+					else
+					{
+						if($propsDef[$uid]['PROPERTY_TYPE']=='S' && $propsDef[$uid]['USER_TYPE']=='directory')
+						{
+							$valUid = $this->GetHighloadBlockValue($propsDef[$uid], $valUid);
+						}
+						elseif($propsDef[$uid]['PROPERTY_TYPE']=='E')
+						{
+							$valUid = $this->GetIblockElementValue($propsDef[$uid], $valUid, array());
+						}
+						if(strlen($valUid)==0) $valUid = false;
+						$uid = 'PROPERTY_'.$uid;
+					}
+					if(strpos($keyUid, 'REMOVE_')===0) $fkey = '='.$uid;
+					else $fkey = '!'.$uid;
+					if(!isset($arSubFields[$fkey])) $arSubFields[$fkey] = $valUid;
+					else
+					{
+						if(!is_array($arSubFields[$fkey])) $arSubFields[$fkey] = array($arSubFields[$fkey]);
+						$arSubFields[$fkey][] = $valUid;
+					}
 				}
-				$arSubFields['!'.$uid] = $valUid;
 			}
 			
 			if(!empty($arProductFields) && !empty($arUpdatedIds) && $IBLOCK_ID > 0)
 			{
 				if(count($arProductFields) > 1)
 				{
-					$arProductFields = array(array_merge(array('LOGIC'=>'OR'), array_map(create_function('$k,$v', 'return array($k=>$v);'), array_keys($arProductFields), $arProductFields)));
+					$arProductFields = array(array_merge(array('LOGIC'=>'OR'), array_map(array('\Bitrix\KitImportxml\Utils', 'ArrayCombine'), array_keys($arProductFields), $arProductFields)));
 				}
 				$arProductFields['IBLOCK_ELEMENT.IBLOCK_ID'] = $IBLOCK_ID;
 				$arProductFields['!ID'] = $arUpdatedIds;
@@ -1060,9 +1375,30 @@ class Importer {
 		if($type == 'element' && $this->params['GROUPS']['ELEMENT'])
 		{
 			$emptyFields = array();
+			$arLoadFields = array();
+			if(is_array($this->params['FIELDS']))
+			{
+				foreach($this->params['FIELDS'] as $field)
+				{
+					$arLoadFields[] = end(explode(';', $field));
+				}
+			}
+			if(is_array($this->propertyMap['MAP']))
+			{
+				foreach($this->propertyMap['MAP'] as $field)
+				{
+					if(is_array($field))
+					{
+						foreach($field as $subfield)
+						{
+							$arLoadFields[] = $subfield;
+						}
+					}
+				}
+			}
 			foreach($this->params['ELEMENT_UID'] as $uidField)
 			{
-				if(!is_array($this->params['FIELDS']) || count(preg_grep('/;'.$uidField.'$/', $this->params['FIELDS']))==0)
+				if(!in_array($uidField, $arLoadFields))
 				{
 					$emptyFields[] = $uidField;
 				}
@@ -1077,13 +1413,16 @@ class Importer {
 					{
 						$emptyFieldNames[] = $arFieldsDef['element']['items'][$field];
 					}
-					elseif(strpos($field, 'IP_PROP')===0)
+					elseif(strpos($field, 'IP_PROP')===0 && !$this->propertyInElement)
 					{
 						$emptyFieldNames[] = $arFieldsDef['prop']['items'][$field];
 					}
 				}
-				$this->errors[] = sprintf(Loc::getMessage("KIT_IX_NOT_SET_UID"), implode(', ', $emptyFieldNames));
-				return false;
+				if(!empty($emptyFieldNames))
+				{
+					$this->errors[] = sprintf(Loc::getMessage("KIT_IX_NOT_SET_UID"), implode(', ', $emptyFieldNames));
+					return false;
+				}
 			}
 		}
 		
@@ -1138,10 +1477,43 @@ class Importer {
 			}
 		}
 		
+		if($type == 'store' && $this->params['GROUPS']['STORE'])
+		{
+			$emptyFields = array();
+			$propUid = array('STORE_XML_ID', 'STORE_TITLE');
+			foreach($propUid as $uidField)
+			{
+				if(!is_array($this->params['FIELDS']) || count(preg_grep('/;'.$uidField.'$/', $this->params['FIELDS']))==0)
+				{
+					$emptyFields[] = $uidField;
+				}
+			}
+
+			if(count($emptyFields) >= count($propUid))
+			{
+				return false;
+			}
+		}
+		
 		$this->fieldOnlyNew = array();
 		$this->fieldOnlyNewOffer = array();
 		$this->fieldsForSkuGen = array();
-		$this->fieldSettings = array();
+		$this->fieldsBindToGenSku = array();
+		//$this->fieldSettings = array();
+		foreach($this->fieldSettings as $field=>$arFieldParams)
+		{
+			if($arFieldParams['SET_NEW_ONLY']=='Y')
+			{
+				if(strpos($field, 'OFFER_')===0)
+				{
+					$this->fieldOnlyNewOffer[] = substr($field, 6);
+				}
+				else
+				{
+					$this->fieldOnlyNew[] = $field;
+				}
+			}
+		}
 		foreach($this->params['FIELDS'] as $k=>$fieldFull)
 		{
 			list($xpath, $field) = explode(';', $fieldFull, 2);
@@ -1157,7 +1529,13 @@ class Importer {
 				$field2 = substr($fieldName, 0, strpos($fieldName, '_') + 1).$field2;
 			}
 			
+			if(!is_array($this->fparams[$k])) $this->fparams[$k] = array();
 			$this->fieldSettings[$field] = $this->fparams[$k];
+			if(isset($this->fparams[$k]['REL_ELEMENT_FIELD']) && !is_array($this->fparams[$k]['REL_ELEMENT_FIELD']) && strlen($this->fparams[$k]['REL_ELEMENT_FIELD']) > 0)
+			{
+				$this->fieldSettings[$field.'|'.$this->fparams[$k]['REL_ELEMENT_FIELD']] = $this->fparams[$k];
+				if(substr($this->fparams[$k]['REL_ELEMENT_FIELD'], 0, 7)=='IP_PROP' && !isset($this->fieldSettings[$this->fparams[$k]['REL_ELEMENT_FIELD']])) $this->fieldSettings[$this->fparams[$k]['REL_ELEMENT_FIELD']] = $this->fparams[$k];
+			}
 			
 			if($this->fparams[$k]['SET_NEW_ONLY']=='Y')
 			{
@@ -1177,10 +1555,29 @@ class Importer {
 			{
 				$this->fieldsForSkuGen[] = $k;
 			}
+			if(strpos($field, 'OFFER_')===0 && $this->fparams[$k]['BIND_TO_GENERATED_SKU']=='Y')
+			{
+				$this->fieldsBindToGenSku[] = $k;
+			}
+		}
+		foreach($this->propertyMap['MAP'] as $k1=>$itemFields)
+		{
+			if(!is_array($itemFields)) continue;
+			foreach($itemFields as $k2=>$field)
+			{
+				if(strpos($field, 'OFFER_')===0 && $this->fparams[$k1.'_'.$k2]['USE_FOR_SKU_GENERATE']=='Y')
+				{
+					$this->fieldsForSkuGen[] = $k1.'-'.$k2;
+				}
+				if(strpos($field, 'OFFER_')===0 && $this->fparams[$k1.'_'.$k2]['BIND_TO_GENERATED_SKU']=='Y')
+				{
+					$this->fieldsBindToGenSku[] = $k1.'-'.$k2;
+				}
+			}
 		}
 		$this->conv = new \Bitrix\KitImportxml\Conversion($this, $this->params['IBLOCK_ID'], $this->fieldSettings);
-		
-		//$this->xmlObject = simplexml_load_file($this->filename);
+
+		//$this->xmlObject = simplexml_load_file($this->GetFileName());
 		
 		$this->InitXml($type);
 		
@@ -1222,383 +1619,16 @@ class Importer {
 			$this->xmlIbProps = $this->GetXmlObject($count, 0, $this->params['GROUPS']['IBPROPERTY'], true);
 			$this->xmlIbPropsCount = $count;
 		}
+		
+		if($type == 'store')
+		{
+			if(!isset($this->xmlStoreCurrentRow)) $this->xmlStoreCurrentRow = intval($this->stepparams['xmlStoreCurrentRow']);			
+			$count = 0;
+			$this->xmlStores = $this->GetXmlObject($count, 0, $this->params['GROUPS']['STORE'], true);
+			$this->xmlStoresCount = $count;
+		}
+		
 		return true;
-	}
-	
-	public function CheckGroupParams($type, $xpathFrom, $xpathTo)
-	{
-		if(trim($this->params['GROUPS'][$type], '/')==$xpathFrom)
-		{
-			$xmlSectionCurrentRow = $this->xmlSectionCurrentRow;
-			$xmlCurrentRow = $this->xmlCurrentRow;
-			$maxStepRows = $this->maxStepRows;
-			$this->maxStepRows = 2;
-			$xmlElements = $this->GetXmlObject(($count=0), 0, $xpathTo);
-			if(is_array($xmlElements) && count($xmlElements) > 0)
-			{
-				$this->params['GROUPS'][$type] = $xpathTo;
-			}
-			$this->xmlSectionCurrentRow = $xmlSectionCurrentRow;
-			$this->xmlCurrentRow = $xmlCurrentRow;
-			$this->maxStepRows = $maxStepRows;
-		}
-	}
-	
-	public function GetXmlObject(&$countRows, $beginRow, $xpath, $nolimit = false)
-	{
-		$xpath = trim($xpath);
-		if(strlen($xpath) == 0) return;
-		
-		$arXpath = explode('/', trim($xpath, '/'));
-		$this->xpath = '/'.$xpath;
-		$countRows = 0;
-		if($this->params['NOT_USE_XML_READER']=='Y' || !class_exists('\XMLReader'))
-		{
-			$this->xmlRowDiff = 0;
-			$this->xmlObject = simplexml_load_file($this->filename);
-			//$rows = $this->xmlObject->xpath('/'.$xpath);
-			$rows = $this->Xpath($this->xmlObject, '/'.$xpath);
-			$countRows = count($rows); 
-			return $rows;
-		}
-
-		$multiParent = false;
-		for($i=1; $i<count($arXpath); $i++)
-		{
-			if(in_array(implode('/', array_slice($arXpath, 0, $i)), $this->xpathMulti))
-			{
-				$multiParent = true;
-			}
-		}
-		$arXpath = \Bitrix\KitImportxml\Utils::ConvertDataEncoding($arXpath, $this->siteEncoding, $this->fileEncoding);
-		$cachedCountRowsKey = $xpath;
-		$cachedCountRows = 0;
-		if(isset($this->stepparams['count_rows'][$cachedCountRowsKey]))
-		{
-			$cachedCountRows = (int)$this->stepparams['count_rows'][$cachedCountRowsKey];
-		}
-		
-		$xml = new \XMLReader();
-		$res = $xml->open($this->filename);
-		
-		$arObjects = array();
-		$arObjectNames = array();
-		$arXPaths = array();
-		$curDepth = 0;
-		$isRead = false;
-		$countLoadedRows = 0;
-		$break = false;
-		$countRows = -1;
-		$rootNS = '';
-		while(($isRead || $xml->read()) && !$break) 
-		{
-			$isRead = false;
-			if($xml->nodeType == \XMLReader::ELEMENT) 
-			{
-				$curDepth = $xml->depth;
-				$arObjectNames[$curDepth] = $curName = (strlen($rootNS) > 0 && strpos($xml->name, ':')===false ? $rootNS.':' : '').$xml->name;
-				$extraDepth = $curDepth + 1;
-				while(isset($arObjectNames[$extraDepth]))
-				{
-					unset($arObjectNames[$extraDepth]);
-					$extraDepth++;
-				}
-				
-				$curXPath = implode('/', $arObjectNames);
-				$curXPath = \Bitrix\KitImportxml\Utils::ConvertDataEncoding($curXPath, $this->fileEncoding, $this->siteEncoding);
-				if($multiParent)
-				{
-					if(strpos($xpath, $curXPath)!==0 && strpos($curXPath, $xpath)!==0) continue;
-					if($xpath==$curXPath) $countRows++;
-					if($countRows < $beginRow && strlen($curXPath)>=strlen($xpath)) continue;
-					if($xpath==$curXPath)
-					{
-						$countLoadedRows++;
-						if($countLoadedRows > $this->maxStepRows && !$nolimit && $cachedCountRows > 0)
-						{
-							$break = true;
-						}
-					}
-				}
-				else
-				{
-					if(strpos($xpath.'/', $curXPath.'/')!==0 && strpos($curXPath.'/', $xpath.'/')!==0)
-					{
-						$isRead = false;
-						$nextTag = $arXpath[$curDepth];
-						if(($pos = strpos($nextTag, ':'))!==false) $nextTag = substr($nextTag, $pos+1);
-						while(!$isRead && $xml->next($nextTag)) $isRead = true;
-						continue;
-					}
-					if($xpath==$curXPath)
-					{
-						$countRows++;
-						$nextTag = $curName;
-						if(($pos = strpos($nextTag, ':'))!==false) $nextTag = substr($nextTag, $pos+1);
-						while($countRows < $beginRow && $xml->next($nextTag)) $countRows++;
-					}
-					if($countRows < $beginRow && strlen($curXPath)>=strlen($xpath)) continue;
-					if($xpath==$curXPath)
-					{
-						$countLoadedRows++;
-						if($countLoadedRows > $this->maxStepRows && !$nolimit)
-						{
-							if($cachedCountRows > 0)
-							{
-								$break = true;
-							}
-							else
-							{
-								$nextTag = $curName;
-								if(($pos = strpos($nextTag, ':'))!==false) $nextTag = substr($nextTag, $pos+1);
-								while($xml->next($nextTag)) $countRows++;
-							}
-						}
-					}
-				}
-				if($countLoadedRows > $this->maxStepRows && !$nolimit) continue;
-				
-				$arAttributes = array();
-				if($xml->moveToFirstAttribute())
-				{
-					$arAttributes[] = array('name'=>$xml->name, 'value'=>$xml->value, 'namespaceURI'=>$xml->namespaceURI);
-					while($xml->moveToNextAttribute ())
-					{
-						$arAttributes[] = array('name'=>$xml->name, 'value'=>$xml->value, 'namespaceURI'=>$xml->namespaceURI);
-					}
-				}
-				$xml->moveToElement();
-				
-
-				$curName = $xml->name;
-				$curValue = null;
-				//$curNamespace = ($xml->namespaceURI ? $xml->namespaceURI : null);
-				$curNamespace = null;
-				if($xml->namespaceURI && strpos($curName, ':')!==false)
-				{
-					$curNamespace = $xml->namespaceURI;
-				}
-
-				$isSubRead = false;
-				while(($xml->read() && ($isSubRead = true)) && ($xml->nodeType == \XMLReader::SIGNIFICANT_WHITESPACE)){}
-				if($xml->nodeType == \XMLReader::TEXT || $xml->nodeType == \XMLReader::CDATA)
-				{
-					$curValue = $xml->value;
-				}
-				else
-				{
-					$isRead = $isSubRead;
-				}
-
-				if($curDepth == 0)
-				{
-					//$xmlObj = new \SimpleXMLElement('<'.$curName.'></'.$curName.'>');
-					if(($pos = strpos($curName, ':'))!==false)
-					{
-						$rootNS = substr($curName, 0, $pos);
-						$curName = substr($curName, strlen($rootNS) + 1);
-					}
-					$xmlObj = new \SimpleXMLElement('<'.$curName.'></'.$curName.'>', 0, false, $rootNS, true);
-					$arObjects[$curDepth] = &$xmlObj;
-					if(($pos = strpos($curName, ':'))!==false) $rootNS = substr($curName, 0, $pos);
-				}
-				else
-				{
-					$curValue = str_replace('&', '&amp;', $curValue);
-					$arObjects[$curDepth] = $arObjects[$curDepth - 1]->addChild($curName, $curValue, $curNamespace);
-				}			
-
-				foreach($arAttributes as $arAttr)
-				{
-					if(strpos($arAttr['name'], ':')!==false && $arAttr['namespaceURI']) $arObjects[$curDepth]->addAttribute($arAttr['name'], $arAttr['value'], $arAttr['namespaceURI']);
-					else $arObjects[$curDepth]->addAttribute($arAttr['name'], $arAttr['value']);
-				}
-			}
-		}
-		$xml->close();
-		$countRows++;
-		if($cachedCountRows > 0) $countRows = $cachedCountRows;
-		else $this->stepparams['count_rows'][$cachedCountRowsKey] = $countRows;
-			
-		if(is_object($xmlObj))
-		{
-			$this->xmlRowDiff = $beginRow;
-			$this->xmlObject = $xmlObj;
-			//return $this->xmlObject->xpath('/'.$xpath);
-			return $this->Xpath($this->xmlObject, '/'.$xpath);
-		}
-		return false;
-	}
-	
-	public function GetPartXmlObject($xpath, $wChild=true)
-	{
-		$xpath = trim(trim($xpath), '/');
-		if(strlen($xpath) == 0) return;
-
-		if(!class_exists('\XMLReader'))
-		{
-			$xmlObject = simplexml_load_file($this->filename);
-			//$rows = $xmlObject->xpath('/'.$xpath);
-			$rows = $this->Xpath($xmlObject, '/'.$xpath);
-			return $rows;
-		}
-		
-		$xpath = preg_replace('/\[\d+\]/', '', $xpath);
-		$arXpath = $arXpathOrig = explode('/', trim($xpath, '/'));
-		
-		$xml = new \XMLReader();
-		$res = $xml->open($this->filename);
-		
-		$arObjects = array();
-		$arObjectNames = array();
-		$arXPaths = array();
-		$curDepth = 0;
-		$isRead = false;
-		$break = false;
-		while(($isRead || $xml->read()) && !$break) 
-		{
-			$isRead = false;
-			if($xml->nodeType == \XMLReader::ELEMENT) 
-			{
-				$curDepth = $xml->depth;
-				$arObjectNames[$curDepth] = $xml->name;
-				$extraDepth = $curDepth + 1;
-				while(isset($arObjectNames[$extraDepth]))
-				{
-					unset($arObjectNames[$extraDepth]);
-					$extraDepth++;
-				}
-				
-				$curXPath = implode('/', $arObjectNames);
-				$curXPath = \Bitrix\KitImportxml\Utils::ConvertDataEncoding($curXPath, $this->fileEncoding, $this->siteEncoding);
-				if(strpos($xpath.'/', $curXPath.'/')!==0 && strpos($curXPath.'/', $xpath.'/')!==0)
-				{
-					if(isset($arObjects[$curDepth]) && !in_array(implode('/', array_slice($arXpathOrig, 0, $curDepth+1)), $this->xpathMulti))
-					{
-						$break = true;
-					}
-					continue;
-				}
-				if(strlen($xpath) > strlen($curXPath) && !$wChild) continue;
-				
-				$arAttributes = array();
-				if($xml->moveToFirstAttribute())
-				{
-					$arAttributes[] = array('name'=>$xml->name, 'value'=>$xml->value, 'namespaceURI'=>$xml->namespaceURI);
-					while($xml->moveToNextAttribute ())
-					{
-						$arAttributes[] = array('name'=>$xml->name, 'value'=>$xml->value, 'namespaceURI'=>$xml->namespaceURI);
-					}
-				}
-				$xml->moveToElement();
-				
-
-				$curName = $xml->name;
-				$curValue = null;
-				//$curNamespace = ($xml->namespaceURI ? $xml->namespaceURI : null);
-				$curNamespace = null;
-				if($xml->namespaceURI && strpos($curName, ':')!==false)
-				{
-					$curNamespace = $xml->namespaceURI;
-				}
-
-				$isSubRead = false;
-				while(($xml->read() && ($isSubRead = true)) && ($xml->nodeType == \XMLReader::SIGNIFICANT_WHITESPACE)){}
-				if($xml->nodeType == \XMLReader::TEXT || $xml->nodeType == \XMLReader::CDATA)
-				{
-					$curValue = $xml->value;
-				}
-				else
-				{
-					$isRead = $isSubRead;
-				}
-
-				if($curDepth == 0)
-				{
-					//$xmlObj = new \SimpleXMLElement('<'.$curName.'></'.$curName.'>');
-					if(($pos = strpos($curName, ':'))!==false)
-					{
-						$rootNS = substr($curName, 0, $pos);
-						$curName = substr($curName, strlen($rootNS) + 1);
-					}
-					$xmlObj = new \SimpleXMLElement('<'.$curName.'></'.$curName.'>', 0, false, $rootNS, true);
-					$arObjects[$curDepth] = &$xmlObj;
-				}
-				else
-				{
-					$curValue = str_replace('&', '&amp;', $curValue);
-					$arObjects[$curDepth] = $arObjects[$curDepth - 1]->addChild($curName, $curValue, $curNamespace);
-				}			
-
-				foreach($arAttributes as $arAttr)
-				{
-					if(strpos($arAttr['name'], ':')!==false && $arAttr['namespaceURI']) $arObjects[$curDepth]->addAttribute($arAttr['name'], $arAttr['value'], $arAttr['namespaceURI']);
-					else $arObjects[$curDepth]->addAttribute($arAttr['name'], $arAttr['value']);
-				}
-				
-				//if(strlen($xpath)==strlen($curXPath) && !$wChild) $break = true;
-			}
-		}
-		$xml->close();
-
-		if(is_object($xmlObj))
-		{
-			//return $xmlObj->xpath('/'.$xpath);
-			return $this->Xpath($xmlObj, '/'.$xpath);
-		}
-		return false;
-	}
-	
-	public function GetBreakParams($action = 'continue')
-	{
-		$this->ClearIblocksTagCache();
-		$arStepParams = array(
-			'params'=> array_merge($this->stepparams, array(
-				'xmlCurrentRow' => intval($this->xmlCurrentRow),
-				'xmlSectionCurrentRow' => intval($this->xmlSectionCurrentRow),
-				'xmlIbPropCurrentRow' => intval($this->xmlIbPropCurrentRow),
-				'sectionIds' => $this->sectionIds,
-				'propertyIds' => $this->propertyIds,
-				'sectionsTmp' => $this->sectionsTmp,
-			)),
-			'action' => $action,
-			'errors' => $this->errors,
-			'sessid' => bitrix_sessid()
-		);
-		
-		if($action == 'continue')
-		{
-			file_put_contents($this->tmpfile, serialize($arStepParams['params']));
-			unset($arStepParams['params']['sectionIds'], $arStepParams['params']['propertyIds']);
-			if(file_exists($this->imagedir))
-			{
-				DeleteDirFilesEx(substr($this->imagedir, strlen($_SERVER['DOCUMENT_ROOT'])));
-			}
-		}
-		elseif(file_exists($this->tmpdir))
-		{
-			DeleteDirFilesEx(substr($this->tmpdir, strlen($_SERVER['DOCUMENT_ROOT'])));
-			unlink($this->procfile);
-		}
-		
-		unset($arStepParams['params']['currentelement']);
-		unset($arStepParams['params']['currentelementitem']);
-		return $arStepParams;
-	}
-	
-	public function CompareUploadValue($key, $val, $needval)
-	{
-		if((!$key && $needval==$val)
-			|| ($needval=='{empty}' && strlen($val)==0)
-			|| ($needval=='{not_empty}' && strlen($val) > 0)
-			|| ($key=='contain' && strpos($val, $needval)!==false)
-			|| ($key=='begin' && substr($val, 0, strlen($needval))==$needval)
-			|| ($key=='end' && substr($val, -strlen($needval))==$needval)
-			|| ($key=='gt' && $this->GetFloatVal($val) > $this->GetFloatVal($needval))
-			|| ($key=='lt' && $this->GetFloatVal($val) < $this->GetFloatVal($needval)))
-		{
-			return true;
-		}else return false;
 	}
 	
 	public function PreCheckSkipLine($key, $val)
@@ -1610,7 +1640,7 @@ class Importer {
 		if($load && is_array($p['UPLOAD_VALUES']) && !empty($p['UPLOAD_VALUES']))
 		{
 			$subload = false;
-			$val = ToLower(trim($val));
+			$val = ToLower(trim(is_array($val) ? implode($this->params['ELEMENT_MULTIPLE_SEPARATOR'], $val) : $val));
 			$keys = $p['UPLOAD_KEYS'];
 			foreach($p['UPLOAD_VALUES'] as $kv=>$needval)
 			{
@@ -1626,9 +1656,9 @@ class Importer {
 		if($load && is_array($p['NOT_UPLOAD_VALUES']) && !empty($p['NOT_UPLOAD_VALUES']))
 		{
 			$subload = true;
-			$val = ToLower(trim($val));
+			$val = ToLower(trim(is_array($val) ? implode($this->params['ELEMENT_MULTIPLE_SEPARATOR'], $val) : $val));
 			$keys = $p['NOT_UPLOAD_KEYS'];
-			foreach($v['NOT_UPLOAD_VALUES'] as $kv=>$needval)
+			foreach($p['NOT_UPLOAD_VALUES'] as $kv=>$needval)
 			{
 				$key = (isset($keys[$kv]) ? $keys[$kv] : '');
 				$needval = ToLower(trim($needval));
@@ -1654,13 +1684,16 @@ class Importer {
 				if(!is_array($v)) continue;
 				
 				list($xpath, $field) = explode(';', $this->params['FIELDS'][$k], 2);
-				if($type=='element' && (strpos($field, 'ISECT_')===0 || strpos($field, 'ISUBSECT_')===0)) continue;
+				if($type=='element' && (strpos($field, 'ISECT_')===0 || strpos($field, 'OFFER_')===0 || strpos($field, 'SUBSECT_')!==false)) continue;
 				if($type=='section' && strpos($field, 'ISECT_')!==0) continue;
 				if($type=='offer' && strpos($field, 'OFFER_')!==0) continue;
-				if($type=='subsection' && strpos($field, 'ISUBSECT_')!==0) continue;
+				if(strpos($type, 'subsection')!==false && strpos($field, 'SUBSECT_')===false) continue;
 				if($type=='ibproperty' && strpos($field, 'IBPROP_')!==0) continue;
+				if($type=='ibpropval' && strpos($field, 'IBPVAL_')!==0) continue;
+				if($type=='reststore' && strpos($field, 'RESTSTORE_')!==0) continue;
+				if($type=='store' && strpos($field, 'STORE_')!==0) continue;
 				if(strpos($xpath, $this->params['GROUPS'][ToUpper($type)])!==0) continue;
-				
+
 				if(is_array($v['UPLOAD_VALUES']) || is_array($v['NOT_UPLOAD_VALUES']) || $v['FILTER_EXPRESSION'])
 				{
 					$val = $arItem[$k];
@@ -1670,15 +1703,18 @@ class Importer {
 					{
 						foreach($val as $k2=>$v2)
 						{
-							$val[$k2] = $this->ApplyConversions($valOrig[$k2], $v['CONVERSION'], array());
+							$val[$k2] = $this->ApplyConversions($valOrig[$k2], $v['CONVERSION'], array(), array('KEY'=>$k, 'NAME'=>$field, 'INDEX'=>$k2));
 						}
-						$val = implode($this->params['ELEMENT_MULTIPLE_SEPARATOR'], $val);
 					}
 					else
 					{
-						$val = $this->ApplyConversions($valOrig, $v['CONVERSION'], array());
+						$val = $this->ApplyConversions($valOrig, $v['CONVERSION'], array(), array('KEY'=>$k, 'NAME'=>$field));
 					}
-					$val = ToLower(trim($val));
+					if(is_array($val))
+					{
+						$val = implode($this->params['ELEMENT_MULTIPLE_SEPARATOR'], array_diff($val, array('')));
+					}
+					else $val = ToLower(trim($val));
 				}
 				else
 				{
@@ -1727,50 +1763,6 @@ class Importer {
 		return !$load;
 	}
 	
-	public function ExecuteFilterExpression($val, $expression, $altReturn = true, $arParams = array())
-	{
-		foreach($arParams as $k=>$v)
-		{
-			${$k} = $v;
-		}
-		$expression = trim($expression);
-		try{				
-			if(stripos($expression, 'return')===0)
-			{
-				return eval($expression.';');
-			}
-			elseif(preg_match('/\$val\s*=/', $expression))
-			{
-				eval($expression.';');
-				return $val;
-			}
-			else
-			{
-				return eval('return '.$expression.';');
-			}
-		}catch(Exception $ex){
-			return $altReturn;
-		}
-	}
-	
-	public function ExecuteOnAfterSaveHandler($handler, $ID)
-	{
-		try{				
-			eval($handler.';');
-		}catch(Exception $ex){}
-	}
-	
-	public function GetPathAttr(&$arPath)
-	{
-		$attr = false;
-		if(strpos($arPath[count($arPath)-1], '@')===0)
-		{
-			$attr = substr(array_pop($arPath), 1);
-			$attr = \Bitrix\KitImportxml\Utils::ConvertDataEncoding($attr, $this->siteEncoding, $this->fileEncoding);
-		}
-		return $attr;
-	}
-	
 	public function GetNextIbPropRecord($time)
 	{
 		if(!isset($this->xmlIbPropCurrentRow) || !is_numeric($this->xmlIbPropCurrentRow))
@@ -1786,7 +1778,7 @@ class Importer {
 				list($xpath, $fieldName) = explode(';', $field, 2);
 				if(strpos($fieldName, 'IBPROP_')!==0) continue;
 				
-				$xpath = substr($xpath, strlen($this->params['GROUPS']['IBPROPERTY']) + 1);
+				$xpath = mb_substr($xpath, mb_strlen($this->params['GROUPS']['IBPROPERTY']) + 1);
 				if(strlen($xpath) > 0) $arPath = explode('/', $xpath);
 				else $arPath = array();
 				$attr = $this->GetPathAttr($arPath);
@@ -1834,9 +1826,83 @@ class Importer {
 				$arItem['~'.$key] = $val;
 			}
 
-			$this->xmlIbPropCurrentRow++;
+			$this->stepparams['xmlIbPropCurrentRow'] = ++$this->xmlIbPropCurrentRow;
 			
 			if(!$this->CheckSkipLine($arItem, 'ibproperty'))
+			{
+				return $arItem;
+			}
+		}
+		
+		return false;
+	}
+	
+	public function GetNextStoreRecord($time)
+	{
+		if(!isset($this->xmlStoreCurrentRow) || !is_numeric($this->xmlStoreCurrentRow))
+		{
+			$this->xmlStoreCurrentRow = 0;
+		}
+		while(isset($this->xmlStores[$this->xmlStoreCurrentRow]))
+		{
+			$this->currentXmlObj = $simpleXmlObj = $this->xmlStores[$this->xmlStoreCurrentRow];
+			$arItem = array();
+			foreach($this->params['FIELDS'] as $key=>$field)
+			{
+				list($xpath, $fieldName) = explode(';', $field, 2);
+				if(strpos($fieldName, 'STORE_')!==0) continue;
+				
+				$xpath = mb_substr($xpath, mb_strlen($this->params['GROUPS']['STORE']) + 1);
+				if(strlen($xpath) > 0) $arPath = explode('/', $xpath);
+				else $arPath = array();
+				$attr = $this->GetPathAttr($arPath);
+				if(count($arPath) > 0)
+				{
+					$simpleXmlObj2 = $this->Xpath($simpleXmlObj, implode('/', $arPath));
+					if(count($simpleXmlObj2)==1) $simpleXmlObj2 = current($simpleXmlObj2);
+				}
+				else $simpleXmlObj2 = $simpleXmlObj;
+				
+				if($attr!==false)
+				{
+					if(is_array($simpleXmlObj2))
+					{
+						$val = array();
+						foreach($simpleXmlObj2 as $k=>$v)
+						{
+							$val[] = (string)$v->attributes()->{$attr};
+						}
+					}
+					else
+					{
+						$val = (string)$simpleXmlObj2->attributes()->{$attr};
+					}
+				}
+				else
+				{
+					if(is_array($simpleXmlObj2))
+					{
+						$val = array();
+						foreach($simpleXmlObj2 as $k=>$v)
+						{
+							$val[] = (string)$v;
+						}
+					}
+					else
+					{
+						$val = (string)$simpleXmlObj2;
+					}					
+				}
+				
+				$val = $this->GetRealXmlValue($val);
+		
+				$arItem[$key] = (is_array($val) ? array_map(array($this, 'Trim'), $val) : $this->Trim($val));
+				$arItem['~'.$key] = $val;
+			}
+
+			$this->xmlStoreCurrentRow++;
+			
+			if(!$this->CheckSkipLine($arItem, 'store'))
 			{
 				return $arItem;
 			}
@@ -1861,25 +1927,27 @@ class Importer {
 		{
 			$this->currentXmlObj = $simpleXmlObj = $this->xmlSections[$this->xmlSectionCurrentRow];
 			$arItem = array();
+			$arItemFields = array();
+			$arItemFieldsOrig = array();
 			$break = $unset = false;
 			foreach($this->params['FIELDS'] as $key=>$field)
 			{
 				list($xpath, $fieldName) = explode(';', $field, 2);
 				if(strpos($fieldName, 'ISECT_')!==0) continue;
-				if(strlen($this->params['GROUPS']['SUBSECTION']) > 0 && strpos($xpath, $this->params['GROUPS']['SUBSECTION'])===0) continue;
+				if(strlen($this->params['GROUPS']['SUBSECTION']) > 0 && strpos(rtrim($xpath, '/').'/', rtrim($this->params['GROUPS']['SUBSECTION'], '/').'/')===0) continue;
 
-				$conditionIndex = trim($this->fparams[$key]['INDEX_LOAD_VALUE']);
+				$cIndex = trim($this->fparams[$key]['INDEX_LOAD_VALUE']);
 				$conditions = $this->fparams[$key]['CONDITIONS'];
 				if(!is_array($conditions)) $conditions = array();
 				foreach($conditions as $k2=>$v2)
 				{
 					if(preg_match('/^\{(\S*)\}$/', $v2['CELL'], $m))
 					{
-						$conditions[$k2]['XPATH'] = substr($m[1], strlen($this->params['GROUPS']['SECTION']) + 1);
+						$conditions[$k2]['XPATH'] = mb_substr($m[1], mb_strlen($this->params['GROUPS']['SECTION']) + 1);
 					}
 				}
 
-				$xpath = substr($xpath, strlen($this->params['GROUPS']['SECTION']) + 1);
+				$xpath = mb_substr($xpath, mb_strlen($this->params['GROUPS']['SECTION']) + 1);
 				if(strlen($xpath) > 0) $arPath = explode('/', $xpath);
 				else $arPath = array();
 				$attr = $this->GetPathAttr($arPath);
@@ -1904,7 +1972,7 @@ class Importer {
 							}
 						}
 						if(count($val)==0) $val = '';
-						elseif(is_numeric($conditionIndex)) $val = $val[$conditionIndex - 1];
+						elseif(is_numeric($cIndex)) $val = $val[($cIndex >=0 ? $cIndex - 1 : count($val) + $cIndex)];
 						elseif(count($val)==1) $val = current($val);
 					}
 					else
@@ -1928,7 +1996,7 @@ class Importer {
 							}
 						}
 						if(count($val)==0) $val = '';
-						elseif(is_numeric($conditionIndex)) $val = $val[$conditionIndex - 1];
+						elseif(is_numeric($cIndex)) $val = $val[($cIndex >=0 ? $cIndex - 1 : count($val) + $cIndex)];
 						elseif(count($val)==1) $val = current($val);
 					}
 					else
@@ -1940,7 +2008,7 @@ class Importer {
 					}					
 				}
 				
-				$val = $this->GetRealXmlValue($val);
+				$val = $origVal = $this->GetRealXmlValue($val);
 				
 				if(in_array($fieldName, array('ISECT_PARENT_TMP_ID', 'ISECT_TMP_ID')))
 				{
@@ -1950,24 +2018,29 @@ class Importer {
 						$val = $this->ApplyConversions($val, $conversions, $arItem, array('KEY'=>$fieldName, 'NAME'=>$fieldName), array());
 					}
 				}
-				
-				if(!$this->useSectionPathByLink)
-				{
-					if($fieldName=='ISECT_PARENT_TMP_ID' && trim($val) && !isset($this->sectionIds[trim($val)]))
-					{
-						$break = true;
-						break;
-					}
-					if($fieldName=='ISECT_TMP_ID' && trim($val) && isset($this->sectionIds[trim($val)]) && !$this->subSectionInSection)
-					{
-						$unset = true;
-						$break = true;
-						break;
-					}
-				}
 		
-				$arItem[$key] = (is_array($val) ? array_map(array($this, 'Trim'), $val) : $this->Trim($val));
+				if(in_array($fieldName, array('ISECT_TMP_ID', 'ISECT_PARENT_TMP_ID')) && is_array($val)) $val = current($val);
+				$arItemFields[$fieldName] = $this->Trim($val);
+				$arItemFieldsOrig[$fieldName] = $this->Trim($origVal);
+				$arItem[$key] = $this->Trim($val);
 				$arItem['~'.$key] = $val;
+			}
+			if(!$this->useSectionPathByLink)
+			{
+				if($arItemFields['ISECT_PARENT_TMP_ID']==$this->stepparams['section_struct_root_id']) $arItemFields['ISECT_PARENT_TMP_ID'] = '';
+				if(array_key_exists('ISECT_PARENT_TMP_ID', $arItemFields) && $arItemFields['ISECT_PARENT_TMP_ID'] && !isset($this->sectionIds[$arItemFields['ISECT_PARENT_TMP_ID']]) && !isset($this->sectionMap['MAP'][$arItemFieldsOrig['ISECT_TMP_ID']]) && !$this->elementInSection)
+				{
+					$break = true;
+				}
+				if(array_key_exists('ISECT_TMP_ID', $arItemFields) && $arItemFields['ISECT_TMP_ID'] && isset($this->sectionIds[$arItemFields['ISECT_TMP_ID']]) && !$this->subSectionInSection && !$this->sectionInElement && !$this->elementInSection && !isset($this->stepparams['xmlCurrentRowInSection']))
+				{
+					$unset = true;
+					$break = true;
+				}
+				if(array_key_exists('ISECT_TMP_ID', $arItemFields) && array_key_exists('ISECT_PARENT_TMP_ID', $arItemFields))
+				{
+					$this->sectionStruct[$arItemFields['ISECT_TMP_ID']] = $arItemFields['ISECT_PARENT_TMP_ID'];
+				}
 			}
 			if($break)
 			{
@@ -1986,10 +2059,33 @@ class Importer {
 					$this->xmlSections[] = $tmpSection;
 					$this->xmlSectionCurrentRow = 0;
 					$moveCnt++;
+					if($moveCnt >= count($this->xmlSections) && (empty($this->sectionIds) || count(array_diff($this->sectionIds, array('0')))==0) && !$this->sectionLoadMode && count($this->sectionStruct) > 0)
+					{
+						$length = 0;
+						$parent = '';
+						foreach($this->sectionStruct as $c=>$p)
+						{
+							$loop = 0;
+							while(30 > $loop++ && isset($this->sectionStruct[$p]))
+							{
+								$p = $this->sectionStruct[$p];
+							}
+							if($loop < 30 && $loop > $length)
+							{
+								$length = $loop;
+								$parent = $p;
+							}
+						}
+						if(strlen($parent) > 0 && $parent!=$this->stepparams['section_struct_root_id'])
+						{
+							$this->stepparams['section_struct_root_id'] = $parent;
+							$moveCnt = 0;
+						}
+					}
 				}
 				continue;
 			}
-			if($this->elementInSection)
+			if($this->elementInSection || !$this->useSectionTmpId)
 			{
 				$this->xmlSectionCurrentRow++;
 			}
@@ -2009,7 +2105,7 @@ class Importer {
 		return false;
 	}
 	
-	public function GetNextSubsection($ID, $arItem, $xmlSubsectionCurrentRow)
+	public function GetNextSubsection(&$xmlSubsectionCurrentRow, $ID, $arItem)
 	{
 		$currentSectionXpath = $this->currentSectionXpath;
 		if(!is_object($this->currentXmlObj)) return false;
@@ -2017,8 +2113,8 @@ class Importer {
 		while(($simpleXmlObj = $this->currentXmlObj)
 			&& ($this->currentSectionXpath = $currentSectionXpath.'['.($xmlSubsectionCurrentRow + 1).']')
 			&& ($this->xpathReplace = array('FROM' => $this->params['GROUPS']['SUBSECTION'], 'TO' => $this->currentSectionXpath))
-			&& ($subsectionXpath = substr($this->xpath, 1))
-			&& ($objXpath = substr($this->ReplaceXpath($this->params['GROUPS']['SUBSECTION']), strlen($subsectionXpath) + 1))
+			&& ($subsectionXpath = mb_substr($this->xpath, 1))
+			&& ($objXpath = mb_substr($this->ReplaceXpath($this->params['GROUPS']['SUBSECTION']), mb_strlen($subsectionXpath) + 1))
 			//&& ($simpleXmlObj->xpath($objXpath))
 			&& ($this->Xpath($simpleXmlObj, $objXpath))
 			)
@@ -2030,7 +2126,7 @@ class Importer {
 				'FROM' => $this->params['GROUPS']['SUBSECTION'],
 				'TO' => $this->currentSectionXpath
 			);
-			$subsectionXpath = substr($this->xpath, 1);*/
+			$subsectionXpath = mb_substr($this->xpath, 1);*/
 			$this->xmlPartObjects = array();
 
 			$arItem = array();
@@ -2040,26 +2136,26 @@ class Importer {
 				list($xpath, $fieldName) = explode(';', $field, 2);
 				if(strpos($xpath, $this->params['GROUPS']['SUBSECTION'])!==0) continue;
 				
-				$conditionIndex = trim($this->fparams[$key]['INDEX_LOAD_VALUE']);
+				$cIndex = trim($this->fparams[$key]['INDEX_LOAD_VALUE']);
 				$conditions = $this->fparams[$key]['CONDITIONS'];
 				if(!is_array($conditions)) $conditions = array();
 				foreach($conditions as $k2=>$v2)
 				{
 					if(preg_match('/^\{(\S*)\}$/', $v2['CELL'], $m))
 					{
-						$conditions[$k2]['XPATH'] = substr($this->ReplaceXpath($m[1]), strlen($subsectionXpath) + 1);
+						$conditions[$k2]['XPATH'] = mb_substr($this->ReplaceXpath($m[1]), mb_strlen($subsectionXpath) + 1);
 					}
 					$conditions[$k2]['FROM'] = preg_replace_callback('/^\{(\S*)\}$/', array($this, 'ReplaceConditionXpath'), $conditions[$k2]['FROM']);
 				}
 				
-				$xpath = substr($this->ReplaceXpath($xpath), strlen($subsectionXpath) + 1);
+				$xpath = mb_substr($this->ReplaceXpath($xpath), mb_strlen($subsectionXpath) + 1);
 				$arPath = explode('/', $xpath);
 				$attr = $this->GetPathAttr($arPath);
 				if(count($arPath) > 0)
 				{
 					//$simpleXmlObj2 = $simpleXmlObj->xpath(implode('/', $arPath));
 					$simpleXmlObj2 = $this->Xpath($simpleXmlObj, implode('/', $arPath));
-					if(count($simpleXmlObj2)==1) $simpleXmlObj2 = current($simpleXmlObj2);
+					if(is_array($simpleXmlObj2) && count($simpleXmlObj2)==1) $simpleXmlObj2 = current($simpleXmlObj2);
 				}
 				else $simpleXmlObj2 = $simpleXmlObj;
 				$xpath2 = implode('/', $arPath);
@@ -2077,7 +2173,7 @@ class Importer {
 							}
 						}
 						if(count($val)==0) $val = '';
-						elseif(is_numeric($conditionIndex)) $val = $val[$conditionIndex - 1];
+						elseif(is_numeric($cIndex)) $val = $val[($cIndex >=0 ? $cIndex - 1 : count($val) + $cIndex)];
 						elseif(count($val)==1) $val = current($val);
 					}
 					else
@@ -2101,7 +2197,7 @@ class Importer {
 							}
 						}
 						if(count($val)==0) $val = '';
-						elseif(is_numeric($conditionIndex)) $val = $val[$conditionIndex - 1];
+						elseif(is_numeric($cIndex)) $val = $val[($cIndex >=0 ? $cIndex - 1 : count($val) + $cIndex)];
 						elseif(count($val)==1) $val = current($val);
 					}
 					else
@@ -2123,6 +2219,7 @@ class Importer {
 			{
 				return $arItem;
 			}
+			else $xmlSubsectionCurrentRow++;
 		}
 		
 		return false;
@@ -2149,18 +2246,18 @@ class Importer {
 				if(strlen($this->params['GROUPS']['OFFER']) > 0 && strpos($xpath, rtrim($this->params['GROUPS']['OFFER'], '/').'/')===0) continue;
 				if($this->propertyInElement && strpos($xpath, $this->params['GROUPS']['PROPERTY'])===0) continue;
 				
-				$conditionIndex = trim($this->fparams[$key]['INDEX_LOAD_VALUE']);
+				$cIndex = trim($this->fparams[$key]['INDEX_LOAD_VALUE']);
 				$conditions = $this->fparams[$key]['CONDITIONS'];
 				if(!is_array($conditions)) $conditions = array();
 				foreach($conditions as $k2=>$v2)
 				{
 					if(preg_match('/^\{(\S*)\}$/', $v2['CELL'], $m))
 					{
-						$conditions[$k2]['XPATH'] = substr($m[1], strlen($this->params['GROUPS']['ELEMENT']) + 1);
+						$conditions[$k2]['XPATH'] = mb_substr($m[1], mb_strlen($this->params['GROUPS']['ELEMENT']) + 1);
 					}
 				}
 				
-				$xpath = substr($xpath, strlen($this->params['GROUPS']['ELEMENT']) + 1);
+				$xpath = mb_substr($xpath, mb_strlen($this->params['GROUPS']['ELEMENT']) + 1);
 				$arPath = array_diff(explode('/', $xpath), array(''));
 				$attr = $this->GetPathAttr($arPath);
 				if(count($arPath) > 0)
@@ -2184,7 +2281,7 @@ class Importer {
 							}
 						}
 						if(count($val)==0) $val = '';
-						elseif(is_numeric($conditionIndex)) $val = $val[$conditionIndex - 1];
+						elseif(is_numeric($cIndex)) $val = $val[($cIndex >=0 ? $cIndex - 1 : count($val) + $cIndex)];
 						elseif(count($val)==1) $val = current($val);
 					}
 					else
@@ -2208,7 +2305,7 @@ class Importer {
 							}
 						}
 						if(count($val)==0) $val = '';
-						elseif(is_numeric($conditionIndex)) $val = $val[$conditionIndex - 1];
+						elseif(is_numeric($cIndex)) $val = $val[($cIndex >=0 ? $cIndex - 1 : count($val) + $cIndex)];
 						elseif(count($val)==1) $val = current($val);
 					}
 					else
@@ -2236,6 +2333,7 @@ class Importer {
 			
 			if(!$skipLine && !$this->CheckSkipLine($arItem, 'element'))
 			{
+				//$arItem['xmlCurrentRow'] = $this->xmlCurrentRow;
 				return $arItem;
 			}
 			if($this->CheckTimeEnding($time)) return false;
@@ -2251,12 +2349,17 @@ class Importer {
 			$simpleXmlObj = $this->currentXmlObj;
 			//$this->currentXmlObj = $simpleXmlObj = $this->xmlOffers[$this->xmlOfferCurrentRow];
 			$this->xmlPartObjects = array();
+			$offerXpath = mb_substr($this->xpath, 1);
 		
+			$offerGroup = $this->params['GROUPS']['OFFER'];
+			if(mb_strpos($offerGroup, $offerXpath)!==0)
+			{
+				$offerGroup = $offerXpath.mb_substr($offerGroup, mb_strlen($this->params['GROUPS']['ELEMENT']));
+			}
 			$this->xpathReplace = array(
-				'FROM' => $this->params['GROUPS']['OFFER'],
-				'TO' => $this->params['GROUPS']['OFFER'].'['.($this->xmlOfferCurrentRow + 1).']'
+				'FROM' => $offerGroup,
+				'TO' => $offerGroup.'['.($this->xmlOfferCurrentRow + 1).']'
 			);
-			$offerXpath = substr($this->xpath, 1);
 
 			$arItem = array();
 			foreach($this->params['FIELDS'] as $key=>$field)
@@ -2272,20 +2375,23 @@ class Importer {
 					}
 					continue;
 				}
+				elseif($this->params['GROUPS']['OFFER']!=$offerGroup)
+				{
+					$xpath = $offerGroup.mb_substr($xpath, mb_strlen($this->params['GROUPS']['OFFER']));
+				}
 				
-				$conditionIndex = trim($this->fparams[$key]['INDEX_LOAD_VALUE']);
+				$cIndex = trim($this->fparams[$key]['INDEX_LOAD_VALUE']);
 				$conditions = $this->fparams[$key]['CONDITIONS'];
 				if(!is_array($conditions)) $conditions = array();
 				foreach($conditions as $k2=>$v2)
 				{
 					if(preg_match('/^\{(\S*)\}$/', $v2['CELL'], $m))
 					{
-						$conditions[$k2]['XPATH'] = substr($this->ReplaceXpath($m[1]), strlen($offerXpath) + 1);
+						$conditions[$k2]['XPATH'] = mb_substr($this->ReplaceXpath($m[1]), mb_strlen($offerXpath) + 1);
 					}
 					$conditions[$k2]['FROM'] = preg_replace_callback('/^\{(\S*)\}$/', array($this, 'ReplaceConditionXpath'), $conditions[$k2]['FROM']);
 				}
-					
-				$xpath = substr($this->ReplaceXpath($xpath), strlen($offerXpath) + 1);
+				$xpath = mb_substr($this->ReplaceXpath($xpath), mb_strlen($offerXpath) + 1);
 				$arPath = explode('/', $xpath);
 				$attr = $this->GetPathAttr($arPath);
 				if(count($arPath) > 0)
@@ -2310,7 +2416,7 @@ class Importer {
 							}
 						}
 						if(count($val)==0) $val = '';
-						elseif(is_numeric($conditionIndex)) $val = $val[$conditionIndex - 1];
+						elseif(is_numeric($cIndex)) $val = $val[($cIndex >=0 ? $cIndex - 1 : count($val) + $cIndex)];
 						elseif(count($val)==1) $val = current($val);
 					}
 					else
@@ -2334,7 +2440,7 @@ class Importer {
 							}
 						}
 						if(count($val)==0) $val = '';
-						elseif(is_numeric($conditionIndex)) $val = $val[$conditionIndex - 1];
+						elseif(is_numeric($cIndex)) $val = $val[($cIndex >=0 ? $cIndex - 1 : count($val) + $cIndex)];
 						elseif(count($val)==1) $val = current($val);
 					}
 					else
@@ -2355,6 +2461,7 @@ class Importer {
 
 			if(!$this->CheckSkipLine($arItem, 'offer'))
 			{
+				//if(array_key_exists('xmlCurrentRow', $arParentItem)) $arItem['xmlCurrentRow'] = $arParentItem['xmlCurrentRow'];
 				return $arItem;
 			}
 		}
@@ -2362,41 +2469,43 @@ class Importer {
 		return false;
 	}
 	
-	public function GetNextProperty($groupXpath = '')
+	public function GetNextProperty($groupXpath, $groupName = '')
 	{
-		if(strlen($groupXpath)==0) $groupXpath = $this->params['GROUPS']['PROPERTY'];
+		$origGroupXpath = $this->params['GROUPS'][strlen($groupName)==0 ? 'PROPERTY' : $groupName];
+		if(strlen($groupXpath)==0) $groupXpath = $origGroupXpath;
 		while(isset($this->xmlProperties[$this->xmlPropertiesCurrentRow]))
 		{
 			$simpleXmlObj = $this->currentParentXmlObj;
 			$this->currentXmlObj = $this->xmlProperties[$this->xmlPropertiesCurrentRow];
 			$this->xmlPartObjects = array();
 		
+			$xpathReplace = $this->xpathReplace;
 			$this->xpathReplace = array(
-				'FROM' => $this->params['GROUPS']['PROPERTY'],
-				'TO' => $groupXpath.'['.($this->xmlPropertiesCurrentRow + 1).']'
+				'FROM' => $origGroupXpath,
+				'TO' => (isset($this->xmlPropertiesMap[$this->xmlPropertiesCurrentRow]) ? $this->xmlPropertiesMap[$this->xmlPropertiesCurrentRow] : $groupXpath.'['.($this->xmlPropertiesCurrentRow + 1).']')
 			);
-			$propertyXpath = substr($this->parentXpath, 1);
+			$propertyXpath = mb_substr($this->parentXpath, 1);
 			
 			$arItem = array();
 			foreach($this->params['FIELDS'] as $key=>$field)
 			{
 				$val = '';
 				list($xpath, $fieldName) = explode(';', $field, 2);
-				if(strpos($xpath, $this->params['GROUPS']['PROPERTY'])!==0) continue;
+				if(strpos($xpath, $origGroupXpath)!==0) continue;
 				
-				$conditionIndex = trim($this->fparams[$key]['INDEX_LOAD_VALUE']);
+				$cIndex = trim($this->fparams[$key]['INDEX_LOAD_VALUE']);
 				$conditions = $this->fparams[$key]['CONDITIONS'];
 				if(!is_array($conditions)) $conditions = array();
 				foreach($conditions as $k2=>$v2)
 				{
 					if(preg_match('/^\{(\S*)\}$/', $v2['CELL'], $m))
 					{
-						$conditions[$k2]['XPATH'] = substr($this->ReplaceXpath($m[1]), strlen($propertyXpath) + 1);
+						$conditions[$k2]['XPATH'] = mb_substr($this->ReplaceXpath($m[1]), mb_strlen($propertyXpath) + 1);
 					}
 					$conditions[$k2]['FROM'] = preg_replace_callback('/^\{(\S*)\}$/', array($this, 'ReplaceConditionXpath'), $conditions[$k2]['FROM']);
 				}
 			
-				$xpath = substr($this->ReplaceXpath($xpath), strlen($propertyXpath) + 1);
+				$xpath = mb_substr($this->ReplaceXpath($xpath), mb_strlen($propertyXpath) + 1);
 				$arPath = explode('/', $xpath);
 				$attr = $this->GetPathAttr($arPath);
 				if(count($arPath) > 0)
@@ -2421,7 +2530,528 @@ class Importer {
 							}
 						}
 						if(count($val)==0) $val = '';
-						elseif(is_numeric($conditionIndex)) $val = $val[$conditionIndex - 1];
+						elseif(is_numeric($cIndex)) $val = $val[($cIndex >=0 ? $cIndex - 1 : count($val) + $cIndex)];
+						elseif(count($val)==1) $val = current($val);
+					}
+					else
+					{
+						if($this->CheckConditions($conditions, $xpath, $simpleXmlObj, $simpleXmlObj2))
+						{
+							//$val = (string)$simpleXmlObj2->attributes()->{$attr};
+							$val = (is_callable(array($simpleXmlObj2, 'attributes')) ? (string)$simpleXmlObj2->attributes()->{$attr} : '');
+						}
+					}
+				}
+				else
+				{
+					if(is_array($simpleXmlObj2))
+					{
+						$val = array();
+						foreach($simpleXmlObj2 as $k=>$v)
+						{
+							if($this->CheckConditions($conditions, $xpath, $simpleXmlObj, $v, $k))
+							{
+								$val[] = (string)$v;
+							}
+						}
+						if(count($val)==0) $val = '';
+						elseif(is_numeric($cIndex)) $val = $val[($cIndex >=0 ? $cIndex - 1 : count($val) + $cIndex)];
+						elseif(count($val)==1) $val = current($val);
+					}
+					else
+					{
+						if($this->CheckConditions($conditions, $xpath, $simpleXmlObj, $simpleXmlObj2))
+						{
+							$val = (string)$simpleXmlObj2;
+						}
+					}					
+				}
+				
+				$val = $this->GetRealXmlValue($val);
+		
+				$arItem[$key] = (is_array($val) ? array_map(array($this, 'Trim'), $val) : $this->Trim($val));
+				$arItem['~'.$key] = $val;
+			}
+			$this->xpathReplace = $xpathReplace;
+			$this->xmlPropertiesCurrentRow++;
+			
+			if(!$this->CheckSkipLine($arItem, (strlen($groupName) > 0 ? ToLower($groupName) : 'property')))
+			{
+				return $arItem;
+			}
+		}
+		
+		return false;
+	}
+	
+	public function GetNextRestStore($groupName)
+	{
+		$groupXpath = $this->params['GROUPS'][$groupName];
+		while(isset($this->xmlRestStores[$this->xmlRestStoresCurrentRow]))
+		{
+			$simpleXmlObj = $this->currentXmlObj = $this->xmlRestStores[$this->xmlRestStoresCurrentRow];
+			$arItem = array();
+			foreach($this->params['FIELDS'] as $key=>$field)
+			{
+				$val = '';
+				list($xpath, $fieldName) = explode(';', $field, 2);
+				if(strpos($xpath, $groupXpath)!==0) continue;
+				
+				$xpath = mb_substr($xpath, mb_strlen($groupXpath) + 1);
+				if(strlen($xpath) > 0) $arPath = explode('/', $xpath);
+				else $arPath = array();
+				$attr = $this->GetPathAttr($arPath);
+				if(count($arPath) > 0)
+				{
+					$simpleXmlObj2 = $this->Xpath($simpleXmlObj, implode('/', $arPath));
+					if(count($simpleXmlObj2)==1) $simpleXmlObj2 = current($simpleXmlObj2);	
+				}
+				else $simpleXmlObj2 = $simpleXmlObj;
+				
+				if($attr!==false)
+				{
+					if(is_array($simpleXmlObj2))
+					{
+						$val = array();
+						foreach($simpleXmlObj2 as $k=>$v)
+						{
+							$val[] = (string)$v->attributes()->{$attr};
+						}
+					}
+					else
+					{
+						$val = (string)$simpleXmlObj2->attributes()->{$attr};
+					}
+				}
+				else
+				{
+					if(is_array($simpleXmlObj2))
+					{
+						$val = array();
+						foreach($simpleXmlObj2 as $k=>$v)
+						{
+							$val[] = (string)$v;
+						}
+					}
+					else
+					{
+						$val = (string)$simpleXmlObj2;
+					}					
+				}
+				
+				$val = $this->GetRealXmlValue($val);
+		
+				$arItem[$key] = (is_array($val) ? array_map(array($this, 'Trim'), $val) : $this->Trim($val));
+				$arItem['~'.$key] = $val;
+			}			
+			$this->xmlRestStoresCurrentRow++;
+
+			if(!$this->CheckSkipLine($arItem, 'reststore'))
+			{
+				return $arItem;
+			}
+		}
+		
+		return false;
+	}
+	
+	public function SaveIbPropRecord($arItem)
+	{
+		/*if(count(array_diff(array_map('trim', $arItem), array('')))==0) return false;*/  //maybe array in items
+	
+		$IBLOCK_ID = $this->params['IBLOCK_ID'];
+		$arFields = array();
+		$tmpID = false;
+		$onKeys = array();
+		foreach($this->params['FIELDS'] as $key=>$fieldFull)
+		{
+			list($xpath, $field) = explode(';', $fieldFull, 2);
+
+			$value = $arItem[$key];
+			if($this->fparams[$key]['NOT_TRIM']=='Y') $value = $arItem['~'.$key];
+			$origValue = $arItem['~'.$key];
+			
+			$conversions = $this->fparams[$key]['CONVERSION'];
+			if(!empty($conversions))
+			{
+				$value = $this->ApplyConversions($value, $conversions, $arItem, array('KEY'=>$field, 'NAME'=>$field), $iblockFields);
+				$origValue = $this->ApplyConversions($origValue, $conversions, $arItem, array('KEY'=>$field, 'NAME'=>$field), $iblockFields);
+				if($value===false) continue;
+			}
+			
+			if(strpos($field, 'IBPROP_')===0)
+			{
+				$fieldName = substr($field, 7);
+				if($fieldName=='TMP_ID') $tmpID = $value;
+				else $arFields[$fieldName] = $value;
+			}
+			if($this->fparams[$key]['SET_NEW_ONLY']=='Y')
+			{
+				$onKeys[$fieldName] = $fieldName;
+			}
+		}
+		$arFeaturesFields = $this->GetPropFeatureFields($arFields);
+		$groupName = (array_key_exists('GROUP_NAME', $arFields) ? $arFields['GROUP_NAME'] : '');
+		while(is_array($groupName)) $groupName = current($groupName);
+		
+		$arFilter = array();
+		if(isset($arFields['XML_ID']) && strlen(trim($arFields['XML_ID'])) > 0) $arFilter['XML_ID'] = $arFields['XML_ID'];
+		elseif(isset($arFields['CODE']) && strlen(trim($arFields['CODE'])) > 0) $arFilter['CODE'] = $arFields['CODE'];
+		elseif(isset($arFields['NAME']) && strlen(trim($arFields['NAME'])) > 0) $arFilter['NAME'] = $arFields['NAME'];
+		if(!empty($arFilter))
+		{
+			$arFilter['IBLOCK_ID'] = $IBLOCK_ID;
+			$arFields['IBLOCK_ID'] = $IBLOCK_ID;
+			$arFields['ACTIVE'] = 'Y';
+			if(isset($arFields['MULTIPLE'])) $arFields['MULTIPLE'] = $this->GetBoolValue($arFields['MULTIPLE']);
+			if(isset($arFields['WITH_DESCRIPTION'])) $arFields['WITH_DESCRIPTION'] = $this->GetBoolValue($arFields['WITH_DESCRIPTION']);
+			if(isset($arFields['SMART_FILTER'])) $arFields['SMART_FILTER'] = $this->GetBoolValue($arFields['SMART_FILTER']);
+			if(isset($arFields['SECTION_PROPERTY'])) $arFields['SECTION_PROPERTY'] = $this->GetBoolValue($arFields['SECTION_PROPERTY']);
+			
+			if($arFields['SMART_FILTER'] == 'Y')
+			{
+				if(\CIBlock::GetArrayByID($arFields["IBLOCK_ID"], "SECTION_PROPERTY") != "Y")
+				{
+					$ib = new \CIBlock;
+					$ib->Update($arFields["IBLOCK_ID"], array('SECTION_PROPERTY'=>'Y'));
+				}
+			}
+			$this->GetPropertyType($arFields);
+			
+			$arPropFields = $arFields;
+			unset($arPropFields['VALUES']);
+			$propID = 0;
+			if($arr = \CIBlockProperty::GetList(array(), $arFilter)->Fetch())
+			{
+				$arPropFields = array_diff_key($arPropFields, $onKeys);
+				$ibp = new \CIBlockProperty;
+				$ibp->Update($arr['ID'], array_diff_key($arPropFields, array('IBLOCK_ID'=>true))); //With IBLOCK_ID disappear SMART_FILTER
+				if($arPropFields['SECTION_PROPERTY'])
+				{
+					$arSectionProperty = \Bitrix\Iblock\SectionPropertyTable::getList(array('filter'=>array('PROPERTY_ID'=>$arr['ID'], 'SECTION_ID'=>0), 'select'=>array('PROPERTY_ID')))->Fetch();
+					if($arPropFields['SECTION_PROPERTY']=='N' && $arSectionProperty)
+					{
+						\Bitrix\Iblock\SectionPropertyTable::delete(array('IBLOCK_ID'=>$arFields['IBLOCK_ID'], 'SECTION_ID'=>0, 'PROPERTY_ID'=>$arr['ID']));
+					}
+					elseif($arPropFields['SECTION_PROPERTY']=='Y' && !$arSectionProperty)
+					{
+						\Bitrix\Iblock\SectionPropertyTable::add(array('IBLOCK_ID'=>$arFields['IBLOCK_ID'], 'SECTION_ID'=>0, 'PROPERTY_ID'=>$arr['ID'], 'SMART_FILTER'=>'N', 'DISPLAY_TYPE'=>'F', 'DISPLAY_EXPANDED'=>'N'));
+					}
+				}
+				if(isset($arPropFields['SMART_FILTER']))
+				{
+					$dbRes2 = \Bitrix\Iblock\SectionPropertyTable::getList(array("select" => array("SECTION_ID", "PROPERTY_ID", "SMART_FILTER"), "filter" => array("=IBLOCK_ID" => $arFields['IBLOCK_ID'] ,"=PROPERTY_ID" => $arr['ID'])));
+					while($arr2 = $dbRes2->Fetch())
+					{
+						if($arr2['SMART_FILTER']==$arPropFields['SMART_FILTER']) continue;
+						\CIBlockSectionPropertyLink::Set($arr2['SECTION_ID'], $arr2['PROPERTY_ID'], array('SMART_FILTER'=>$arPropFields['SMART_FILTER']));
+					}
+				}
+				$propID = $arr['ID'];
+				$arFields = $arFields + $arr;
+			}
+			else
+			{
+				if(isset($arPropFields['NAME']) && !isset($arPropFields['CODE']))
+				{
+					$arParams = array(
+						'max_len' => 50,
+						'change_case' => 'U',
+						'replace_space' => '_',
+						'replace_other' => '_',
+						'delete_repeat_replace' => 'Y',
+					);
+					$propCode = $codePrefix. \CUtil::translit($arPropFields['NAME'], LANGUAGE_ID, $arParams);
+					$propCode = preg_replace('/[^a-zA-Z0-9_]/', '', $propCode);
+					$propCode = preg_replace('/^[0-9_]+/', '', $propCode);
+					$arFields['CODE'] = $arPropFields['CODE'] = $propCode;
+				}
+				$this->PreparePropertyCode($arPropFields);
+				$ibp = new \CIBlockProperty;
+				$propID = $ibp->Add($arPropFields);
+			}
+			
+			if($propID > 0)
+			{
+				if(!empty($arFeaturesFields)) \Bitrix\Iblock\Model\PropertyFeature::setFeatures($propID, $arFeaturesFields);
+				if(strlen($groupName) > 0 && strlen($arFields['CODE']) > 0)
+				{
+					if(Loader::IncludeModule('aspro.max') && class_exists('\Aspro\Max\PropertyGroups') && function_exists('json_decode') && \Aspro\Max\PropertyGroups::checkIblockId($arFields['IBLOCK_ID']))
+					{
+						$arGroups = array();
+						$fn = $_SERVER["DOCUMENT_ROOT"].'/bitrix/modules/aspro.max/admin/propertygroups/json/prop_groups_iblock_'.$arFields['IBLOCK_ID'].'.json';
+						if(file_exists($fn))
+						{
+							$arGroups = json_decode(file_get_contents($fn), true);
+							if(!is_array($arGroups)) $arGroups = array();
+						}
+						$find = false;
+						foreach($arGroups as $k=>$v)
+						{
+							if(ToLower(trim($v['NAME']))==ToLower(trim($groupName)))
+							{
+								if(!in_array($arFields['CODE'], $v['PROPS'])) $arGroups[$k]['PROPS'][] = $arFields['CODE'];
+								$find = true;
+							}
+							else $arGroups[$k]['PROPS'] = array_diff($v['PROPS'], array($arFields['CODE']));
+						}
+						if(!$find)
+						{
+							$arGroups[] = array('NAME'=>$groupName, 'PROPS'=>array($arFields['CODE']), 'CODE'=>\CUtil::translit($groupName, LANGUAGE_ID));
+						}
+						file_put_contents($fn, json_encode($arGroups));
+					}
+				}
+				$arPropFields['ID'] = $propID;
+				if($tmpID!==false && strlen($tmpID) > 0)
+				{
+					$this->propertyIds[$tmpID] = $propID;
+				}
+				if($arFields['PROPERTY_TYPE']=='L')
+				{
+					if(isset($arFields['VALUES']) && !empty($arFields['VALUES']))
+					{
+						$arValues = $arFields['VALUES'];
+						if(!is_array($arValues))
+						{
+							$arValues = explode($this->params['ELEMENT_MULTIPLE_SEPARATOR'], $arValues);
+							$arValues = array_diff(array_unique(array_map('trim', $arValues)), array(''));
+						}
+						foreach($arValues as $value)
+						{
+							$this->GetListPropertyValue($arPropFields, $value);
+						}
+					}
+				}
+				$this->SetPropValues($arPropFields, $arFields);
+			}
+		}
+		
+		$this->SaveStatusImport();
+		return $sectionID;
+	}
+	
+	public function SaveStoreRecord($arItem)
+	{
+		/*if(count(array_diff(array_map('trim', $arItem), array('')))==0) return false;*/  //maybe array in items
+
+		$arFields = array();
+		$tmpID = false;
+		foreach($this->params['FIELDS'] as $key=>$fieldFull)
+		{
+			list($xpath, $field) = explode(';', $fieldFull, 2);
+
+			$value = $arItem[$key];
+			while(is_array($value)) $value = reset($value);
+			if($this->fparams[$key]['NOT_TRIM']=='Y') $value = $arItem['~'.$key];
+			$origValue = $arItem['~'.$key];
+			
+			$conversions = $this->fparams[$key]['CONVERSION'];
+			if(!empty($conversions))
+			{
+				$value = $this->ApplyConversions($value, $conversions, $arItem, array('KEY'=>$field, 'NAME'=>$field), $iblockFields);
+				$origValue = $this->ApplyConversions($origValue, $conversions, $arItem, array('KEY'=>$field, 'NAME'=>$field), $iblockFields);
+				if($value===false) continue;
+			}
+			
+			if(strpos($field, 'STORE_')===0)
+			{
+				$fieldName = substr($field, 6);
+				if($fieldName=='TMP_ID') $tmpID = $value;
+				else $arFields[$fieldName] = $value;
+			}
+		}
+		
+		$storeID = 0;
+		$arFilter = array();
+		if(isset($arFields['XML_ID']) && strlen(trim($arFields['XML_ID'])) > 0)
+		{
+			$arFilter['XML_ID'] = $arFields['XML_ID'];
+		}
+		elseif(isset($arFields['TITLE']) && strlen(trim($arFields['TITLE'])) > 0)
+		{
+			$arFilter['TITLE'] = $arFields['TITLE'];
+		}
+		if(!empty($arFilter))
+		{
+			if(isset($arFields['ACTIVE'])) $arFields['ACTIVE'] = $this->GetBoolValue($arFields['ACTIVE'], false, 'Y');
+			if(isset($arFields['ISSUING_CENTER'])) $arFields['ISSUING_CENTER'] = $this->GetBoolValue($arFields['ISSUING_CENTER'], false, 'Y');
+			if(isset($arFields['SHIPPING_CENTER'])) $arFields['SHIPPING_CENTER'] = $this->GetBoolValue($arFields['SHIPPING_CENTER'], false, 'Y');
+			if(isset($arFields['SORT'])) $arFields['SORT'] = $this->GetFloatVal($arFields['SORT']);
+			if($arr = \Bitrix\Catalog\StoreTable::GetList(array('filter'=>$arFilter, 'select'=>array('ID')))->Fetch())
+			{
+				$storeID = $arr['ID'];
+				\Bitrix\Catalog\StoreTable::Update($storeID, $arFields);
+			}
+			else
+			{
+				if(!isset($arFields['ADDRESS']) || strlen(trim($arFields['ADDRESS']))==0)
+				{
+					if(isset($arFields['TITLE']) && strlen(trim($arFields['TITLE'])) > 0) $arFields['ADDRESS'] = $arFields['TITLE'];
+					elseif(isset($arFields['XML_ID']) && strlen(trim($arFields['XML_ID'])) > 0) $arFields['ADDRESS'] = $arFields['XML_ID'];
+				}
+				if(!isset($arFields['ACTIVE'])) $arFields['ACTIVE'] = 'Y';
+				if(!isset($arFields['ISSUING_CENTER'])) $arFields['ISSUING_CENTER'] = 'Y';
+				if(!isset($arFields['SHIPPING_CENTER'])) $arFields['SHIPPING_CENTER'] = 'Y';
+				$dbRes = \Bitrix\Catalog\StoreTable::Add($arFields);
+				if($dbRes->isSuccess())
+				{
+					$storeID = (int)$dbRes->getId();
+				}
+			}
+		}
+		
+		$this->SaveStatusImport();
+		return $storeID;
+	}
+	
+	public function GetPropertyType(&$arFields)
+	{
+		while(is_array($arFields['PROPERTY_TYPE'])) $arFields['PROPERTY_TYPE'] = reset($arFields['PROPERTY_TYPE']);
+		if(strpos($arFields['PROPERTY_TYPE'], ':')!==false)
+		{
+			list($ptype, $utype) = explode(':', $arFields['PROPERTY_TYPE'], 2);
+			$arFields['PROPERTY_TYPE'] = $ptype;
+			$arFields['USER_TYPE'] = $utype;
+		}
+		if($arFields['PROPERTY_TYPE']==Loc::getMessage("KIT_IX_PROP_STRING")) $arFields['PROPERTY_TYPE'] = 'S';
+		elseif($arFields['PROPERTY_TYPE']==Loc::getMessage("KIT_IX_PROP_NUMBER")) $arFields['PROPERTY_TYPE'] = 'N';
+		elseif($arFields['PROPERTY_TYPE']==Loc::getMessage("KIT_IX_PROP_LIST")) $arFields['PROPERTY_TYPE'] = 'L';
+		elseif(array_key_exists('PROPERTY_TYPE', $arFields) && strlen($arFields['PROPERTY_TYPE'])==0) $arFields['PROPERTY_TYPE'] = 'S';
+	}
+	
+	public function SetPropValues($arPropFields, $arProp=array())
+	{
+		if(!$this->propvalInProp) return;		
+		$xmlPartObjects = $this->xmlPartObjects;
+		$this->currentParentXmlObj = $this->currentXmlObj;
+		$groupName = 'IBPROPVAL';
+		$xpath = $this->params['GROUPS'][$groupName];
+		$groupXpath = $xpath;
+		$xpath = trim(mb_substr($xpath, mb_strlen($this->params['GROUPS']['IBPROPERTY'])), '/');
+		$this->parentXpath = $this->xpath;
+		$this->xpath = '/'.$this->params['GROUPS'][$groupName];
+		$this->xmlPropVals = $this->Xpath($this->currentParentXmlObj, $xpath);
+		$this->xmlPropValsCurrentRow = 0;
+		while($arPropVal = $this->GetNextPropVal($groupXpath, $groupName))
+		{
+			
+			$arFields = array();
+			foreach($this->params['FIELDS'] as $key=>$fieldFull)
+			{
+				list($xpath, $field) = explode(';', $fieldFull, 2);
+				if(strpos($field, 'IBPVAL_')!==0) continue;
+				
+				$value = $arPropVal[$key];
+				if($this->fparams[$key]['NOT_TRIM']=='Y') $value = $arPropVal['~'.$key];
+				
+				$conversions = $this->fparams[$key]['CONVERSION'];
+				if(!empty($conversions))
+				{
+					if(is_array($value))
+					{
+						foreach($value as $k2=>$v2)
+						{
+							$value[$k2] = $this->ApplyConversions($value[$k2], $conversions, $arPropVal);
+						}
+					}
+					else
+					{
+						$value = $this->ApplyConversions($value, $conversions, $arPropVal);
+					}
+					if($value===false || (is_array($value) && count(array_diff($value, array(false)))==0)) continue;
+				}
+				$fieldName = substr($field, 7);
+				$arFields[$fieldName] = $value;
+			}
+
+			if($arProp['PROPERTY_TYPE']=='E') 
+			{
+				$arElemFields = array('NAME'=>isset($arFields['VALUE']) ? trim($arFields['VALUE']) : '');
+				if(isset($arFields['XML_ID']) && strlen(trim($arFields['XML_ID'])) > 0) $arElemFields['XML_ID'] = $arFields['XML_ID'];
+				$this->GetIblockElementValue($arProp, $arElemFields, array('REL_ELEMENT_FIELD'=>'IE_NAME'), true);
+				$val = $arFields['VALUE'];
+			}
+			else
+			{
+				if($arProp['PROPERTY_TYPE']=='L') $this->GetListPropertyValue($arProp, $arFields, 'XML_ID');
+				$val = $arFields['VALUE'];
+			}
+			if(array_key_exists('TMP_ID', $arFields))
+			{
+				$propId = $arPropFields['ID'];
+				if(!isset($this->propertyValIds[$propId])) $this->propertyValIds[$propId] = array();
+				$this->propertyValIds[$propId][$arFields['TMP_ID']] = $val;
+			}
+		}
+		$this->xpath = $this->parentXpath;
+		$this->parentXpath = '';
+		$this->currentXmlObj = $this->currentParentXmlObj;
+		$this->xmlPartObjects = $xmlPartObjects;
+	}
+	
+	public function GetNextPropVal($groupXpath, $groupName = '')
+	{		
+		$origGroupXpath = $this->params['GROUPS'][strlen($groupName)==0 ? 'IBPROPERTY' : $groupName];
+		if(strlen($groupXpath)==0) $groupXpath = $origGroupXpath;
+		while(isset($this->xmlPropVals[$this->xmlPropValsCurrentRow]))
+		{
+			$simpleXmlObj = $this->currentParentXmlObj;
+			$this->currentXmlObj = $this->xmlPropVals[$this->xmlPropValsCurrentRow];
+			$this->xmlPartObjects = array();
+		
+			$xpathReplace = $this->xpathReplace;
+			$this->xpathReplace = array(
+				'FROM' => $origGroupXpath,
+				'TO' => ($groupXpath.'['.($this->xmlPropValsCurrentRow + 1).']')
+			);
+			$propertyXpath = mb_substr($this->parentXpath, 1);
+
+			$arItem = array();
+			foreach($this->params['FIELDS'] as $key=>$field)
+			{
+				$val = '';
+				list($xpath, $fieldName) = explode(';', $field, 2);
+				if(strpos($xpath, $origGroupXpath)!==0) continue;
+				
+				$cIndex = trim($this->fparams[$key]['INDEX_LOAD_VALUE']);
+				$conditions = $this->fparams[$key]['CONDITIONS'];
+				if(!is_array($conditions)) $conditions = array();
+				foreach($conditions as $k2=>$v2)
+				{
+					if(preg_match('/^\{(\S*)\}$/', $v2['CELL'], $m))
+					{
+						$conditions[$k2]['XPATH'] = mb_substr($this->ReplaceXpath($m[1]), mb_strlen($propertyXpath) + 1);
+					}
+					$conditions[$k2]['FROM'] = preg_replace_callback('/^\{(\S*)\}$/', array($this, 'ReplaceConditionXpath'), $conditions[$k2]['FROM']);
+				}
+			
+				$xpath = mb_substr($this->ReplaceXpath($xpath), mb_strlen($propertyXpath) + 1);
+				$arPath = explode('/', $xpath);
+				$attr = $this->GetPathAttr($arPath);
+				if(count($arPath) > 0)
+				{
+					//$simpleXmlObj2 = $simpleXmlObj->xpath(implode('/', $arPath));
+					$simpleXmlObj2 = $this->Xpath($simpleXmlObj, implode('/', $arPath));
+					if(count($simpleXmlObj2)==1) $simpleXmlObj2 = current($simpleXmlObj2);	
+				}
+				else $simpleXmlObj2 = $simpleXmlObj;
+				$xpath2 = implode('/', $arPath);
+				
+				if($attr!==false)
+				{
+					if(is_array($simpleXmlObj2))
+					{
+						$val = array();
+						foreach($simpleXmlObj2 as $k=>$v)
+						{
+							if($this->CheckConditions($conditions, $xpath, $simpleXmlObj, $v, $k))
+							{
+								$val[] = (string)$v->attributes()->{$attr};
+							}
+						}
+						if(count($val)==0) $val = '';
+						elseif(is_numeric($cIndex)) $val = $val[($cIndex >=0 ? $cIndex - 1 : count($val) + $cIndex)];
 						elseif(count($val)==1) $val = current($val);
 					}
 					else
@@ -2445,7 +3075,7 @@ class Importer {
 							}
 						}
 						if(count($val)==0) $val = '';
-						elseif(is_numeric($conditionIndex)) $val = $val[$conditionIndex - 1];
+						elseif(is_numeric($cIndex)) $val = $val[($cIndex >=0 ? $cIndex - 1 : count($val) + $cIndex)];
 						elseif(count($val)==1) $val = current($val);
 					}
 					else
@@ -2462,9 +3092,10 @@ class Importer {
 				$arItem[$key] = (is_array($val) ? array_map(array($this, 'Trim'), $val) : $this->Trim($val));
 				$arItem['~'.$key] = $val;
 			}
-			$this->xmlPropertiesCurrentRow++;
+			$this->xpathReplace = $xpathReplace;
+			$this->xmlPropValsCurrentRow++;
 			
-			if(!$this->CheckSkipLine($arItem, 'property'))
+			if(!$this->CheckSkipLine($arItem, 'ibpropval'))
 			{
 				return $arItem;
 			}
@@ -2473,522 +3104,17 @@ class Importer {
 		return false;
 	}
 	
-	public function ReplaceXpath($xpath)
+	public function SaveSectionRecord($arItem, $parentSectionId=0, $isSub=false)
 	{
-		if(is_array($this->xpathReplace) && isset($this->xpathReplace['FROM']) && isset($this->xpathReplace['TO']))
-		{
-			$xpath = str_replace($this->xpathReplace['FROM'], $this->xpathReplace['TO'], $xpath);
-		}
-		return $xpath;
-	}
-	
-	public function ReplaceConditionXpath($m)
-	{
-		$offerXpath = substr($this->xpath, 1);
-		if(strpos($m[1], $offerXpath)===0)
-		{
-			return '{'.substr($this->ReplaceXpath($m[1]), strlen($offerXpath) + 1).'}';
-		}
-		else
-		{
-			return '{'.$this->ReplaceXpath($m[1]).'}';
-		}
-	}
-	
-	public function ReplaceConditionXpathToValue($m)
-	{
-		$xpath = $this->replaceXpath;
-		$simpleXmlObj = $this->replaceSimpleXmlObj;
-		$simpleXmlObj2 = $this->replaceSimpleXmlObj2;
-		$xpath2 = $m[1];
-		if(strpos($xpath2, $xpath)===0)
-		{
-			$xpath2 = substr($xpath2, strlen($xpath) + 1);
-			$simpleXmlObj = $simpleXmlObj2;
-		}
-		else
-		{
-			$arXpath2 = $this->GetXPathParts($xpath2);
-			if(strlen($arXpath2['xpath']) > 0)
-			{
-				if(!isset($this->xmlParts[$arXpath2['xpath']]))
-				{
-					$this->xmlParts[$arXpath2['xpath']] = $this->GetPartXmlObject($arXpath2['xpath']);
-				}
-				$xmlPart = $this->xmlParts[$arXpath2['xpath']];
-				if(!isset($this->xmlPartsValues[$xpath2]))
-				{
-					$arValues = array();
-					foreach($xmlPart as $k=>$xmlObj)
-					{
-						if(strlen($arXpath2['subpath'])==0) $xmlObj2 = $xmlObj;
-						else $xmlObj2 = $this->Xpath($xmlObj, $arXpath2['subpath']);
-						if(is_array($xmlObj2)) $xmlObj2 = current($xmlObj2);
-						if($arXpath2['attr']!==false && is_callable(array($xmlObj2, 'attributes')))
-						{
-							$val2 = (string)$xmlObj2->attributes()->{$arXpath2['attr']};
-						}
-						else
-						{
-							$val2 = (string)$xmlObj2;
-						}
-						//$arValues[$k] = $val2;
-						$arValues[$val2] = $k;
-					}
-					$this->xmlPartsValues[$xpath2] = $arValues;
-				}
-				$xmlPartsValues = $this->xmlPartsValues[$xpath2];
-				
-				if(is_array($xmlPart))
-				{
-					$valXpath = $xpath;
-					$parentXpath = (isset($this->parentXpath) && strlen($this->parentXpath) > 0 ? $this->parentXpath : '');
-					$parentXpathWS = trim($parentXpath, '/');
-					$xpathReplaced = false;
-					if($this->replaceXpathCell)
-					{
-						$valXpath2 = trim($this->replaceXpathCell, '{}');
-						$parentXpath2 = trim($this->xpath, '/');
-						if(strlen($parentXpath2) > 0 && strpos($valXpath2, $parentXpath2)===0)
-						{
-							$valXpath = substr($valXpath2, strlen($parentXpath2)+1);
-							if(strlen($parentXpathWS) > 0 && strpos($parentXpath2, $parentXpathWS)===0)
-							{
-								$valXpath = substr($parentXpath2, strlen($parentXpathWS)+1).'/'.ltrim($valXpath, '/');
-							}
-							$xpathReplaced = true;
-						}
-					}
-					if(strlen($parentXpath) > 0)
-					{
-						$valXpath = rtrim($this->parentXpath, '/').'/'.ltrim($valXpath, '/');
-						if($xpathReplaced) $valXpath = $this->ReplaceXpath($valXpath);
-					}
-					$val = $this->GetValueByXpath($valXpath, $simpleXmlObj, true);
-					$k = false;
-					if(strlen($val) > 0 && isset($xmlPartsValues[$val])) $k = $xmlPartsValues[$val];
-
-					if($k!==false)
-					{
-						$this->xmlPartObjects[$arXpath2['xpath']] = $xmlPart[$k];
-						return $val;
-					}
-					else return '';
-					
-					/*foreach($xmlPart as $xmlObj)
-					{
-						if(strlen($arXpath2['subpath'])==0) $xmlObj2 = $xmlObj;
-						//else $xmlObj2 = $xmlObj->xpath($arXpath2['subpath']);
-						else $xmlObj2 = $this->Xpath($xmlObj, $arXpath2['subpath']);
-						if(is_array($xmlObj2)) $xmlObj2 = current($xmlObj2);
-						if($arXpath2['attr']!==false && is_callable(array($xmlObj2, 'attributes')))
-						{
-							$val2 = (string)$xmlObj2->attributes()->{$arXpath2['attr']};
-						}
-						else
-						{
-							$val2 = (string)$xmlObj2;
-						}
-						if($val2==$val)
-						{
-							$this->xmlPartObjects[$arXpath2['xpath']] = $xmlObj;
-							return $val;
-						}
-					}*/
-				}
-			}
-		}
-		$arPath = explode('/', $xpath2);
-		$attr = $this->GetPathAttr($arPath);
-		if(count($arPath) > 0)
-		{
-			//$simpleXmlObj3 = $simpleXmlObj->xpath(implode('/', $arPath));
-			$simpleXmlObj3 = $this->Xpath($simpleXmlObj, implode('/', $arPath));
-			if(count($simpleXmlObj3)==1) $simpleXmlObj3 = current($simpleXmlObj3);
-		}
-		else $simpleXmlObj3 = $simpleXmlObj;
-		
-		if(is_array($simpleXmlObj3)) $simpleXmlObj3 = current($simpleXmlObj3);
-		$condVal = (string)(($attr!==false && is_callable(array($simpleXmlObj3, 'attributes'))) ? $simpleXmlObj3->attributes()->{$attr} : $simpleXmlObj3);
-		return $condVal;
-	}
-	
-	public function GetXPathParts($xpath)
-	{
-		$arPath = explode('/', $xpath);
-		$attr = $this->GetPathAttr($arPath);
-		$xpath2 = implode('/', $arPath);
-		$xpath3 = '';
-		if(strpos($xpath2, '//')!==false && strpos($xpath2, '//') > 0)
-		{
-			list($xpath2, $xpath3) = explode('//', $xpath2, 2);
-		}
-		$xpath2 = rtrim($xpath2, '/');
-		return array('xpath'=>$xpath2, 'subpath' => $xpath3, 'attr'=>$attr);
-	}
-	
-	public function GetToXpathReplace($arPath, $lastElem, $lastKey, $key, $simpleXmlObj)
-	{
-		$toXpath = ltrim(implode('/', $arPath).'/'.$lastElem.'['.$lastKey.']', '/');
-		if(count($this->Xpath($simpleXmlObj, $toXpath))==0)
-		{
-			$keyOrig = $key;
-			$arPath[] = $lastElem;
-			$arNewPath = array();
-			while(count($arPath) > 0)
-			{
-				$arNewPath[] = array_shift($arPath);
-				if(count($arPath) > 0)
-				{
-					$objs = $this->Xpath($simpleXmlObj, implode('/', $arNewPath));
-					if(count($objs) > 1)
-					{
-						$key2 = $key;
-						$k = -1;
-						while($key2 >= 0 && isset($objs[++$k]))
-						{
-							$key2 -= count($this->Xpath($objs[$k], implode('/', $arPath)));
-							if($key2 >= 0) $key = $key2;
-						}
-						$lastInd = count($arNewPath) - 1;
-						if(!preg_match('/\[\d+\]/', $arNewPath[$lastInd]))
-						{
-							$arNewPath[$lastInd] = $arNewPath[$lastInd].'['.($k + 1).']';
-						}
-					}
-				}
-				else
-				{
-					$lastInd = count($arNewPath) - 1;
-					if(!preg_match('/\[\d+\]/', $arNewPath[$lastInd]))
-					{
-						$arNewPath[$lastInd] = $arNewPath[$lastInd].'['.($key + 1).']';
-					}
-				}
-			}
-			if(count($this->Xpath($simpleXmlObj, implode('/', $arNewPath))) > 0)
-			{
-				$toXpath = ltrim(implode('/', $arNewPath), '/');
-			}
-		}
-		return $toXpath;
-	}
-	
-	public function CheckConditions($conditions, $xpath, $simpleXmlObj, $simpleXmlObj2, $key=false)
-	{
-		if(empty($conditions)) return true;
-		if($key!==false)
-		{
-			$arPath = explode('/', $xpath);
-			$attr = $this->GetPathAttr($arPath);
-			//if(count($arPath) > 1 && ($cnt = count($simpleXmlObj->xpath(implode('/', $arPath)))) && $cnt > 1)
-			if(count($arPath) > 1 && ($cnt = count($this->Xpath($simpleXmlObj, implode('/', $arPath)))) && $cnt > 1)
-			{
-				while(($lastElem = array_pop($arPath)) && (count($arPath) > 0) /*&& (count($this->Xpath($simpleXmlObj, implode('/', $arPath)))==$cnt)*/ && ($cnt2 = count($this->Xpath($simpleXmlObj, implode('/', $arPath)))) && $cnt2>=$cnt){$cnt3 = $cnt2;}
-				/*Fix for missign tag*/
-				$key2 = $key;
-				if($cnt3 > $cnt)
-				{
-					$subpath = implode('/', $arPath).'/'.$lastElem;
-					for($i=0; $i<min($key2+1, $cnt3); $i++)
-					{
-						$xpath2 = $subpath.'['.($i+1).']/'.substr($xpath, strlen($subpath) + 1);
-						//if(count($simpleXmlObj->xpath($xpath2))==0) $key2++;
-						if(count($this->Xpath($simpleXmlObj, $xpath2))==0) $key2++;
-					}
-				}
-				/*/Fix for missign tag*/
-
-				$xpathReplace = $this->xpathReplace;
-				$this->xpathReplace = array(
-					'FROM' => ltrim(implode('/', $arPath).'/'.$lastElem, '/'),
-					//'TO' => ltrim(implode('/', $arPath).'/'.$lastElem.'['.($key2+1).']', '/')
-					'TO' => $this->GetToXpathReplace($arPath, $lastElem, ($key2+1), $key, $simpleXmlObj)
-				);
-				foreach($conditions as $k3=>$v3)
-				{
-					$conditions[$k3]['XPATH'] = str_replace($this->xpathReplace['FROM'], $this->xpathReplace['TO'], $conditions[$k3]['XPATH']);
-					//FIX: a bunch of several values of the same tag with other xml nodes does not work with this line
-					//$conditions[$k3]['FROM'] = preg_replace_callback('/^\{(\S*)\}$/', array($this, 'ReplaceConditionXpath'), $conditions[$k3]['FROM']);
-				}
-				$this->xpathReplace = $xpathReplace;
-			}
-		}
-		
-		$k = 0;
-		while(isset($conditions[$k]))
-		{
-			$v = $conditions[$k];
-			$pattern = '/^\{(\S*)\}$/';
-			if(preg_match($pattern, $v['FROM']))
-			{
-				$this->replaceXpath = $xpath;
-				$this->replaceXpathCell = $v['CELL'];
-				$this->replaceSimpleXmlObj = $simpleXmlObj;
-				$this->replaceSimpleXmlObj2 = $simpleXmlObj2;
-				$v['FROM'] = preg_replace_callback($pattern, array($this, 'ReplaceConditionXpathToValue'), $v['FROM']);
-			}
-			
-			$xpath2 = $v['XPATH'];
-
-			$generalXpath = $xpath;
-			if(strpos($xpath, '@')!==false) $generalXpath = rtrim(substr($xpath, 0, strpos($xpath, '@')), '/');
-			/*Attempt of relative seaarch node*/
-			if(strpos($xpath2, $generalXpath)!==0 && strpos($xpath2, '[')===false && strpos($generalXpath, '[')===false)
-			{
-				$diffLevel = 0;
-				$sharedXpath = ltrim($generalXpath, '/');
-				$arSharedXpath = explode('/', $sharedXpath);
-				while(count($arSharedXpath) > 0 && strpos($xpath2, $sharedXpath)!==0)
-				{
-					array_pop($arSharedXpath);
-					$sharedXpath = implode('/', $arSharedXpath);
-					$diffLevel++;
-				}
-				if(strlen($sharedXpath) > 0 && strpos($xpath2, $sharedXpath)===0 && $diffLevel > 0)
-				{
-					$simpleXmlObjArr = $simpleXmlObj2->xpath(substr(str_repeat('../', $diffLevel), 0, -1));
-					if(is_array($simpleXmlObjArr) && count($simpleXmlObjArr)==1) $simpleXmlObjArr = current($simpleXmlObjArr);
-					if(is_object($simpleXmlObjArr))
-					{
-						$simpleXmlObj2 = $simpleXmlObjArr;
-						$generalXpath = $sharedXpath;
-					}
-				}
-			}
-			/*/Attempt of relative seaarch node*/
-			if(strpos($xpath2, $generalXpath)===0)
-			{
-				//$xpath2 = substr($xpath2, strlen($xpath) + 1);
-				$xpath2 = substr($xpath2, strlen($generalXpath));
-				$xpath2 = ltrim(preg_replace('/^\[\d*\]/', '', $xpath2), '/');
-				$simpleXmlObj = $simpleXmlObj2;
-			}
-			$arPath = explode('/', $xpath2);
-			$attr = $this->GetPathAttr($arPath);
-			if(count($arPath) > 0)
-			{
-				//$simpleXmlObj3 = $simpleXmlObj->xpath(implode('/', $arPath));
-				$simpleXmlObj3 = $this->Xpath($simpleXmlObj, implode('/', $arPath));
-				if(count($simpleXmlObj3)==1) $simpleXmlObj3 = current($simpleXmlObj3);
-			}
-			else $simpleXmlObj3 = $simpleXmlObj;
-			
-			$condVal = '';
-			if(is_array($simpleXmlObj3))
-			{					
-				$find = false;
-				foreach($simpleXmlObj3 as $k2=>$curObj)
-				{
-					$condVal = (string)($attr!==false ? $curObj->attributes()->{$attr} : $curObj);
-					if($this->CheckCondition($condVal, $v))
-					{
-						$find = true;
-						
-						$cnt = count($simpleXmlObj3);
-						if($cnt > 1)
-						{
-							$arPath2 = $arPath;
-							$lastElem = array_pop($arPath2);
-							while(($lastElem = array_pop($arPath2)) && (count($arPath) > 0) 
-								//&& (count($simpleXmlObj->xpath(implode('/', $arPath2)))==$cnt)){}
-								&& (count($this->Xpath($simpleXmlObj, implode('/', $arPath2)))==$cnt)){}
-							$xpathReplace = $this->xpathReplace;
-							$this->xpathReplace = array(
-								'FROM' => implode('/', $arPath2).'/'.$lastElem,
-								//'TO' => implode('/', $arPath2).'/'.$lastElem.'['.($k2+1).']'
-								'TO' => $this->GetToXpathReplace($arPath2, $lastElem, ($k2+1), $key, $simpleXmlObj)
-							);
-							foreach($conditions as $k3=>$v3)
-							{
-								if($k3 <= $k) continue;
-								$conditions[$k3]['XPATH'] = str_replace($this->xpathReplace['FROM'], $this->xpathReplace['TO'], $conditions[$k3]['XPATH']);
-								$conditions[$k3]['FROM'] = preg_replace_callback('/^\{(\S*)\}$/', array($this, 'ReplaceConditionXpath'), $conditions[$k3]['FROM']);
-							}
-							$this->xpathReplace = $xpathReplace;
-						}
-					}
-				}
-				if(!$find) return false;
-			}
-			else
-			{
-				$condVal = (string)(($attr!==false && is_callable(array($simpleXmlObj3, 'attributes'))) ? $simpleXmlObj3->attributes()->{$attr} : $simpleXmlObj3);
-				if(!$this->CheckCondition($condVal, $v)) return false;
-			}
-			$k++;
-		}
-		return true;
-	}
-	
-	public function CheckCondition($condVal, $v)
-	{
-		$condVal = \Bitrix\KitImportxml\Utils::ConvertDataEncoding($condVal, $this->fileEncoding, $this->siteEncoding);
-		$condVal = preg_replace('/\s+/', ' ', trim($condVal));
-		$v['FROM'] = preg_replace('/\s+/', ' ', trim($v['FROM']));
-		if(!(($v['WHEN']=='EQ' && $condVal==$v['FROM'])
-			|| ($v['WHEN']=='NEQ' && $condVal!=$v['FROM'])
-			|| ($v['WHEN']=='GT' && $condVal > $v['FROM'])
-			|| ($v['WHEN']=='LT' && $condVal < $v['FROM'])
-			|| ($v['WHEN']=='GEQ' && $condVal >= $v['FROM'])
-			|| ($v['WHEN']=='LEQ' && $condVal <= $v['FROM'])
-			|| ($v['WHEN']=='CONTAIN' && strpos($condVal, $v['FROM'])!==false)
-			|| ($v['WHEN']=='NOT_CONTAIN' && strpos($condVal, $v['FROM'])===false)
-			|| ($v['WHEN']=='REGEXP' && preg_match('/'.ToLower($v['FROM']).'/i', ToLower($condVal)))
-			|| ($v['WHEN']=='EMPTY' && strlen($condVal)==0)
-			|| ($v['WHEN']=='NOT_EMPTY' && strlen($condVal) > 0)))
-		{
-			return false;
-		}
-		return true;
-	}
-	
-	public function SaveIbPropRecord($arItem)
-	{
-		if(count(array_diff(array_map('trim', $arItem), array('')))==0)
-		{
-			return false;
-		}
-	
-		$IBLOCK_ID = $this->params['IBLOCK_ID'];
-		$arFields = array();
-		$tmpID = false;
-		foreach($this->params['FIELDS'] as $key=>$fieldFull)
-		{
-			list($xpath, $field) = explode(';', $fieldFull, 2);
-
-			$value = $arItem[$key];
-			if($this->fparams[$key]['NOT_TRIM']=='Y') $value = $arItem['~'.$key];
-			$origValue = $arItem['~'.$key];
-			
-			$conversions = $this->fparams[$key]['CONVERSION'];
-			if(!empty($conversions))
-			{
-				$value = $this->ApplyConversions($value, $conversions, $arItem, array('KEY'=>$field, 'NAME'=>$field), $iblockFields);
-				$origValue = $this->ApplyConversions($origValue, $conversions, $arItem, array('KEY'=>$field, 'NAME'=>$field), $iblockFields);
-				if($value===false) continue;
-			}
-			
-			if(strpos($field, 'IBPROP_')===0)
-			{
-				$fieldName = substr($field, 7);
-				if($fieldName=='TMP_ID') $tmpID = $value;
-				else $arFields[$fieldName] = $value;
-			}
-		}
-		
-		$arFilter = array();
-		if(isset($arFields['CODE']) && strlen(trim($arFields['CODE'])) > 0)
-		{
-			$arFilter['CODE'] = $arFields['CODE'];
-		}
-		elseif(isset($arFields['NAME']) && strlen(trim($arFields['NAME'])) > 0)
-		{
-			$arFilter['NAME'] = $arFields['NAME'];
-		}
-		if(!empty($arFilter))
-		{
-			$arFilter['IBLOCK_ID'] = $IBLOCK_ID;
-			$arFields['IBLOCK_ID'] = $IBLOCK_ID;
-			$arFields['ACTIVE'] = 'Y';
-			$arFields['MULTIPLE'] = $this->GetBoolValue($arFields['MULTIPLE']);
-			$arFields['WITH_DESCRIPTION'] = $this->GetBoolValue($arFields['WITH_DESCRIPTION']);
-			$arFields['SMART_FILTER'] = $this->GetBoolValue($arFields['SMART_FILTER']);
-			
-			if($arFields['SMART_FILTER'] == 'Y')
-			{
-				if(\CIBlock::GetArrayByID($arFields["IBLOCK_ID"], "SECTION_PROPERTY") != "Y")
-				{
-					$ib = new \CIBlock;
-					$ib->Update($arFields["IBLOCK_ID"], array('SECTION_PROPERTY'=>'Y'));
-				}
-			}
-			
-			if(strpos($arFields['PROPERTY_TYPE'], ':')!==false)
-			{
-				list($ptype, $utype) = explode(':', $arFields['PROPERTY_TYPE'], 2);
-				$arFields['PROPERTY_TYPE'] = $ptype;
-				$arFields['USER_TYPE'] = $utype;
-			}
-				
-			if(isset($arFields['NAME']) && !isset($arFields['CODE']))
-			{
-				$arParams = array(
-					'max_len' => 50,
-					'change_case' => 'U',
-					'replace_space' => '_',
-					'replace_other' => '_',
-					'delete_repeat_replace' => 'Y',
-				);
-				$propCode = $codePrefix. \CUtil::translit($arFields['NAME'], LANGUAGE_ID, $arParams);
-				$propCode = preg_replace('/[^a-zA-Z0-9_]/', '', $propCode);
-				$propCode = preg_replace('/^[0-9_]+/', '', $propCode);
-				$arFields['CODE'] = $propCode;
-			}
-			
-			$arPropFields = $arFields;
-			unset($arPropFields['VALUES']);
-			$propID = 0;
-			if($arr = \CIBlockProperty::GetList(array(), $arFilter)->Fetch())
-			{
-				$ibp = new \CIBlockProperty;
-				$ibp->Update($arr['ID'], $arPropFields);
-				if(isset($arPropFields['SMART_FILTER']))
-				{
-					$dbRes2 = \Bitrix\Iblock\SectionPropertyTable::getList(array("select" => array("SECTION_ID", "PROPERTY_ID"), "filter" => array("=IBLOCK_ID" => $arFields['IBLOCK_ID'] ,"=PROPERTY_ID" => $arr['ID'])));
-					while($arr2 = $dbRes2->Fetch())
-					{
-						\CIBlockSectionPropertyLink::Set($arr2['SECTION_ID'], $arr2['PROPERTY_ID'], array('SMART_FILTER'=>$arPropFields['SMART_FILTER']));
-					}
-				}
-				$propID = $arr['ID'];
-			}
-			else
-			{
-				$this->PreparePropertyCode($arPropFields);
-				$ibp = new \CIBlockProperty;
-				$propID = $ibp->Add($arPropFields);
-			}
-			
-			if($propID > 0)
-			{
-				if($tmpID!==false && strlen($tmpID) > 0)
-				{
-					$this->propertyIds[$tmpID] = $propID;
-				}
-				if($arFields['PROPERTY_TYPE']=='L' && !empty($arFields['VALUES']))
-				{
-					$arPropFields['ID'] = $propID;
-					$arValues = $arFields['VALUES'];
-					if(!is_array($arValues))
-					{
-						$arValues = explode($this->params['ELEMENT_MULTIPLE_SEPARATOR'], $arValues);
-						$arValues = array_diff(array_unique(array_map('trim', $arValues)), array(''));
-					}
-					foreach($arValues as $value)
-					{
-						$this->GetListPropertyValue($arPropFields, $value);
-					}
-				}
-			}
-		}
-		
-		$this->SaveStatusImport();
-		return $sectionID;
-	}
-	
-	public function SaveSectionRecord($arItem, $parentSectionId=0)
-	{
-		if(count(array_diff(array_map('trim', $arItem), array('')))==0)
-		{
-			return false;
-		}
+		/*if(count(array_diff(array_map('trim', $arItem), array('')))==0) return false;*/  //maybe array in items
 	
 		$IBLOCK_ID = $this->params['IBLOCK_ID'];
 		$SECTION_ID = $this->params['SECTION_ID'];
 		$arParams = array();
 		$sectionUid = $this->params['SECTION_UID'];
 		
+		$arRelProfiles = array();
+		$arItemFields = array();
 		$arFieldsSections = array();
 		foreach($this->params['FIELDS'] as $key=>$fieldFull)
 		{
@@ -3001,12 +3127,12 @@ class Importer {
 			$conversions = $this->fparams[$key]['CONVERSION'];
 			if(!empty($conversions) && !in_array($field, array('ISECT_PARENT_TMP_ID', 'ISECT_TMP_ID')))
 			{
-				$value = $this->ApplyConversions($value, $conversions, $arItem, array('KEY'=>$field, 'NAME'=>$field), $iblockFields);
-				$origValue = $this->ApplyConversions($origValue, $conversions, $arItem, array('KEY'=>$field, 'NAME'=>$field), $iblockFields);
+				$value = $this->ApplyConversions($value, $conversions, $arItem, array('KEY'=>$key, 'NAME'=>$field), $iblockFields);
+				$origValue = $this->ApplyConversions($origValue, $conversions, $arItem, array('KEY'=>$key, 'NAME'=>$field), $iblockFields);
 				if($value===false) continue;
 			}
 			
-			$prefix = ($parentSectionId > 0 ? 'ISUBSECT_' : 'ISECT_');
+			$prefix = (($isSub || (is_numeric($parentSectionId) && $parentSectionId > 0) || (!is_numeric($parentSectionId) && strlen($parentSectionId) > 0)) ? 'ISUBSECT_' : 'ISECT_');
 			if(strpos($field, $prefix)===0)
 			{
 				$adata = false;
@@ -3015,29 +3141,78 @@ class Importer {
 					list($field, $adata) = explode('|', $field);
 					$adata = explode('=', $adata);
 				}
-				$fKey = substr($field, strlen($prefix));
+				$fKey = mb_substr($field, mb_strlen($prefix));
+				if($fKey=='PROFILE_URL' && is_numeric($this->fparams[$key]['REL_PROFILE_ID']) && strlen($this->fparams[$key]['REL_PROFILE_ID']) > 0)
+				{
+					$arRelProfiles[$key] = array('LINK'=>$value, 'PROFILE'=>$this->fparams[$key]['REL_PROFILE_ID']);
+					continue;
+				}
+				
 				$arFieldsSections[$fKey] = $value;
-				
-				if(is_array($adata) && count($adata) > 1)
+				$arItemFields[$fKey] = $this->Trim($arItem[$key]);
+				if(in_array($fKey, array('TMP_ID', 'PARENT_TMP_ID')) && is_array($arItemFields[$fKey])) $arItemFields[$fKey] = current($arItemFields[$fKey]);
+				if(is_array($adata) && count($adata) > 1) $arFieldsSections[$adata[0]] = $adata[1];
+				if($fKey==$sectionUid) $arParams = $this->fparams[$key];
+			}
+		}
+
+		if($this->sectionLoadMode || count($this->sectionMap['MAP']) > 0)
+		{
+			$sectionID = 0;
+			$sectionIDs = array();
+			if(array_key_exists('TMP_ID', $arItemFields) && array_key_exists($arItemFields['TMP_ID'], $this->sectionMap['MAP']))
+			{
+				$sm = $this->sectionMap['MAP'][$arItemFields['TMP_ID']];
+				$sectionIDs = array_diff(array_map('intval', $sm), array(0));
+				$sectionID = (int)current($sectionIDs);
+				if(in_array('NOT_LOAD', $sm) || in_array('NOT_LOAD_WITH_CHILDREN', $sm))
 				{
-					$arFieldsSections[$adata[0]] = $adata[1];
+					$this->notLoadSections['s'][] = $arItemFields['TMP_ID'];
+					$sectionID = 0;
+					if(in_array('NOT_LOAD_WITH_CHILDREN', $sm))
+					{
+						$this->notLoadSections['p'][] = $arItemFields['TMP_ID'];
+					}
 				}
-				
-				if($fKey==$sectionUid)
-				{
-					$arParams = $this->fparams[$key];
-				}
+			}
+			if(!$sectionID && array_key_exists('PARENT_TMP_ID', $arItemFields) && in_array($arItemFields['PARENT_TMP_ID'], $this->notLoadSections['p']))
+			{
+				$this->notLoadSections['s'][] = $arItemFields['TMP_ID'];
+				$this->notLoadSections['p'][] = $arItemFields['TMP_ID'];
+			}
+			$skip = false;
+			if(array_key_exists('TMP_ID', $arItemFields) && in_array($arItemFields['TMP_ID'], $this->notLoadSections['s']))
+			{
+				$this->sectionIds[$arItemFields['TMP_ID']] = (array_key_exists('PARENT_TMP_ID', $arItemFields) && array_key_exists($arItemFields['PARENT_TMP_ID'], $this->sectionIds) ? $this->sectionIds[$arItemFields['PARENT_TMP_ID']] : 0);
+				$skip = true;
+			}
+			if($this->sectionLoadMode=='MAPPED') $skip = true;
+			if($this->sectionLoadMode=='MAPPED_CHILD' && !array_key_exists($arItemFields['PARENT_TMP_ID'], $this->sectionIds) && !($this->subSectionInSection && $parentSectionId)) $skip = true;
+			
+			if($sectionID > 0 || $skip)
+			{
+				if($sectionID > 0) $this->sectionIds[$arItemFields['TMP_ID']] = $sectionIDs;
+				$this->SaveSectionRecordAfter($sectionID, $arItem, $arItemFields, $sectionIDs);
+				$this->SaveStatusImport();
+				$this->SaveTmpSection($arFieldsSections, $parentSectionId);
+				if(!empty($sectionIDs)) return $sectionIDs;
+				elseif($sectionID > 0) return $sectionID;
+				elseif($skip) return false;
 			}
 		}
 		
 		if($this->useSectionPathByLink)
 		{
-			$this->sectionsTmp[$arFieldsSections['TMP_ID']] = array(
-				'PARENT' => $arFieldsSections['PARENT_TMP_ID'],
-				'NAME' => $arFieldsSections['NAME']
-			);
+			if(!isset($arFieldsSections['TMP_ID']) || strlen($arFieldsSections['TMP_ID'])==0) return false;
+			if(!isset($arFieldsSections['PARENT_TMP_ID']) && $parentSectionId) $arFieldsSections['PARENT_TMP_ID'] = $parentSectionId;
+			$this->SaveTmpSection($arFieldsSections);
+			$this->SaveSectionRecordAfter($arFieldsSections['TMP_ID'], $arItem, $arItemFields);
 			$this->SaveStatusImport();
 			return $arFieldsSections['TMP_ID'];
+		}
+		elseif(isset($arFieldsSections['TMP_ID']) && strlen($arFieldsSections['TMP_ID']) > 0)
+		{
+			$this->SaveTmpSection($arFieldsSections, $parentSectionId);
 		}
 		
 		if($parentSectionId > 0)
@@ -3052,6 +3227,12 @@ class Importer {
 				if(isset($this->sectionIds[$arFieldsSections['PARENT_TMP_ID']]))
 				{
 					$parentId = $this->sectionIds[$arFieldsSections['PARENT_TMP_ID']];
+					//if(is_array($parentId)) $parentId = current($parentId);
+					if(is_array($parentId))
+					{
+						$parentId = array_diff($parentId, array('', '0'));
+						if(count($parentId) < 2) $parentId = current($parentId);
+					}
 				}
 				unset($arFieldsSections['PARENT_TMP_ID']);
 			}
@@ -3067,26 +3248,52 @@ class Importer {
 		$sectIds = $this->SaveSection($arFieldsSections, $IBLOCK_ID, $parentId, 0, $arParams);
 		if(!empty($sectIds))
 		{
-			$sectionID = end($sectIds);
+			//$sectionID = end($sectIds);
+			$sectionID = $sectIds;
 			$this->sectionIds[$tmpId] = $sectionID;
-			
-			$this->SaveSectionRecordAfter($sectionID, $arItem);
+			$this->SaveSectionRecordAfter($sectionID, $arItem, $arItemFields);
 		}
 		
 		$this->SaveStatusImport();
+		$this->CheckRelProfiles($arRelProfiles);
 		return $sectionID;
 	}
 	
-	public function SaveSectionRecordAfter($sectionID, $arItem)
+	public function SaveTmpSection($arFieldsSections, $parentSectionId=0)
 	{
-		if(!$sectionID) return;
+		$this->sectionsTmp[$arFieldsSections['TMP_ID']] = array(
+			'PARENT' => (!isset($arFieldsSections['PARENT_TMP_ID']) && $parentSectionId ? $parentSectionId : $arFieldsSections['PARENT_TMP_ID']),
+			'NAME' => $arFieldsSections['NAME']
+		);
+	}
+	
+	public function SaveSectionRecordAfter($sectionID, $arItem, $arItemFields=array(), $sectionIDs=array())
+	{
+		//if(!$sectionID) return;
 		$currentXpath = $this->currentSectionXpath;
-		
+		if($sectionID && isset($this->sectionTmpMap) && isset($arItemFields['PARENT_TMP_ID']) && isset($arItemFields['TMP_ID']))
+		{
+			$this->sectionTmpMap[$arItemFields['TMP_ID']] = array(
+				'ID' => $sectionID,
+				'PARENT_TMP_ID' => $arItemFields['PARENT_TMP_ID'],
+			);
+		}
+
 		if($this->subSectionInSection)
 		{
-			$xpath = trim(substr($this->params['GROUPS']['SUBSECTION'], strlen($this->params['GROUPS']['SECTION'])), '/');
+			$level = 0;
+			if(count($this->subSectionInSectionLevels) > 0)
+			{
+				$curXpathWONumbers = preg_replace('/\[\d+\]/', '', $this->currentSectionXpath);
+				foreach($this->subSectionInSectionLevels as $k=>$v)
+				{
+					if($v && $curXpathWONumbers==$this->params['GROUPS'][str_repeat('SUB', $k-1).'SECTION']) $level = $k;
+				}
+			}
+			if($level > 0) $xpath = trim(mb_substr($this->params['GROUPS'][str_repeat('SUB', $level).'SECTION'], mb_strlen($this->params['GROUPS'][str_repeat('SUB', $level-1).'SECTION'])), '/');
+			else $xpath = trim(mb_substr($this->params['GROUPS']['SUBSECTION'], mb_strlen($this->params['GROUPS']['SECTION'])), '/');
 			$this->currentSectionXpath = $currentSectionXpath = $this->currentSectionXpath.'/'.$xpath;
-			$xpath2 = trim(substr($currentSectionXpath, strlen($this->params['GROUPS']['SECTION'])), '/');
+			$xpath2 = trim(mb_substr($currentSectionXpath, mb_strlen($this->params['GROUPS']['SECTION'])), '/');
 			//if($this->currentXmlObj->xpath($xpath2))
 			if($this->Xpath($this->currentXmlObj, $xpath2))
 			{
@@ -3098,9 +3305,10 @@ class Importer {
 					$xmlSubsectionCurrentRow = $this->stepparams['xmlSubsectionCurrentRowInSection'];
 				}
 				$this->stepparams['xmlSubsectionCurrentRowInSection'] = 0;
-				while($arSubsectionItem = $this->GetNextSubsection($sectionID, $arItem, $xmlSubsectionCurrentRow))
+				while($arSubsectionItem = $this->GetNextSubsection($xmlSubsectionCurrentRow, $sectionID, $arItem))
 				{
-					$this->SaveSectionRecord($arSubsectionItem, $sectionID);
+					$lastSubsectionId = $this->SaveSectionRecord($arSubsectionItem, $sectionID, true);
+					if(!isset($this->lastSubsectionId)) $this->lastSubsectionId = $lastSubsectionId;
 					$this->currentSectionXpath = $currentSectionXpath;
 					$this->xmlSubsections = $xmlSubsections;
 					if($this->CheckTimeEnding())
@@ -3115,12 +3323,13 @@ class Importer {
 			}
 		}
 		
-		if($this->elementInSection)
+		if($sectionID && $this->elementInSection)
 		{
 			$parentXpath = $this->xpath;
-			$this->xpath = '/'.trim(preg_replace('/\[\d+\]/', '', $currentXpath), '/').'/'.$this->xpathElementInSection;
+			$this->currentSectionShareXpath = preg_replace('/\[\d+\]/', '', $currentXpath);
+			$this->xpath = '/'.trim($this->currentSectionShareXpath, '/').'/'.$this->xpathElementInSection;
 			
-			$xpath = trim(substr($currentXpath, strlen($this->params['GROUPS']['SECTION'])), '/');
+			$xpath = trim(mb_substr($currentXpath, mb_strlen($this->params['GROUPS']['SECTION'])), '/');
 			if(strlen($xpath) > 0) $xpath .= '/';
 			$xpath .= $this->xpathElementInSection;
 			//$this->xmlElements = $this->currentXmlObj->xpath($xpath);
@@ -3132,14 +3341,14 @@ class Importer {
 				$this->stepparams['total_file_line'] = $this->xmlElementsCount;*/
 				$this->currentParentSectionXmlObj = $this->currentXmlObj;
 				$this->xmlCurrentRow = 0;
-				if($this->stepparams['xmlCurrentRowInSection'] > 0)
+				if(isset($this->stepparams['xmlCurrentRowInSection']))
 				{
-					$this->xmlCurrentRow = $this->stepparams['xmlCurrentRowInSection'];
+					$this->xmlCurrentRow = (int)$this->stepparams['xmlCurrentRowInSection'];
 				}
-				$this->stepparams['xmlCurrentRowInSection'] = 0;
-				while($arItem = $this->GetNextRecord($time))
+				unset($this->stepparams['xmlCurrentRowInSection']);
+				while($arEItem = $this->GetNextRecord($time))
 				{
-					if(is_array($arItem)) $this->SaveRecord($arItem, $sectionID);
+					if(is_array($arEItem)) $this->SaveRecord($arEItem + $arItem, (is_array($sectionIDs) && count($sectionIDs) > 1 ? $sectionIDs : $sectionID));
 					if($this->CheckTimeEnding())
 					{
 						$this->stepparams['xmlCurrentRowInSection'] = $this->xmlCurrentRow;
@@ -3150,20 +3359,27 @@ class Importer {
 				$this->currentXmlObj = $this->currentParentSectionXmlObj;
 			}
 			$this->xpath = $parentXpath;
+			$this->currentSectionShareXpath = null;
 		}
 	}
 	
-	public function SaveRecord($arItem, $sectionID=0)
+	public function SaveRecord($arItem, $sectionID=0, $isPacket=false)
 	{
-		$this->stepparams['total_read_line']++;
-		if(count(array_diff(array_map('trim', $arItem), array('')))==0)
+		if(!$isPacket)
 		{
-			return false;
+			$this->stepparams['total_read_line']++;
+			/*if(count(array_diff(array_map('trim', $arItem), array('')))==0) return false;*/ //maybe array in items
+			$this->stepparams['total_line']++;
 		}
-		$this->stepparams['total_line']++;
-		
+
 		$IBLOCK_ID = $this->params['IBLOCK_ID'];
 		$SECTION_ID = $this->params['SECTION_ID'];
+		$arSectionIds = array();
+		if(is_array($sectionID))
+		{
+			$arSectionIds = $sectionID;
+			$sectionID = current($sectionID);
+		}
 		if($sectionID > 0) $SECTION_ID = $sectionID;
 		
 		$arFieldsDef = $this->fl->GetFields($IBLOCK_ID);
@@ -3171,11 +3387,11 @@ class Importer {
 
 		$iblockFields = $this->GetIblockFields($IBLOCK_ID);
 		$fieldList = preg_grep('/^[^~]/', array_keys($arItem));
-		
+		$arRelProfiles = array();
 		foreach($this->params['FIELDS'] as $key=>$fieldFull)
 		{
 			list($xpath, $field) = explode(';', $fieldFull, 2);
-			if($field!='VARIABLE') continue;
+			if($field!='VARIABLE' && $field!='PROFILE_URL') continue;
 
 			$value = $arItem[$key];
 			if($this->fparams[$key]['NOT_TRIM']=='Y') $value = $arItem['~'.$key];
@@ -3200,6 +3416,10 @@ class Importer {
 			}
 			$arItem[$key] = $value;
 			$arItem['~'.$key] = $origValue;
+			if($field=='PROFILE_URL' && is_numeric($this->fparams[$key]['REL_PROFILE_ID']) && strlen($this->fparams[$key]['REL_PROFILE_ID']) > 0)
+			{
+				$arRelProfiles[$key] = array('LINK'=>$value, 'PROFILE'=>$this->fparams[$key]['REL_PROFILE_ID']);
+			}
 		}
 
 		$arFieldsElement = array();
@@ -3212,6 +3432,12 @@ class Importer {
 		$arFieldsPropsOrig = array();
 		$arFieldsSections = array();
 		$arFieldsIpropTemp = array();
+		$sectionTmpIds = array();
+		if(!empty($arSectionIds))
+		{
+			$arFieldsElement['IBLOCK_SECTION'] = $arSectionIds;
+			unset($arSectionIds);
+		}
 		foreach($this->params['FIELDS'] as $key=>$fieldFull)
 		{
 			list($xpath, $field) = explode(';', $fieldFull, 2);
@@ -3238,7 +3464,7 @@ class Importer {
 					$value = $this->ApplyConversions($value, $conversions, $arItem, array('KEY'=>$key, 'NAME'=>$field), $iblockFields);
 					$origValue = $this->ApplyConversions($origValue, $conversions, $arItem, array('KEY'=>$key, 'NAME'=>$field), $iblockFields);
 				}
-				if($value===false || (is_array($value) && count(array_diff($value, array(false)))==0)) continue;
+				if($value===false || (is_array($value) && count(array_diff(array_map(array('\Bitrix\KitImportxml\Utils', 'CompEmptyString'), $value), array(false)))==0)) continue;
 			}
 			$this->PrepareElementFields($value, $origValue, $field, $this->fparams[$key]);
 			
@@ -3250,19 +3476,35 @@ class Importer {
 					$arSectionIds = array();
 					if(!empty($value))
 					{
+						if(!is_array($value) && !isset($this->sectionIds[$value]) && strpos($value, $this->params['ELEMENT_MULTIPLE_SEPARATOR'])!==false)
+						{
+							$value = explode($this->params['ELEMENT_MULTIPLE_SEPARATOR'], $value);
+						}
 						if(is_array($value))
 						{
 							foreach($value as $value2)
 							{
-								if(isset($this->sectionIds[$value2])) $arSectionIds[] = $this->sectionIds[$value2];
+								if(isset($this->sectionIds[$value2]))
+								{
+									if(is_array($this->sectionIds[$value2])) $arSectionIds = array_merge($arSectionIds, $this->sectionIds[$value2]);
+									else $arSectionIds[] = $this->sectionIds[$value2];
+								}
 							}
 						}
-						elseif(isset($this->sectionIds[$value])) $arSectionIds[] = $this->sectionIds[$value];
+						elseif(isset($this->sectionIds[$value]))
+						{
+							if(is_array($this->sectionIds[$value])) $arSectionIds = array_merge($arSectionIds, $this->sectionIds[$value]);
+							else $arSectionIds[] = $this->sectionIds[$value];
+						}
 					}
 					if(!empty($arSectionIds))
 					{
-						$arFieldsElement['IBLOCK_SECTION'] = $arSectionIds;
+						if(!array_key_exists('IBLOCK_SECTION', $arFieldsElement)) $arFieldsElement['IBLOCK_SECTION'] = array();
+						$arFieldsElement['IBLOCK_SECTION'] = array_unique(array_merge($arFieldsElement['IBLOCK_SECTION'], $arSectionIds));
 					}
+					$sectionTmpIds = $value;
+					if(!is_array($sectionTmpIds)) $sectionTmpIds = array($sectionTmpIds);
+					$sectionTmpIds = array_diff($sectionTmpIds, array(''));
 				}
 				elseif($fieldKey=='SECTION_PATH')
 				{
@@ -3302,7 +3544,7 @@ class Importer {
 							$arFieldsElement[$adata[0]] = $adata[1];
 						}
 					}
-					if(isset($arFieldsElement[$fieldKey]) && in_array($field, $this->params['ELEMENT_UID']))
+					if(isset($arFieldsElement[$fieldKey]) && (in_array($field, $this->params['ELEMENT_UID']) || $field=='IE_TAGS'))
 					{
 						if(!is_array($arFieldsElement[$fieldKey]))
 						{
@@ -3328,11 +3570,13 @@ class Importer {
 					$adata = explode('=', $adata);
 				}
 				$arSect = explode('_', substr($field, 5), 2);
-				$arFieldsSections[$arSect[0]][$arSect[1]] = $value;
-				
-				if(is_array($adata) && count($adata) > 1)
+				if(strlen($arSect[0]) > 0)
 				{
-					$arFieldsSections[$arSect[0]][$adata[0]] = $adata[1];
+					$arFieldsSections[$arSect[0]][$arSect[1]] = $value;
+					if(is_array($adata) && count($adata) > 1)
+					{
+						$arFieldsSections[$arSect[0]][$adata[0]] = $adata[1];
+					}
 				}
 			}
 			elseif(strpos($field, 'ICAT_PRICE')===0)
@@ -3348,14 +3592,21 @@ class Importer {
 				}
 				elseif(substr($field, -6)=='_EXTRA')
 				{
-					$val = $this->GetFloatVal($val);
+					$val = $this->GetFloatVal($val, 0, true);
 				}
 				
 				$arPrice = explode('_', substr($field, 10), 2);
 				$pkey = $arPrice[1];
-				if($pkey=='PRICE' && $this->fparams[$key]['PRICE_USE_EXT']=='Y')
+				if($pkey=='PRICE')
 				{
-					$pkey = $pkey.'|QUANTITY_FROM='.$this->GetFloatVal($this->fparams[$key]['PRICE_QUANTITY_FROM']).'|QUANTITY_TO='.$this->GetFloatVal($this->fparams[$key]['PRICE_QUANTITY_TO']);
+					if($this->fparams[$key]['PRICE_USE_EXT']=='Y')
+					{
+						$pkey = $pkey.'|QUANTITY_FROM='.$this->GetFloatVal($this->fparams[$key]['PRICE_QUANTITY_FROM']).'|QUANTITY_TO='.$this->GetFloatVal($this->fparams[$key]['PRICE_QUANTITY_TO']);
+					}
+					if($this->fparams[$key]['EXT_UPDATE_FIRST']=='Y')
+					{
+						$arFieldsPrices[$arPrice[0]]['SAVE_QUANTITY'] = 'Y';
+					}
 				}
 				$arFieldsPrices[$arPrice[0]][$pkey] = $val;
 			}
@@ -3375,7 +3626,24 @@ class Importer {
 						$arFieldsProductDiscount[$adata[0]] = $adata[1];
 					}
 				}
-				$arFieldsProductDiscount[substr($field, 14)] = $value;
+				$field = substr($field, 14);
+				if($field=='VALUE' && isset($this->fparams[$key]))
+				{
+					$fse = $this->fparams[$key];
+					if(!empty($fse['CATALOG_GROUP_IDS']))
+					{
+						$arFieldsProductDiscount['CATALOG_GROUP_IDS'] = $fse['CATALOG_GROUP_IDS'];
+					}
+					if(is_array($fse['SITE_IDS']) && !empty($fse['SITE_IDS']))
+					{
+						foreach($fse['SITE_IDS'] as $siteId)
+						{
+							$arFieldsProductDiscount['LID_VALUES'][$siteId] = array('VALUE'=>$value);
+							if(isset($arFieldsProductDiscount['VALUE_TYPE'])) $arFieldsProductDiscount['LID_VALUES'][$siteId]['VALUE_TYPE'] = $arFieldsProductDiscount['VALUE_TYPE'];
+						}
+					}
+				}
+				$arFieldsProductDiscount[$field] = $value;
 			}
 			elseif(strpos($field, 'ICAT_')===0)
 			{
@@ -3384,10 +3652,6 @@ class Importer {
 				{
 					if($val=='') continue;
 					$val = $this->GetFloatVal($val);
-				}
-				elseif($field=='ICAT_MEASURE')
-				{
-					$val = $this->GetMeasureByStr($val);
 				}
 				$arFieldsProduct[substr($field, 5)] = $val;
 			}
@@ -3413,22 +3677,32 @@ class Importer {
 		{
 			$xmlPartObjects = $this->xmlPartObjects;
 			$arElementSections = array();
+			$this->sectionTmpMap = array();
 			$this->currentParentXmlObj = $this->currentXmlObj;
-			$xpath = trim(substr($this->params['GROUPS']['SECTION'], strlen($this->params['GROUPS']['ELEMENT'])), '/');
+			$xpath = trim(mb_substr($this->params['GROUPS']['SECTION'], mb_strlen($this->params['GROUPS']['ELEMENT'])), '/');
 			$this->xmlSections = $this->Xpath($this->currentParentXmlObj, $xpath);
 			$this->xmlSectionCurrentRow = 0;
+			$oldXpath = $this->xpath;
+			$this->xpath = $this->xpath."/".$xpath;
 			while($arSectionItem = $this->GetNextSectionRecord())
 			{
 				$this->currentSectionXpath = rtrim($this->params['GROUPS']['SECTION'], '/');
 				if(is_array($arSectionItem))
 				{
+					$this->lastSubsectionId = null;
 					$sectId = $this->SaveSectionRecord($arSectionItem);
-					if(is_numeric($sectId) && $sectId > 0 && !in_array($sectId, $arElementSections))
-					{
-						$arElementSections[] = $sectId;
-					}
+					if(isset($this->lastSubsectionId) && $this->lastSubsectionId) $sectId = $this->lastSubsectionId;
+					if(is_numeric($sectId) && $sectId > 0 && !in_array($sectId, $arElementSections)) $arElementSections[] = $sectId;
+					elseif(is_array($sectId)) $arElementSections = array_unique(array_merge($arElementSections, $sectId));
 				}
 			}
+			$this->xpath = $oldXpath;
+			$arParentIds = array();
+			foreach($this->sectionTmpMap as $tmpId=>$arTmpSect)
+			{
+				if(isset($arTmpSect['PARENT_TMP_ID']) && isset($this->sectionTmpMap[$arTmpSect['PARENT_TMP_ID']]) && isset($this->sectionTmpMap[$arTmpSect['PARENT_TMP_ID']]['ID']) && ($parentId = $this->sectionTmpMap[$arTmpSect['PARENT_TMP_ID']]['ID'])!==false && in_array($parentId, $arElementSections) && $parentId!=$arTmpSect['ID']) $arParentIds[] = $parentId;
+			}
+			if(count($arParentIds) > 0) $arElementSections = array_diff($arElementSections, $arParentIds);
 			$this->currentXmlObj = $this->currentParentXmlObj;
 			if(!empty($arElementSections))
 			{
@@ -3441,83 +3715,27 @@ class Importer {
 			&& (!isset($arFieldsElement['IBLOCK_SECTION']) || empty($arFieldsElement['IBLOCK_SECTION']))
 			&& (!isset($arFieldsElement['SECTION_PATH']) || empty($arFieldsElement['SECTION_PATH']))
 			&& empty($arFieldsSections)
-			&& !$sectionID
+			&& (!$SECTION_ID || ($this->sectionLoadMode && !$sectionID))
 			)
 		{
 			$this->stepparams['correct_line']++;
 			return false;
 		}
+		if(!empty($sectionTmpIds) && count(array_diff($sectionTmpIds, $this->notLoadSections['s']))==0)
+		{
+			$this->stepparams['correct_line']++;
+			return false;
+		}
 		
-		$this->AddGroupsProperties($arFieldsProps, $arFieldsPropsOrig, $IBLOCK_ID);
+		$this->AddGroupsProperties($arFieldsElement, $arFieldsElementOrig, $arFieldsProps, $arFieldsPropsOrig, $arFieldsPrices, $arFieldsProductStores, $arFieldsProductDiscount, $arFieldsProduct, $arItem, $IBLOCK_ID);
+		$this->AddGroupsStore($arFieldsProductStores, $arItem);
 		
-		if($sectionID > 0 && !isset($arFieldsElement['IBLOCK_SECTION']))
+		/*if($sectionID > 0 && !isset($arFieldsElement['IBLOCK_SECTION']))
 		{
 			$arFieldsElement['IBLOCK_SECTION'] = array($sectionID);
-		}
-
-		$arUid = array();
-		if(!is_array($this->params['ELEMENT_UID'])) $this->params['ELEMENT_UID'] = array($this->params['ELEMENT_UID']);
-		foreach($this->params['ELEMENT_UID'] as $tuid)
-		{
-			$uid = $valUid = $valUid2 = $nameUid = '';
-			$canSubstring = true;
-			if(strpos($tuid, 'IE_')===0)
-			{
-				$nameUid = $arFieldsDef['element']['items'][$tuid];
-				$uid = substr($tuid, 3);
-				if(strpos($uid, '|')!==false) $uid = current(explode('|', $uid));
-				$valUid = $arFieldsElementOrig[$uid];
-				$valUid2 = $arFieldsElement[$uid];
-				
-				if($uid == 'ACTIVE_FROM' || $uid == 'ACTIVE_TO')
-				{
-					$uid = 'DATE_'.$uid;
-					$valUid = $this->GetDateVal($valUid);
-					$valUid2 = $this->GetDateVal($valUid2);
-				}
-			}
-			elseif(strpos($tuid, 'IP_PROP')===0)
-			{
-				$nameUid = $arFieldsDef['prop']['items'][$tuid];
-				$uid = substr($tuid, 7);
-				$valUid = $arFieldsPropsOrig[$uid];
-				$valUid2 = $arFieldsProps[$uid];
-				if($propsDef[$uid]['PROPERTY_TYPE']=='L')
-				{
-					$uid = 'PROPERTY_'.$uid.'_VALUE';
-				}
-				elseif($propsDef[$uid]['PROPERTY_TYPE']=='N' && !is_numeric($valUid))
-				{
-					$valUid = $valUid2 = '';
-				}
-				else
-				{
-					if($propsDef[$uid]['PROPERTY_TYPE']=='S' && $propsDef[$uid]['USER_TYPE']=='directory')
-					{
-						$valUid = $this->GetHighloadBlockValue($propsDef[$uid], $valUid);
-						$valUid2 = $this->GetHighloadBlockValue($propsDef[$uid], $valUid2);
-						$canSubstring = false;
-					}
-					elseif($propsDef[$uid]['PROPERTY_TYPE']=='E')
-					{
-						$valUid = $this->GetIblockElementValue($propsDef[$uid], $valUid, $this->fieldSettings[$tuid]);
-						$valUid2 = $this->GetIblockElementValue($propsDef[$uid], $valUid2, $this->fieldSettings[$tuid]);
-						$canSubstring = false;
-					}
-					$uid = 'PROPERTY_'.$uid;
-				}
-			}
-			if($uid)
-			{
-				$arUid[] = array(
-					'uid' => $uid,
-					'nameUid' => $nameUid,
-					'valUid' => $valUid,
-					'valUid2' => $valUid2,
-					'substring' => ($this->fieldSettings[$tuid]['UID_SEARCH_SUBSTRING']=='Y' && $canSubstring)
-				);
-			}
-		}
+		}*/
+		
+		$arUid = $this->GetFilterUids($arFieldsElement, $arFieldsElementOrig, $arFieldsProps, $arFieldsPropsOrig, $IBLOCK_ID);
 		
 		$emptyFields = array();
 		foreach($arUid as $k=>$v)
@@ -3536,7 +3754,10 @@ class Importer {
 			
 			if(!$res)
 			{
-				$this->errors[] = sprintf(Loc::getMessage("KIT_IX_NOT_SET_FIELD"), implode(', ', $emptyFields), '').(strlen($arFieldsElement['NAME']) > 0 ? ' ('.$arFieldsElement['NAME'].')' : '');
+				$errElemName = $arFieldsElement['NAME'];
+				if(strlen($errElemName)==0) $errElemName = $arFieldsElement['XML_ID'];
+				if(strlen($errElemName)==0) $errElemName = '№'.$this->xmlCurrentRow;
+				$this->errors[] = sprintf(Loc::getMessage("KIT_IX_NOT_SET_FIELD"), implode(', ', $emptyFields), '').(strlen($errElemName) > 0 ? ' ('.$errElemName.')' : '');
 				$this->stepparams['error_line']++;
 			}
 			else
@@ -3563,21 +3784,20 @@ class Importer {
 		{
 			$arFieldsElement['ACTIVE'] = 'Y';
 		}
-
-		if(($this->params['ELEMENT_NO_QUANTITY_DEACTIVATE']=='Y' && isset($arFieldsProduct['QUANTITY']) && $this->GetFloatVal($arFieldsProduct['QUANTITY'])<=0)
-			|| ($this->params['ELEMENT_NO_PRICE_DEACTIVATE']=='Y' && $this->IsEmptyPrice($arFieldsPrices)))
-		{
-			$arFieldsElement['ACTIVE'] = 'N';
-		}
 		
-		$arKeys = array_merge(array('ID', 'NAME', 'IBLOCK_SECTION_ID'), array_keys($arFieldsElement));
+		$arKeys = array_merge(array('ID', 'NAME', 'IBLOCK_SECTION_ID', 'PREVIEW_PICTURE', 'WF_STATUS_ID'), array_keys($arFieldsElement));
 		
 		$arFilter = array('IBLOCK_ID'=>$IBLOCK_ID, 'CHECK_PERMISSIONS' => 'N');
 		foreach($arUid as $v)
 		{
 			if(!$v['substring'])
 			{
-				if(is_array($v['valUid'])) $arSubfilter = array_map('trim', $v['valUid']);
+				if(is_array($v['valUid'])) 
+				{
+					$arSubfilter = $v['valUid'];
+					if(is_array($v['valUid2'])) $arSubfilter = array_unique(array_merge($arSubfilter, $v['valUid2']));
+					elseif(strlen($v['valUid2']) > 0) $arSubfilter[] = $v['valUid2'];
+				}
 				else 
 				{
 					$arSubfilter = array(trim($v['valUid']));
@@ -3603,206 +3823,92 @@ class Importer {
 			}
 			else
 			{
-				$arFilter['%'.$v['uid']] = trim($v['valUid']);
+				if(is_array($v['valUid'])) $v['valUid'] = array_map(array($this, 'Trim'), $v['valUid']);
+				else $v['valUid'] = $this->Trim($v['valUid']);
+				$arFilter['%'.$v['uid']] = $v['valUid'];
 			}
 		}
-		
+
 		if(!empty($arFieldsIpropTemp))
 		{
 			$arFieldsElement['IPROPERTY_TEMPLATES'] = $arFieldsIpropTemp;
 		}
+		$arElemFields = array(
+			'ELEMENT' => $arFieldsElement,
+			'PROPS' => $arFieldsProps,
+			'SECTIONS' => $arFieldsSections,
+			'PRODUCT' => $arFieldsProduct,
+			'PRICES' => $arFieldsPrices,
+			'STORES' => $arFieldsProductStores,
+			'DISCOUNT' => $arFieldsProductDiscount,
+			'ITEM' => $arItem
+		);
 		
-		$elemName = '';
-		//$dbRes = \CIblockElement::GetList(array(), $arFilter, false, false, $arKeys);
-		$dbRes = \Bitrix\KitImportxml\DataManager\IblockElement::GetList($arFilter, $arKeys);
-		while($arElement = $dbRes->Fetch())
+		if($isPacket)
 		{
-			if($this->params['ONLY_DELETE_MODE']=='Y')
-			{
-				$ID = $arElement['ID'];
-				$this->BeforeElementDelete($ID, $IBLOCK_ID);
-				\CIblockElement::Delete($ID);
-				$this->AfterElementDelete($ID, $IBLOCK_ID);
-				unset($ID);
-				continue;
-			}
-			
-			$ID = $arElement['ID'];
-			$arFieldsProps2 = $arFieldsProps;
-			$arFieldsElement2 = $arFieldsElement;
-			$arFieldsSections2 = $arFieldsSections;
-			$arFieldsProduct2 = $arFieldsProduct;
-			$arFieldsPrices2 = $arFieldsPrices;
-			$arFieldsProductStores2 = $arFieldsProductStores;
-			if($this->conv->SetElementId($ID)
-				&& $this->conv->UpdateProperties($arFieldsProps2, $ID)!==false
-				&& $this->conv->UpdateElementFields($arFieldsElement2, $ID)!==false
-				&& $this->conv->UpdateElementSectionFields($arFieldsSections2, $ID)!==false
-				&& $this->conv->UpdateProduct($arFieldsProduct2, $arFieldsPrices2, $arFieldsProductStores2, $ID)!==false
-				&& $this->conv->SetElementId(0))
-			{
-				$this->BeforeElementSave($ID, 'update');
-				if($this->params['ONLY_CREATE_MODE_ELEMENT']!='Y')
-				{
-					$this->UnsetUidFields($arFieldsElement2, $arFieldsProps2, $this->params['ELEMENT_UID']);
-					if(!empty($this->fieldOnlyNew))
-					{
-						$this->UnsetExcessSectionFields($this->fieldOnlyNew, $arFieldsSections2, $arFieldsElement2);
-					}
-					
-					$arElementSections = false;
-					if($this->params['ELEMENT_ADD_NEW_SECTIONS']=='Y')
-					{
-						$arElementSections = $this->GetElementSections($ID);
-						if(!is_array($arElementSections)) $arElementSections = array();
-						if(!is_array($arFieldsElement2['IBLOCK_SECTION'])) $arFieldsElement2['IBLOCK_SECTION'] = array();
-						$arFieldsElement2['IBLOCK_SECTION'] = array_merge($arFieldsElement2['IBLOCK_SECTION'], $arElementSections);
-					}
-					$this->GetSections($arFieldsElement2, $IBLOCK_ID, $SECTION_ID, $arFieldsSections2);
-					if($this->params['NOT_LOAD_ELEMENTS_WO_SECTION']=='Y' 
-						&& (!isset($arFieldsElement2['IBLOCK_SECTION']) || empty($arFieldsElement2['IBLOCK_SECTION']))) continue;
-					
-					foreach($arElement as $k=>$v)
-					{
-						$action = $this->fieldSettings['IE_'.$k]['LOADING_MODE'];
-						if($action)
-						{
-							if($action=='ADD_BEFORE') $arFieldsElement2[$k] = $arFieldsElement2[$k].$v;
-							elseif($action=='ADD_AFTER') $arFieldsElement2[$k] = $v.$arFieldsElement2[$k];
-						}
-					}
-					
-					if(!empty($this->fieldOnlyNew))
-					{
-						$this->UnsetExcessFields($this->fieldOnlyNew, $arFieldsElement2, $arFieldsProps2, $arFieldsProduct2, $arFieldsPrices2, $arFieldsProductStores2, $arFieldsProductDiscount);
-					}
-					
-					$this->RemoveProperties($ID, $IBLOCK_ID);
-					$this->SaveProperties($ID, $IBLOCK_ID, $arFieldsProps2);
-					$this->SaveProduct($ID, $IBLOCK_ID, $arFieldsProduct2, $arFieldsPrices2, $arFieldsProductStores2);
-					
-					$el = new \CIblockElement();
-					if($this->UpdateElement($el, $ID, $IBLOCK_ID, $arFieldsElement2, $arElement, $arElementSections))
-					{
-						//$this->SetTimeBegin($ID);
-					}
-					else
-					{
-						$this->stepparams['error_line']++;
-						$this->errors[] = sprintf(Loc::getMessage("KIT_IX_UPDATE_ELEMENT_ERROR"), $el->LAST_ERROR, 'ID = '.$ID);
-					}
-					
-					$elemName = $arElement['NAME'];
-					$this->SaveDiscount($ID, $IBLOCK_ID, $arFieldsProductDiscount, $elemName);
-					$this->stepparams['element_updated_line']++;
-				}
-			}
-			
-			$this->SaveElementId($ID);
-			if($elemName && !$arFieldsElement2['NAME']) $arFieldsElement2['NAME'] = $elemName;
-			$this->SaveRecordAfter($ID, $IBLOCK_ID, $arItem, $arFieldsElement2);
+			$this->SaveRecordAfter(0, $IBLOCK_ID, $arItem);
+			return array(
+				'ITEM' => $arItem,
+				'FILTER' => $arFilter,
+				'FIELDS' => $arElemFields
+			);
 		}
 		
-		$allowCreate = (bool)(\Bitrix\KitImportxml\DataManager\IblockElement::SelectedRowsCount($dbRes)==0 && $this->params['ONLY_DELETE_MODE']!='Y');
+		$allowCreate = (bool)($this->params['ONLY_DELETE_MODE']!='Y');
 		if($allowCreate && $this->params['SEARCH_OFFERS_WO_PRODUCTS']=='Y')
 		{
-			$res = $this->SaveSKUWithGenerate(0, '', $IBLOCK_ID, $arItem);
+			//$res = $this->SaveSKUWithGenerate(0, '', $IBLOCK_ID, $arItem);
+			$res = $this->SaveRecordAfter(0, $IBLOCK_ID, $arItem);
 			if($res==='timesup') return false;
 			if($res===true) $allowCreate = false;
 		}
 		
+		$elemName = '';
+		$duplicate = false;
+		//$dbRes = \CIblockElement::GetList(array(), $arFilter, false, false, $arKeys);
+		$dbRes = \Bitrix\KitImportxml\DataManager\IblockElementTable::GetListComp($arFilter, $arKeys);
+		while($arElement = $dbRes->Fetch())
+		{
+			$res = $this->SaveRecordUpdate($arRelProfiles, $IBLOCK_ID, $SECTION_ID, $arElement, $arElemFields, array(), $duplicate);			
+			if($res==='timesup') return false;
+			$duplicate = true; 
+		}
+		
+		$allowCreate = (bool)($allowCreate && \Bitrix\KitImportxml\DataManager\IblockElementTable::SelectedRowsCount($dbRes)==0);
+		
 		if($allowCreate)
 		{
-			if($this->params['ONLY_UPDATE_MODE_ELEMENT']!='Y')
+			if($this->SaveRecordAdd($IBLOCK_ID, $SECTION_ID, $arElemFields, $arItem, $arFilter)===false)
 			{
-				$this->UnsetUidFields($arFieldsElement, $arFieldsProps, $this->params['ELEMENT_UID'], true);
-				if(isset($arFieldsElement['ID']))
-				{
-					$this->stepparams['error_line']++;
-					$this->errors[] = sprintf(Loc::getMessage("KIT_IX_NEW_ELEMENT_WITH_ID"), $arFieldsElement['ID'], '');
-					return false;
-				}
-				if(strlen($arFieldsElement['NAME'])==0)
-				{
-					$this->stepparams['error_line']++;
-					$this->errors[] = sprintf(Loc::getMessage("KIT_IX_NOT_SET_FIELD"), $arFieldsDef['element']['items']['IE_NAME']).($arFieldsElement['XML_ID'] ? ' ('.$arFieldsElement['XML_ID'].')' : '');
-					return false;
-				}
-				if($this->params['ELEMENT_NEW_DEACTIVATE']=='Y')
-				{
-					$arFieldsElement['ACTIVE'] = 'N';
-				}
-				elseif(!$arFieldsElement['ACTIVE'])
-				{
-					$arFieldsElement['ACTIVE'] = 'Y';
-				}
-				$arFieldsElement['IBLOCK_ID'] = $IBLOCK_ID;
-				$this->PrepareElementPictures($arFieldsElement);
-				$this->GetSections($arFieldsElement, $IBLOCK_ID, $SECTION_ID, $arFieldsSections);
-				if($this->params['NOT_LOAD_ELEMENTS_WO_SECTION']=='Y' 
-					&& (!isset($arFieldsElement['IBLOCK_SECTION']) || empty($arFieldsElement['IBLOCK_SECTION'])))
-				{
-					$this->stepparams['correct_line']++;
-					return false;
-				}
-				$this->GetDefaultElementFields($arFieldsElement, $iblockFields);
-				$el = new \CIblockElement();
-				$ID = $el->Add($arFieldsElement, false, true, true);
-				
-				if($ID)
-				{
-					$this->BeforeElementSave($ID, 'add');
-					$this->logger->AddElementChanges('IE_', $arFieldsElement);
-					$this->AddTagIblock($IBLOCK_ID);
-					//$this->SetTimeBegin($ID);
-					$this->SaveProperties($ID, $IBLOCK_ID, $arFieldsProps, true);
-					$this->PrepareProductAdd($arFieldsProduct, $ID, $IBLOCK_ID);
-					$this->SaveProduct($ID, $IBLOCK_ID, $arFieldsProduct, $arFieldsPrices, $arFieldsProductStores);
-					$this->SaveDiscount($ID, $IBLOCK_ID, $arFieldsProductDiscount, $arFieldsElement['NAME']);
-					//if(!empty($arFieldsElement['IPROPERTY_TEMPLATES']) || $arFieldsElement['NAME'])
-					if(true)
-					{
-						$ipropValues = new \Bitrix\Iblock\InheritedProperty\ElementValues($IBLOCK_ID, $ID);
-						$ipropValues->clearValues();
-					}
-					$this->stepparams['element_added_line']++;
-					$this->SaveElementId($ID);
-					$this->SaveRecordAfter($ID, $IBLOCK_ID, $arItem, $arFieldsElement);
-				}
-				else
-				{
-					$this->stepparams['error_line']++;
-					$this->errors[] = sprintf(Loc::getMessage("KIT_IX_ADD_ELEMENT_ERROR"), $el->LAST_ERROR, $arFieldsElement['NAME']);
-					return false;
-				}
-			}
-			else
-			{
-				$this->logger->SaveElementNotFound($arFilter);
+				return false;
 			}
 		}
 		
 		$this->stepparams['correct_line']++;
 		$this->SaveStatusImport();
 		$this->RemoveTmpImageDirs();
+		$this->CheckRelProfiles($arRelProfiles);
 	}
 	
-	public function SaveRecordAfter($ID, $IBLOCK_ID, $arItem, $arFieldsElement)
+	public function SaveRecordAfter($ID, $IBLOCK_ID, $arItem, $arFieldsElement=array(), $isChanges=true, $saveOffers=true)
 	{
-		if(!$ID) return;		
+		if(strlen($ID)==0) return false;		
 		$arFieldsElement['ID'] = $ID;
 		$this->stepparams['currentelement'] = $arFieldsElement;
 		$this->stepparams['currentelementitem'] = $arItem;
-		if($this->params['ELEMENT_UID_SKU']) 
+		$ret = false;
+		if($saveOffers && $this->params['ELEMENT_UID_SKU'] && ($this->params['SEARCH_OFFERS_WO_PRODUCTS']!='Y' || $ID==0 || $this->params['CREATE_NEW_OFFERS']=='Y'))
 		{
 			$isSaved = false;
+			$arFParams = $this->fparams;
 			if($this->skuInElement)
 			{				
 				$this->currentParentXmlObj = $this->currentXmlObj;
-				$xpath = trim(substr($this->params['GROUPS']['OFFER'], strlen($this->params['GROUPS']['ELEMENT'])), '/');
+				$xpath = trim(mb_substr($this->params['GROUPS']['OFFER'], mb_strlen($this->params['GROUPS']['ELEMENT'])), '/');
 				//$this->xmlOffers = $this->currentParentXmlObj->xpath($xpath);
 				$this->xmlOffers = $this->Xpath($this->currentParentXmlObj, $xpath);
-				$this->xmlOfferCurrentRow = 0;
+				$this->xmlOfferCurrentRow = (isset($this->stepparams['xmlOfferCurrentRowInElement']) && $this->stepparams['xmlOfferCurrentRowInElement'] > 0 ? (int)$this->stepparams['xmlOfferCurrentRowInElement'] : 0);
+				$this->stepparams['xmlOfferCurrentRowInElement'] = 0;
 				while($arOfferItem = $this->GetNextOffer($ID, $arItem))
 				{
 					foreach($this->arSkuAddFields as $key)
@@ -3816,8 +3922,21 @@ class Importer {
 						if(array_key_exists($key2, $arOfferItem) || array_key_exists($key, $arOfferItem)) continue;
 						$arOfferItem[$key] = $arOfferItem[$key2];
 						$arOfferItem['~'.$key] = $arOfferItem['~'.$key2];
+						$arFParams[$key] = $arFParams[$key2];
 					}
-					$this->SaveSKUWithGenerate($ID, $arFieldsElement['NAME'], $IBLOCK_ID, $arOfferItem);
+					if($this->SaveSKUWithGenerate($ID, $arFieldsElement['NAME'], $IBLOCK_ID, $arOfferItem, $arFParams)===true) $ret = true;
+					if($this->xmlOfferCurrentRow%10==0)
+					{
+						$this->SaveStatusImport();
+						if($this->CheckTimeEnding())
+						{
+							$this->stepparams['xmlOfferCurrentRowInElement'] = $this->xmlOfferCurrentRow;
+							$this->stepparams['total_read_line']--;
+							$this->stepparams['total_line']--;
+							$this->xmlCurrentRow--;
+							return 'timesup';
+						}
+					}
 				}
 				$this->currentXmlObj = $this->currentParentXmlObj;
 				if($this->xmlOfferCurrentRow > 0) $isSaved = true;
@@ -3828,186 +3947,509 @@ class Importer {
 					{
 						$arItem[$key2] = $arItem[$key];
 						$arItem['~'.$key2] = $arItem['~'.$key];
+						$arFParams[$key2] = $arFParams[$key];
 					}
 				}
 			}
 			if(!$isSaved)
 			{
-				$this->SaveSKUWithGenerate($ID, $arFieldsElement['NAME'], $IBLOCK_ID, $arItem);
+				$ret = $this->SaveSKUWithGenerate($ID, $arFieldsElement['NAME'], $IBLOCK_ID, $arItem, $arFParams);
 			}
 		}
 		
-		if($this->params['ONAFTERSAVE_HANDLER'])
+		if($ID > 0)
 		{
-			$this->ExecuteOnAfterSaveHandler($this->params['ONAFTERSAVE_HANDLER'], $ID);
-		}
-		
-		if($this->params['REMOVE_COMPOSITE_CACHE_PART']=='Y')
-		{
-			if($arElement = \CIblockElement::GetList(array(), array('ID'=>$ID), false, false, array('DETAIL_PAGE_URL'))->GetNext())
+			if($this->params['ONAFTERSAVE_HANDLER'])
 			{
-				$this->ClearCompositeCache($arElement['DETAIL_PAGE_URL']);
+				$this->ExecuteOnAfterSaveHandler($this->params['ONAFTERSAVE_HANDLER'], $ID);
+			}
+			
+			if($this->params['REMOVE_COMPOSITE_CACHE_PART']=='Y' && $isChanges)
+			{
+				if($arElement = \CIblockElement::GetList(array(), array('ID'=>$ID), false, false, array('DETAIL_PAGE_URL'))->GetNext())
+				{
+					$this->ClearCompositeCache($arElement['DETAIL_PAGE_URL']);
+				}
 			}
 		}
+		return $ret;
 	}
 	
-	public function AddGroupsProperties(&$arFieldsProps, &$arFieldsPropsOrig, $IBLOCK_ID, $isOffer=false)
+	public function CheckIdForNewElement(&$arFieldsElement, $isOffer=false)
 	{
-		if((!$isOffer && $this->propertyInElement) || ($isOffer && $this->propertyInOffer))
+		if(isset($arFieldsElement['ID']))
 		{
-			$xmlPartObjects = $this->xmlPartObjects;
-			$propsDef = $this->GetIblockProperties($this->params['IBLOCK_ID']);
-			$this->currentParentXmlObj = $this->currentXmlObj;
-			$xpath = $this->params['GROUPS']['PROPERTY'];
+			$ID = trim($arFieldsElement['ID']);
+			$maxVal = 2147483647;
+			$error = false;
+			if(!class_exists('\Bitrix\Iblock\ElementTable')) $error = '';
+			if($error===false && !preg_match('/^[1-9]\d*$/', $ID)) $error = Loc::getMessage("KIT_IX_ERROR_FORMAT_ID");
+			if($error===false && $ID > $maxVal) $error = sprintf(Loc::getMessage("KIT_IX_ERROR_OUTOFRANGE_ID"), $maxVal);
+			if($error===false && \Bitrix\Iblock\ElementTable::getList(array('filter'=>array('ID'=>$ID), 'select'=>array('ID')))->Fetch()) $error = Loc::getMessage("KIT_IX_ERROR_EXISTING_ID");
+			if($error!==false)
+			{
+				$this->stepparams['error_line']++;
+				$this->errors[] = sprintf(($isOffer ? Loc::getMessage("KIT_IX_NEW_OFFER_WITH_ID") : Loc::getMessage("KIT_IX_NEW_ELEMENT_WITH_ID")), $arFieldsElement['ID'], $error);
+				return false;
+			}
+			$arFieldsElement['TMP_ID'] = md5($ID);
+			while(\Bitrix\Iblock\ElementTable::getList(array('filter'=>array('TMP_ID'=>$arFieldsElement['TMP_ID']), 'select'=>array('ID')))->Fetch())
+			{
+				$arFieldsElement['TMP_ID'] = md5($ID.'_'.mt_rand());
+			}
+		}
+		return true;
+	}
+	
+	public function AddGroupsProperties(&$_e, &$_oe, &$_p, &$_op, &$_c, &$_s, &$_d, &$_pr, &$arItem, $IBLOCK_ID, $isOffer=false)
+	{
+		if(isset($this->offerFieldsFromElemProps) && count($this->offerFieldsFromElemProps) > 0 && $isOffer)
+		{
+			foreach($this->offerFieldsFromElemProps as $k=>$v)
+			{
+				foreach($v as $k2=>$v2)
+				{
+					if(!array_key_exists($k2, ${'_'.$k})) ${'_'.$k}[$k2] = $v2;
+				}
+			}
+		}
+		
+		if(!(!$isOffer && $this->propertyInElement) && !($isOffer && $this->propertyInOffer)) return;
+		$isPropertyMap = (bool)($isOffer ? $this->isOfferPropertyMap : $this->isPropertyMap);
+		$propertyMap = ($isOffer ? $this->offerPropertyMap : $this->propertyMap);
+		if(!$isOffer && $isPropertyMap)
+		{
+			$this->offerFieldsFromElemProps = array();
+			foreach(array('e', 'oe', 'p', 'op', 'c', 's', 'd', 'pr') as $v)
+			{
+				$this->offerFieldsFromElemProps[$v] = array();
+				${'__'.$v} = &$this->offerFieldsFromElemProps[$v];
+			}
+		}
+		
+		$xmlPartObjects = $this->xmlPartObjects;
+		$propsDef = $this->GetIblockProperties($this->params['IBLOCK_ID']);
+		$this->currentParentXmlObj = $this->currentXmlObj;
+		$groupName = 'PROPERTY';
+		if($isOffer && isset($this->params['GROUPS']['OFFPROPERTY']) && strlen($this->params['GROUPS']['OFFPROPERTY']) > 0) $groupName = 'OFFPROPERTY';
+		$xpath = $this->params['GROUPS'][$groupName];
+		if($isOffer)
+		{
+			$xpath = $this->ReplaceXpath($xpath);
+		}
+		$groupXpath = $xpath;
+		$xpath = trim(mb_substr($xpath, mb_strlen($this->params['GROUPS']['ELEMENT'])), '/');
+		$this->parentXpath = $this->xpath;
+		$this->xpath = '/'.$this->params['GROUPS'][$groupName];
+		$this->parentObject = array('obj'=>$this->currentParentXmlObj, 'xpath'=>$this->parentXpath);
+		//$this->xmlProperties = $this->currentParentXmlObj->xpath($xpath);
+		$this->xmlProperties = $this->Xpath($this->currentParentXmlObj, $xpath);
+		$this->xmlPropertiesMap = array();
+		$this->GetXpathMap($this->xmlPropertiesMap, $this->currentParentXmlObj, $xpath, $this->params['GROUPS']['ELEMENT']);
+		$iblockFields = $this->GetIblockFields($IBLOCK_ID);
+		$this->xmlPropertiesCurrentRow = 0;
+		while($arProperty = $this->GetNextProperty($groupXpath, $groupName))
+		{
+			$arPropertyFields = array();
+			$arPropertyFieldsOrig = array();
+			$tmpID = false;
+			$setNewOnly = $checkPropXmlId = false;
+			$onlyNewFields = array();
+			foreach($this->params['FIELDS'] as $key=>$fieldFull)
+			{
+				list($xpath, $field) = explode(';', $fieldFull, 2);
+				if(strpos($field, $groupName.'_')!==0) continue;
+				
+				$value = $valueOrig = $arProperty[$key];
+				if($this->fparams[$key]['NOT_TRIM']=='Y') $value = $arProperty['~'.$key];
+				$origValue = $arProperty['~'.$key];
+				
+				$conversions = $this->fparams[$key]['CONVERSION'];
+				if(!empty($conversions))
+				{
+					if(is_array($value))
+					{
+						foreach($value as $k2=>$v2)
+						{
+							$value[$k2] = $this->ApplyConversions($value[$k2], $conversions, $arProperty);
+							$origValue[$k2] = $this->ApplyConversions($origValue[$k2], $conversions, $arProperty);
+						}
+					}
+					else
+					{
+						$value = $this->ApplyConversions($value, $conversions, $arProperty);
+						$origValue = $this->ApplyConversions($origValue, $conversions, $arProperty);
+					}
+					if($value===false || (is_array($value) && count(array_diff($value, array(false)))==0)) continue;
+				}
+				
+				$fieldName = mb_substr($field, mb_strlen($groupName) + 1);
+				if($this->fparams[$key]['SET_NEW_ONLY']=='Y')
+				{
+					if($fieldName=='VALUE') $setNewOnly = true;
+					$onlyNewFields[] = $fieldName;
+				}
+				if($fieldName=='NAME' && $this->fparams[$key]['PROPERTY_SEARCH_WO_XML_ID']=='Y') $checkPropXmlId = true;
+				if($fieldName=='TMP_ID') $tmpID = $value;
+				else $arPropertyFields[$fieldName] = $value;
+				$arPropertyFieldsOrig[$fieldName] = (is_array($valueOrig) ? $valueOrig : $this->Trim($valueOrig));
+			}
+
+			$arPropsInd = array(0);
+			if(array_key_exists('NAME', $arPropertyFields) && is_array($arPropertyFields['NAME']) && count($arPropertyFields['NAME']) > 0)
+			{
+				$arPropsInd = array_keys($arPropertyFields['NAME']);
+				$arPropNames = $arPropertyFields['NAME'];
+				$arPropNamesOrig = $arPropertyFieldsOrig['NAME'];
+				$arPropVals = $arPropertyFields['VALUE'];
+				$arPropValsOrig = $arPropertyFieldsOrig['VALUE'];
+			}
+
+			foreach($arPropsInd as $propInd)
+			{
+				if(isset($arPropNames) && is_array($arPropNames))
+				{
+					$arPropertyFields['NAME'] = $arPropNames[$propInd];
+					$arPropertyFieldsOrig['NAME'] = $arPropNamesOrig[$propInd];
+					if(is_array($arPropVals) && array_key_exists($propInd, $arPropVals))
+					{
+						$arPropertyFields['VALUE'] = $arPropVals[$propInd];
+						$arPropertyFieldsOrig['VALUE'] = $arPropValsOrig[$propInd];
+					}
+				}
+				$arProp = false;
+				$allowCreate = true;
+				$paramNewProps = array();
+				$propIds = array(false);
+				if($tmpID!==false && isset($this->propertyIds[$tmpID]) && $this->propertyIds[$tmpID]) $propIds = array($this->propertyIds[$tmpID]);
+				
+				/*Fields from property map*/
+				if(true /*!$isOffer*/)
+				{
+					if($propertyMap['NOT_LOAD_WO_MAPPED']=='Y') $propIds = array();
+					if($propertyMap['PROPERTY_NOT_CREATE']=='Y') $allowCreate = false;
+					elseif(is_array($propertyMap['NEW_PROPS'])) $paramNewProps = $propertyMap['NEW_PROPS'];
+					if($isPropertyMap && array_key_exists('NAME', $arPropertyFieldsOrig))
+					{
+						$fName = $arPropertyFieldsOrig['NAME'];
+						if(array_key_exists($fName, $propertyMap['MAP']))
+						{
+							$propIds = array();
+							$arFields = $propertyMap['MAP'][$fName];
+							foreach($arFields as $fieldKey=>$field)
+							{
+								if($field=='NOT_LOAD') continue;
+								$value = $origValue = $arPropertyFields['VALUE'];
+								if(!$isOffer && ($fgKey = $fName.'-'.$fieldKey) && (in_array($fgKey, $this->fieldsForSkuGen) || in_array($fgKey, $this->fieldsBindToGenSku)))
+								{
+									//sku generate
+									if(isset($arItem[$fgKey]))
+									{
+										if(!is_array($arItem[$fgKey])) $arItem[$fgKey] = array($arItem[$fgKey]);
+										$arItem[$fgKey][] = $value;
+									}
+									else $arItem[$fgKey] = $value;
+									continue;
+								}
+
+								$fs = $this->fparams[$fName.'_'.$fieldKey];
+								//$conversions = $this->fieldSettings[$field]['CONVERSION'];
+								$conversions = $fs['CONVERSION'];
+								if(!empty($conversions))
+								{
+									$value = $this->ApplyConversions($value, $conversions, $arItem, array('KEY'=>$field, 'NAME'=>$field), $iblockFields);
+									$origValue = $this->ApplyConversions($origValue, $conversions, $arItem, array('KEY'=>$field, 'NAME'=>$field), $iblockFields);
+									if($value===false) continue;
+								}
+								if(preg_match('/ICAT_PRICE.*_PRICE$/', $field) && !in_array($value, array('', '-')))
+								{
+									$value = $this->ApplyMargins($value, $this->fieldSettings[$field]);
+								}
+								if(strpos($field, 'OFFER_')===0)
+								{
+									$px = ($isOffer ? '_' : '__');
+									//if($isOffer && strpos($field, 'OFFER_IP_PROP')===0) $propIds[] = substr($field, 13);
+									$this->AddGroupsField(${$px.'e'}, ${$px.'oe'}, ${$px.'p'}, ${$px.'op'}, ${$px.'c'}, ${$px.'s'}, ${$px.'d'}, ${$px.'pr'}, substr($field, 6), $value, $origValue, $fs, true);
+									if(array_key_exists('DESCRIPTION', $arPropertyFields)) $this->AddGroupsField(${$px.'e'}, ${$px.'oe'}, ${$px.'p'}, ${$px.'op'}, ${$px.'c'}, ${$px.'s'}, ${$px.'d'}, ${$px.'pr'}, substr($field, 6).'_DESCRIPTION', $arPropertyFields['DESCRIPTION'], $arPropertyFields['DESCRIPTION'], $fs, true);
+									if($setNewOnly && !in_array(substr($field, 6), $this->fieldOnlyNewOffer)) $this->fieldOnlyNewOffer[] = substr($field, 6);
+								}
+								else
+								{
+									$this->AddGroupsField($_e, $_oe, $_p, $_op, $_c, $_s, $_d, $_pr, $field, $value, $origValue, $fs);
+									if(array_key_exists('DESCRIPTION', $arPropertyFields)) $this->AddGroupsField($_e, $_oe, $_p, $_op, $_c, $_s, $_d, $_pr, $field.'_DESCRIPTION', $arPropertyFields['DESCRIPTION'], $arPropertyFields['DESCRIPTION'], $fs);
+									if($setNewOnly && !in_array($field, $this->fieldOnlyNew)) $this->fieldOnlyNew[] = $field;
+									//if(strpos($field, 'IP_PROP')===0) $propIds[] = substr($field, 7);
+								}
+							}
+						}
+					}
+				}
+				/*/Fields from property map*/
+				
+				foreach($propIds as $propId)
+				{
+					$arProp = false;
+					if($propId!==false) $arProp = $this->GetIblockPropertyById($propId, $IBLOCK_ID, true);
+					else
+					{
+						if(!is_array($arProp) && $arPropertyFields['XML_ID']) $arProp = $this->GetIblockPropertyByXmlId($arPropertyFields['XML_ID'], $IBLOCK_ID, $allowCreate, $paramNewProps, $arPropertyFields);
+						if(!is_array($arProp) && $arPropertyFields['NAME']) $arProp = $this->GetIblockPropertyByName($arPropertyFields['NAME'], $IBLOCK_ID, $allowCreate, $paramNewProps, $arPropertyFields, $checkPropXmlId);
+						if(!is_array($arProp) && $arPropertyFields['CODE']) $arProp = $this->GetIblockPropertyByCode($arPropertyFields['CODE'], $IBLOCK_ID);
+						
+						/*Update property fields*/
+						if(is_array($arProp) && isset($arProp['ID']) && !array_key_exists($arProp['ID'], $this->updatedProps) && class_exists('\Bitrix\Iblock\PropertyTable'))
+						{
+							$arUpdatedFields = array();
+							$fCount = 0;
+							foreach($arPropertyFields as $k=>$v)
+							{
+								if(in_array($k, array('NAME', 'XML_ID', 'CODE')))
+								{
+									$fCount++;
+									if(!in_array($k, $onlyNewFields)) $arUpdatedFields[$k] = $v;
+								}
+							}
+							if($fCount > 1 && count($arUpdatedFields) > 0)
+							{
+								\Bitrix\Iblock\PropertyTable::update($arProp['ID'], $arUpdatedFields);
+							}
+							$this->updatedProps[$arProp['ID']] = true;
+						}
+						/*/Update property fields*/
+					}
+
+					if(is_array($arProp) && isset($arProp['ID']))
+					{
+						$fieldName = $arProp['ID'];
+						$currentPropDef = (isset($propsDef[$fieldName]) ? $propsDef[$fieldName] : $arProp);
+						$value = $origValue = $arPropertyFields['VALUE'];
+						$key = 'IP_PROP'.$arProp['ID'];
+						$conversions = $this->fieldSettings[$key]['CONVERSION'];
+						if(!empty($conversions))
+						{
+							$value = $this->ApplyConversions($value, $conversions, $arItem, array('KEY'=>$field, 'NAME'=>$field), $iblockFields);
+							$origValue = $this->ApplyConversions($origValue, $conversions, $arItem, array('KEY'=>$field, 'NAME'=>$field), $iblockFields);
+						}
+						if($isOffer && is_numeric($isOffer) && $isOffer==$currentPropDef['ID']) $value = false;
+						if($value!==false)
+						{
+							if(isset($arPropertyFields['VALUE_XML_ID']) && (is_array($arPropertyFields['VALUE_XML_ID']) || strlen($arPropertyFields['VALUE_XML_ID']) > 0))
+							{
+								if($arProp['MULTIPLE']=='Y' && !is_array($arPropertyFields['VALUE_XML_ID']) && strpos($arPropertyFields['VALUE_XML_ID'], $this->params['ELEMENT_MULTIPLE_SEPARATOR'])!==false) $arPropertyFields['VALUE_XML_ID'] = explode($this->params['ELEMENT_MULTIPLE_SEPARATOR'], $arPropertyFields['VALUE_XML_ID']);
+								if($arProp['PROPERTY_TYPE']=='E')
+								{
+									$value = $origValue = $arPropertyFields['VALUE_XML_ID'];
+									$this->fieldSettings['IP_PROP'.$fieldName]['REL_ELEMENT_FIELD'] = 'IE_XML_ID';
+								}
+								elseif($arProp['PROPERTY_TYPE']=='S' && $arProp['USER_TYPE']=='directory')
+								{
+									$value = $origValue = $arPropertyFields['VALUE_XML_ID'];
+									$this->fieldSettings['IP_PROP'.$fieldName]['HLBL_FIELD'] = 'UF_XML_ID';
+								}
+								elseif($arProp['PROPERTY_TYPE']=='L') $value = $origValue = $this->GetListPropertyValueByXmlId($arProp, $arPropertyFields['VALUE_XML_ID']);
+							}
+							
+							if($setNewOnly)
+							{
+								if($isOffer){if(!in_array('IP_PROP'.$fieldName, $this->fieldOnlyNewOffer)) $this->fieldOnlyNewOffer[] = 'IP_PROP'.$fieldName;}
+								else{if(!in_array('IP_PROP'.$fieldName, $this->fieldOnlyNew)) $this->fieldOnlyNew[] = 'IP_PROP'.$fieldName;}
+							}
+							if($arProp['PROPERTY_TYPE']=='E' && !isset($this->fieldSettings['IP_PROP'.$fieldName]['REL_ELEMENT_FIELD'])) $this->fieldSettings['IP_PROP'.$fieldName]['REL_ELEMENT_FIELD'] = 'IE_NAME';
+							
+							$this->GetPropField($_p, $_op, $this->fieldSettings[$key], $currentPropDef, $fieldName, $value, $origValue, $this->params['ELEMENT_UID']);
+							
+							if(isset($arPropertyFields['DESCRIPTION']))
+							{
+								if(!isset($_p[$fieldName.'_DESCRIPTION']))
+								{
+									$_p[$fieldName.'_DESCRIPTION'] = $_op[$fieldName.'_DESCRIPTION'] = $arPropertyFields['DESCRIPTION'];
+								}
+								else
+								{
+									if(!is_array($_p[$fieldName.'_DESCRIPTION']))
+									{
+										$_p[$fieldName.'_DESCRIPTION'] = array($_p[$fieldName.'_DESCRIPTION']);
+										$_op[$fieldName.'_DESCRIPTION'] = array($_op[$fieldName.'_DESCRIPTION']);
+									}
+									$_p[$fieldName.'_DESCRIPTION'][] = $arPropertyFields['DESCRIPTION'];
+									$_op[$fieldName.'_DESCRIPTION'][] = $arPropertyFields['DESCRIPTION'];
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		$this->xpath = $this->parentXpath;
+		$this->parentXpath = '';
+		$this->currentXmlObj = $this->currentParentXmlObj;
+		$this->parentObject = null;
+		$this->xmlPartObjects = $xmlPartObjects;
+	}
+	
+	public function AddGroupsField(&$_e, &$_oe, &$_p, &$_op, &$_c, &$_s, &$_d, &$_pr, $field, $value, $origValue, $fs=array(), $isOffer=false)
+	{
+		if(strpos($field, 'IE_')===0)
+		{
+			$fieldKey = substr($field, 3);
+			if(strpos($fieldKey, '|')!==false)
+			{
+				list($fieldKey, $adata) = explode('|', $fieldKey);
+				$adata = explode('=', $adata);
+				if(count($adata) > 1)
+				{
+					$_e[$adata[0]] = $adata[1];
+				}
+			}
+			if(isset($_e[$fieldKey]) && (in_array($field, ($isOffer ? $this->params['ELEMENT_UID_SKU'] : $this->params['ELEMENT_UID'])) || $field=='IE_TAGS'))
+			{
+				if(!is_array($_e[$fieldKey]))
+				{
+					$_e[$fieldKey] = array($_e[$fieldKey]);
+					$_oe[$fieldKey] = array($_oe[$fieldKey]);
+				}
+				$_e[$fieldKey][] = $value;
+				$_oe[$fieldKey][] = $origValue;
+			}
+			else
+			{
+				$_e[$fieldKey] = $value;
+				$_oe[$fieldKey] = $origValue;
+			}
+		}
+		elseif(strpos($field, 'ICAT_PRICE')===0)
+		{
+			$val = $value;
+			if(substr($field, -6)=='_EXTRA')
+			{
+				$val = $this->GetFloatVal($val, 0, true);
+			}
+			$arPrice = explode('_', substr($field, 10), 2);
+			$pkey = $arPrice[1];
+			$_c[$arPrice[0]][$pkey] = $val;
+		}
+		elseif(strpos($field, 'ICAT_STORE')===0)
+		{
+			$arStore = explode('_', substr($field, 10), 2);
+			$_s[$arStore[0]][$arStore[1]] = $value;
+		}
+		elseif(strpos($field, 'ICAT_DISCOUNT_')===0)
+		{
+			if(strpos($field, '|')!==false)
+			{
+				list($field, $adata) = explode('|', $field);
+				$adata = explode('=', $adata);
+				if(count($adata) > 1)
+				{
+					$_d[$adata[0]] = $adata[1];
+				}
+			}
+			$_d[substr($field, 14)] = $value;
+		}
+		elseif(strpos($field, 'ICAT_')===0)
+		{
+			$val = $value;
+			if($field=='ICAT_PURCHASING_PRICE')
+			{
+				$val = ($val=='' ? $val : $this->GetFloatVal($val));
+			}
+			$_pr[substr($field, 5)] = $val;
+		}
+		elseif(strpos($field, 'IP_PROP')===0)
+		{
+			$fieldName = substr($field, 7);
+			$fieldKey = preg_replace('/\D.*$/', '', $fieldName);
 			if($isOffer)
 			{
-				$xpath = $this->ReplaceXpath($xpath);
+				if($arOfferIblock = $this->GetCachedOfferIblock($this->params['IBLOCK_ID']))
+				{
+					$propsDef = $this->GetIblockProperties($arOfferIblock['OFFERS_IBLOCK_ID']);
+					$this->GetPropField($_p, $_op, $fs, $propsDef[$fieldKey], $fieldName, $value, $origValue);
+				}
 			}
-			$groupXpath = $xpath;
-			$xpath = trim(substr($xpath, strlen($this->params['GROUPS']['ELEMENT'])), '/');
-			$this->parentXpath = $this->xpath;
-			$this->xpath = '/'.$this->params['GROUPS']['PROPERTY'];
-			//$this->xmlProperties = $this->currentParentXmlObj->xpath($xpath);
-			$this->xmlProperties = $this->Xpath($this->currentParentXmlObj, $xpath);
-			$this->xmlPropertiesCurrentRow = 0;
-			while($arProperty = $this->GetNextProperty($groupXpath))
+			else
 			{
-				$arPropertyFields = array();
-				$tmpID = false;
-				foreach($this->params['FIELDS'] as $key=>$fieldFull)
-				{
-					list($xpath, $field) = explode(';', $fieldFull, 2);
-					if(strpos($field, 'PROPERTY_')!==0) continue;
-					
-					$value = $arProperty[$key];
-					if($this->fparams[$key]['NOT_TRIM']=='Y') $value = $arProperty['~'.$key];
-					$origValue = $arProperty['~'.$key];
-					
-					$conversions = $this->fparams[$key]['CONVERSION'];
-					if(!empty($conversions))
-					{
-						if(is_array($value))
-						{
-							foreach($value as $k2=>$v2)
-							{
-								$value[$k2] = $this->ApplyConversions($value[$k2], $conversions, $arProperty);
-								$origValue[$k2] = $this->ApplyConversions($origValue[$k2], $conversions, $arProperty);
-							}
-						}
-						else
-						{
-							$value = $this->ApplyConversions($value, $conversions, $arProperty);
-							$origValue = $this->ApplyConversions($origValue, $conversions, $arProperty);
-						}
-						if($value===false || (is_array($value) && count(array_diff($value, array(false)))==0)) continue;
-					}
-					
-					$fieldName = substr($field, 9);
-					if($fieldName=='TMP_ID') $tmpID = $value;
-					else $arPropertyFields[$fieldName] = $value;
-				}
-
-				$arProp = false;
-				if($tmpID!==false && isset($this->propertyIds[$tmpID]) && $this->propertyIds[$tmpID]) $arProp = $this->GetIblockPropertyById($this->propertyIds[$tmpID], $IBLOCK_ID, true);
-				elseif($arPropertyFields['NAME']) $arProp = $this->GetIblockPropertyByName($arPropertyFields['NAME'], $IBLOCK_ID, true);
-				elseif($arPropertyFields['CODE']) $arProp = $this->GetIblockPropertyByCode($arPropertyFields['CODE'], $IBLOCK_ID);
-			
-				if(is_array($arProp) && isset($arProp['ID']))
-				{
-					$fieldName = $arProp['ID'];
-					$currentPropDef = $propsDef[$fieldName];
-					$value = $origValue = $arPropertyFields['VALUE'];
-					if($arProp['PROPERTY_TYPE']=='E' && !isset($this->fieldSettings['IP_PROP'.$fieldName]['REL_ELEMENT_FIELD'])) $this->fieldSettings['IP_PROP'.$fieldName]['REL_ELEMENT_FIELD'] = 'IE_NAME';
-					
-					$this->GetPropField($arFieldsProps, $arFieldsPropsOrig, $this->fparams[$key], $currentPropDef, $fieldName, $value, $origValue, $this->params['ELEMENT_UID']);
-					
-					if(isset($arPropertyFields['DESCRIPTION']))
-					{
-						if(!isset($arFieldsProps[$fieldName.'_DESCRIPTION']))
-						{
-							$arFieldsProps[$fieldName.'_DESCRIPTION'] = $arFieldsPropsOrig[$fieldName.'_DESCRIPTION'] = $arPropertyFields['DESCRIPTION'];
-						}
-						else
-						{
-							if(!is_array($arFieldsProps[$fieldName.'_DESCRIPTION']))
-							{
-								$arFieldsProps[$fieldName.'_DESCRIPTION'] = array($arFieldsProps[$fieldName.'_DESCRIPTION']);
-								$arFieldsPropsOrig[$fieldName.'_DESCRIPTION'] = array($arFieldsPropsOrig[$fieldName.'_DESCRIPTION']);
-							}
-							$arFieldsProps[$fieldName.'_DESCRIPTION'][] = $arPropertyFields['DESCRIPTION'];
-							$arFieldsPropsOrig[$fieldName.'_DESCRIPTION'][] = $arPropertyFields['DESCRIPTION'];
-						}
-					}
-					
-				}
+				$propsDef = $this->GetIblockProperties($this->params['IBLOCK_ID']);
+				$this->GetPropField($_p, $_op, $fs, $propsDef[$fieldKey], $fieldName, $value, $origValue);
 			}
-			$this->xpath = $this->parentXpath;
-			$this->parentXpath = '';
-			$this->currentXmlObj = $this->currentParentXmlObj;
-			$this->xmlPartObjects = $xmlPartObjects;
 		}
 	}
 	
-	public function UpdateElement(&$el, $ID, $IBLOCK_ID, $arFieldsElement, $arElement=array(), $arElementSections=array())
+	public function AddGroupsStore(&$arFStores, $arParentItem=array())
 	{
-		if(!empty($arFieldsElement))
+		if(!$this->reststoreInElement) return;
+		$xmlPartObjects = $this->xmlPartObjects;
+		$this->currentParentXmlObj = $this->currentXmlObj;
+		$groupName = 'RESTSTORE';
+		$xpath = $this->params['GROUPS'][$groupName];
+		$xpath = trim(mb_substr($xpath, mb_strlen($this->params['GROUPS']['ELEMENT'])), '/');
+		$this->parentXpath = $this->xpath;
+		$this->xpath = '/'.$this->params['GROUPS'][$groupName];
+		$this->xmlRestStores = $this->Xpath($this->currentParentXmlObj, $xpath);
+		$this->xmlRestStoresCurrentRow = 0;
+		while($arStore = $this->GetNextRestStore($groupName))
 		{
-			$this->PrepareElementPictures($arFieldsElement, $isOffer);
+			$arStore = $arStore+$arParentItem;
+			$arFields = array();
+			$tmpID = false;
+			foreach($this->params['FIELDS'] as $key=>$fieldFull)
+			{
+				list($xpath, $field) = explode(';', $fieldFull, 2);
+				$fieldName = mb_substr($field, mb_strlen($groupName) + 1);
+				if(strpos($field, $groupName.'_')!==0) continue;
+				
+				$value = $valueOrig = $arStore[$key];
+				if($this->fparams[$key]['NOT_TRIM']=='Y') $value = $arStore['~'.$key];
+				$origValue = $arStore['~'.$key];
+				
+				$conversions = $this->fparams[$key]['CONVERSION'];
+				if(!empty($conversions))
+				{
+					if(is_array($value))
+					{
+						foreach($value as $k2=>$v2)
+						{
+							$value[$k2] = $this->ApplyConversions($value[$k2], $conversions, $arStore);
+							$origValue[$k2] = $this->ApplyConversions($origValue[$k2], $conversions, $arStore);
+						}
+					}
+					else
+					{
+						$value = $this->ApplyConversions($value, $conversions, $arStore);
+						$origValue = $this->ApplyConversions($origValue, $conversions, $arStore);
+					}
+					if($value===false || (is_array($value) && count(array_diff($value, array(false)))==0)) continue;
+				}
 
-			if($this->params['ELEMENT_NOT_CHANGE_SECTIONS']=='Y')
-			{
-				unset($arFieldsElement['IBLOCK_SECTION'], $arFieldsElement['IBLOCK_SECTION_ID']);
-			}
-			elseif(!isset($arFieldsElement['IBLOCK_SECTION_ID']) && isset($arFieldsElement['IBLOCK_SECTION']) && is_array($arFieldsElement['IBLOCK_SECTION']) && count($arFieldsElement['IBLOCK_SECTION']) > 0)
-			{
-				reset($arFieldsElement['IBLOCK_SECTION']);
-				$arFieldsElement['IBLOCK_SECTION_ID'] = current($arFieldsElement['IBLOCK_SECTION']);
-			}
-			foreach($arFieldsElement as $k=>$v)
-			{
-				if($k=='IBLOCK_SECTION' && is_array($v))
-				{
-					if(!is_array($arElementSections)) $arElementSections = $this->GetElementSections($ID);
-					if(count($v)==count($arElementSections) && count(array_diff($v, $arElementSections))==0)
-					{
-						unset($arFieldsElement[$k]);
-					}
-				}
-				elseif($k=='PREVIEW_PICTURE' || $k=='DETAIL_PICTURE')
-				{
-					if(!$this->IsChangedImage($arElement[$k], $arFieldsElement[$k]))
-					{
-						unset($arFieldsElement[$k]);
-					}
-				}
-				elseif($v==$arElement[$k])
-				{
-					unset($arFieldsElement[$k]);
-				}
+				if($fieldName=='TMP_ID') $tmpID = $value;
+				else $arFields[$fieldName] = $value;
 			}
 			
-			if(isset($arFieldsElement['DETAIL_PICTURE']) && is_array($arFieldsElement['DETAIL_PICTURE']) && empty($arFieldsElement['DETAIL_PICTURE'])) unset($arFieldsElement['DETAIL_PICTURE']);
-			if(isset($arFieldsElement['DETAIL_PICTURE']))
+			if(isset($arFields['STORE_XML_ID']) && strlen(trim($arFields['STORE_XML_ID'])) > 0 && count($arFields) > 1)
 			{
-				if(is_array($arFieldsElement['DETAIL_PICTURE']) && (!isset($arFieldsElement['PREVIEW_PICTURE']) || !is_array($arFieldsElement['PREVIEW_PICTURE']))) $arFieldsElement['PREVIEW_PICTURE'] = array();
+				if(!isset($this->storesList)) $this->storesList = array();
+				if(!isset($this->storesList[$arFields['STORE_XML_ID']]))
+				{
+					$storeId = 0;
+					if($arr = \Bitrix\Catalog\StoreTable::GetList(array('filter'=>array('XML_ID'=>$arFields['STORE_XML_ID']), 'select'=>array('ID')))->Fetch())
+					{
+						$storeId = $arr['ID'];
+					}
+					$this->storesList[$arFields['STORE_XML_ID']] = $storeId;
+				}
+				if($this->storesList[$arFields['STORE_XML_ID']] > 0)
+				{
+					$storeId = $this->storesList[$arFields['STORE_XML_ID']];
+					unset($arFields['STORE_XML_ID']);
+					if(!isset($arFStores[$storeId])) $arFStores[$storeId] = array();
+					$arFStores[$storeId] = array_merge($arFStores[$storeId], $arFields);
+				}
 			}
-			elseif(isset($arFieldsElement['PREVIEW_PICTURE']) && is_array($arFieldsElement['PREVIEW_PICTURE']) && empty($arFieldsElement['PREVIEW_PICTURE'])) unset($arFieldsElement['PREVIEW_PICTURE']);
 		}
-		
-		if(empty($arFieldsElement) && $this->params['ELEMENT_NOT_UPDATE_WO_CHANGES']=='Y') return true;
-		if($el->Update($ID, $arFieldsElement, false, true, true))
-		{
-			$this->logger->AddElementChanges('IE_', $arFieldsElement, $arElement);
-			$this->AddTagIblock($IBLOCK_ID);
-			//if(!empty($arFieldsElement['IPROPERTY_TEMPLATES']) || $arFieldsElement['NAME'])
-			if(true)
-			{
-				$ipropValues = new \Bitrix\Iblock\InheritedProperty\ElementValues($IBLOCK_ID, $ID);
-				$ipropValues->clearValues();
-			}
-			return true;
-		}
-		return false;
+		$this->xpath = $this->parentXpath;
+		$this->parentXpath = '';
+		$this->currentXmlObj = $this->currentParentXmlObj;
+		$this->xmlPartObjects = $xmlPartObjects;
 	}
 	
 	public function PrepareFieldsBeforeConv(&$value, &$origValue, $field, $arParams)
@@ -4015,7 +4457,15 @@ class Importer {
 		if($field=='IE_SECTION_PATH' && $this->useSectionPathByLink)
 		{
 			$tmpSep = ($arParams['SECTION_PATH_SEPARATOR'] ? $arParams['SECTION_PATH_SEPARATOR'] : '/');
-			$value = $origValue = $this->GetSectionPathByLink($value, $tmpSep);
+			if(is_array($value))
+			{
+				$origValue = array();
+				foreach($value as $k=>$v)
+				{
+					$value[$k] = $origValue[$k] = $this->GetSectionPathByLink($v, $tmpSep);
+				}
+			}
+			else $value = $origValue = $this->GetSectionPathByLink($value, $tmpSep);
 		}
 	}
 	
@@ -4047,126 +4497,65 @@ class Importer {
 		}
 	}
 	
-	public function PrepareElementPictures(&$arFieldsElement, $isOffer=false)
+	public function PrepareElementPictures(&$arFieldsElement, $IBLOCK_ID, $fieldPrefix='', $arElement=array())
 	{
+		$iblockFields = $this->GetIblockFields($IBLOCK_ID);
+		$fromDetail = false;
+		if(isset($arFieldsElement['DETAIL_PICTURE']) && isset($iblockFields['PREVIEW_PICTURE']['DEFAULT_VALUE']) && is_array($iblockFields['PREVIEW_PICTURE']['DEFAULT_VALUE']))
+		{
+			$remove = (bool)((!is_array($arFieldsElement['DETAIL_PICTURE']) && trim($arFieldsElement['DETAIL_PICTURE'])=='-') || (is_array($arFieldsElement['DETAIL_PICTURE']) && in_array('-', $arFieldsElement['DETAIL_PICTURE'])));
+			if((!$remove && $iblockFields['PREVIEW_PICTURE']['DEFAULT_VALUE']['FROM_DETAIL']=='Y' && (!$arFieldsElement['PREVIEW_PICTURE'] || $iblockFields['PREVIEW_PICTURE']['DEFAULT_VALUE']['UPDATE_WITH_DETAIL']=='Y'))
+				|| ($remove && $iblockFields['PREVIEW_PICTURE']['DEFAULT_VALUE']['DELETE_WITH_DETAIL']=='Y' && !$arFieldsElement['PREVIEW_PICTURE']))
+			{
+				$arFieldsElement['PREVIEW_PICTURE'] = $arFieldsElement['DETAIL_PICTURE'];
+				$fromDetail = true;
+			}
+		}
 		$arPictures = array('PREVIEW_PICTURE', 'DETAIL_PICTURE');
 		foreach($arPictures as $picName)
 		{
 			if($arFieldsElement[$picName])
 			{
 				$val = $arFieldsElement[$picName];
-				$arFile = $this->GetFileArray($val, array(), array('FILETYPE'=>'IMAGE'));
-				if(empty($arFile) && strpos($val, $this->params['ELEMENT_MULTIPLE_SEPARATOR'])!==false)
+				$fs = $this->fieldSettings[$fieldPrefix.'IE_'.($fromDetail ? 'DETAIL_PICTURE' : $picName)];
+				$fs1 = $this->fieldSettings[$fieldPrefix.'IE_'.$picName];
+				if(!is_array($fs)) $fs = array();
+				if(!is_array($fs1)) $fs1 = array();
+				$arFileParams = array('FILETYPE'=>'IMAGE', 'FILE_TIMEOUT'=>$fs['FILE_TIMEOUT'], 'FILE_HEADERS'=>$fs['FILE_HEADERS']);
+				$arDef = (isset($iblockFields[$picName]['DEFAULT_VALUE']) ? $iblockFields[$picName]['DEFAULT_VALUE'] : array());
+				if($fs1['INCLUDE_PICTURE_PROCESSING']=='Y') $arDef = $fs1['PICTURE_PROCESSING'];
+				$arFile = $this->GetFileArray($val, $arDef, $arFileParams, $arElement[$picName]);
+				$sep = $this->params['ELEMENT_MULTIPLE_SEPARATOR'];
+				if(empty($arFile) && (!is_array($val) || $val=current($val)) && preg_match('/[;,\|\s'.preg_quote($sep, '/').']/s', $val))
 				{
-					$arVals = array_diff(array_map('trim', explode($this->params['ELEMENT_MULTIPLE_SEPARATOR'], $val)), array(''));
-					if(count($arVals) > 0 && ($val = current($arVals)))
+					if(strpos($val, $sep)!==false) $arVals = explode($sep, $val);
+					else $arVals = preg_split('/[;,\|\s]+/s', $val);
+					$arVals = array_diff(array_map('trim', $arVals), array(''));
+					$arFile = false;
+					while(!$arFile && count($arVals) > 0 && ($newVal = array_shift($arVals)))
 					{
-						$arFile = $this->GetFileArray($val, array(), array('FILETYPE'=>'IMAGE'));
+						$arFile = $this->GetFileArray($newVal, $arDef, $arFileParams, $arElement[$picName]);
 					}
 				}
 				$arFieldsElement[$picName] = $arFile;
 			}
 			if(isset($arFieldsElement[$picName.'_DESCRIPTION']))
 			{
-				$arFieldsElement[$picName]['description'] = $arFieldsElement[$picName.'_DESCRIPTION'];
+				if(!is_array($arFieldsElement[$picName])) $arFieldsElement[$picName] = array();
+				$arFieldsElement[$picName]['description'] = (is_array($arFieldsElement[$picName.'_DESCRIPTION']) ? current($arFieldsElement[$picName.'_DESCRIPTION']) : $arFieldsElement[$picName.'_DESCRIPTION']);
 				unset($arFieldsElement[$picName.'_DESCRIPTION']);
 			}
 		}
-		if((isset($arFieldsElement['DETAIL_PICTURE']) && is_array($arFieldsElement['DETAIL_PICTURE'])) && (!isset($arFieldsElement['PREVIEW_PICTURE']) || !is_array($arFieldsElement['PREVIEW_PICTURE'])))
-		{
-			$arFieldsElement['PREVIEW_PICTURE'] = array();
-		}
-		
+
 		$arTexts = array('PREVIEW_TEXT', 'DETAIL_TEXT');
 		foreach($arTexts as $keyText)
 		{
 			if($arFieldsElement[$keyText])
 			{
-				if($this->fieldSettings[($isOffer ? 'OFFER_' : '').'IE_'.$keyText]['LOAD_BY_EXTLINK']=='Y')
+				if(is_array($arFieldsElement[$keyText]) && count($arFieldsElement[$keyText]) > 0) $arFieldsElement[$keyText] = current(array_diff(array_map('trim', $arFieldsElement[$keyText]), array('')));
+				if($this->fieldSettings[$fieldPrefix.'IE_'.$keyText]['LOAD_BY_EXTLINK']=='Y')
 				{
-					$client = new \Bitrix\Main\Web\HttpClient(array('socketTimeout'=>10, 'disableSslVerification'=>true));
-					$path = $arFieldsElement[$keyText];
-					$arUrl = parse_url($path);
-					$res = $client->get($path);
-					$hct = ToLower($client->getHeaders()->get('content-type'));
-					$siteEncoding = $fileEncoding = \Bitrix\KitImportxml\Utils::getSiteEncoding();
-					if(preg_match('/charset=(.+)(;|$)/Uis', $hct, $m))
-					{
-						$fileEncoding = ToLower(trim($m[1]));
-					}
-					if(class_exists('\DOMDocument') && $arUrl['fragment'])
-					{
-						if($fileEncoding && !preg_match('/<meta[^>]*http\-equiv=[\'"]content\-type[\'"]/Uis', $res) && !preg_match('/<meta[^>]*charset=/Uis', $res) && ($endHeadPos = stripos($res, '</head>')))
-						{
-							$res = substr($res, 0, $endHeadPos).'<meta http-equiv="Content-Type" content="text/html; charset='.$fileEncoding.'">'.substr($res, $endHeadPos);
-						}
-						$doc = new \DOMDocument();
-						$doc->preserveWhiteSpace = false;
-						$doc->formatOutput = true;
-						$doc->loadHTML($res);
-						$node = $doc;
-						$arParts = preg_split('/\s+/', $arUrl['fragment']);
-						$i = 0;
-						while(isset($arParts[$i]) && ($node instanceOf \DOMDocument || $node instanceOf \DOMElement))
-						{
-							$part = $arParts[$i];
-							$tagName = (preg_match('/^([^#\.]+)([#\.].*$|$)/', $part, $m) ? $m[1] : '');
-							$tagId = (preg_match('/^[^#]*#([^#\.]+)([#\.].*$|$)/', $part, $m) ? $m[1] : '');
-							$arClasses = array_diff(explode('.', (preg_match('/^[^\.]*\.([^#]+)([#\.].*$|$)/', $part, $m) ? $m[1] : '')), array(''));
-							if($tagName)
-							{
-								$nodes = $node->getElementsByTagName($tagName);
-								if($tagId || !empty($arClasses))
-								{
-									$find = false;
-									$key = 0;
-									while(!$find && $key<$nodes->length)
-									{
-										$node1 = $nodes->item($key);
-										$subfind = true;
-										if($tagId && $node1->getAttribute('id')!=$tagId) $subfind = false;
-										foreach($arClasses as $className)
-										{
-											if($className && !preg_match('/(^|\s)'.preg_quote($className, '/').'(\s|$)/is', $node1->getAttribute('class'))) $subfind = false;
-										}
-										$find = $subfind;
-										if(!$find) $key++;
-									}
-									if($find) $node = $nodes->item($key);
-									else $node = null;
-								}
-								else
-								{
-									$node = $nodes->item(0);
-								}
-							}
-							$i++;
-						}
-						if($node instanceOf \DOMElement)
-						{
-							$innerHTML = '';
-							$children = $node->childNodes;
-							foreach($children as $child)
-							{
-								$innerHTML .= $child->ownerDocument->saveXML($child);
-							}
-							if(strlen($innerHTML)==0 && $node->nodeValue) $innerHTML = $node->nodeValue;
-							$res = $innerHTML;
-						}
-						else
-						{
-							$res = '';
-						}
-						if($res && $siteEncoding!='utf-8')
-						{
-							$res = \Bitrix\Main\Text\Encoding::convertEncoding($res, 'utf-8', $siteEncoding);
-						}
-					}
-					elseif($siteEncoding!=$fileEncoding)
-					{
-						$res = \Bitrix\Main\Text\Encoding::convertEncoding($res, $fileEncoding, $siteEncoding);
-					}
-					$arFieldsElement[$keyText] = $res;
+					$arFieldsElement[$keyText] = \Bitrix\KitImportxml\Utils::DownloadTextTextByLink($arFieldsElement[$keyText]);
 				}
 				else
 				{
@@ -4178,19 +4567,38 @@ class Importer {
 				}
 			}
 		}
+		
+		if(isset($arFieldsElement['TAGS']) && is_array($arFieldsElement['TAGS']))
+		{
+			$arFieldsElement['TAGS'] = implode(', ', array_diff(array_unique($arFieldsElement['TAGS']), array('')));
+		}
+		
+		while(isset($arFieldsElement['NAME']) && is_array($arFieldsElement['NAME'])) $arFieldsElement['NAME'] = reset($arFieldsElement['NAME']);
+		while(isset($arFieldsElement['CODE']) && is_array($arFieldsElement['CODE'])) $arFieldsElement['CODE'] = reset($arFieldsElement['CODE']);
 	}
 	
-	public function SaveStatusImport($end = false)
+	public function PrepareSectionPictures(&$arFields, $IBLOCK_ID, $arSection=array())
 	{
-		if($this->procfile)
+		$this->PrepareSectionUFields($arFields, $IBLOCK_ID, true);
+		$arPictures = array('PICTURE', 'DETAIL_PICTURE');
+		foreach($arPictures as $picName)
 		{
-			$writeParams = array_merge($this->stepparams, array(
-				'xmlCurrentRow' => intval($this->xmlCurrentRow),
-				'xmlSectionCurrentRow' => intval($this->xmlSectionCurrentRow),
-				'sectionIds' => $this->sectionIds
-			));
-			$writeParams['action'] = ($end ? 'finish' : 'continue');
-			file_put_contents($this->procfile, \CUtil::PhpToJSObject($writeParams));
+			if($arFields[$picName])
+			{
+				$val = $arFields[$picName];
+				if(is_array($val)) $val = current($val);
+				$arFile = $this->GetFileArray($val, array(), array('FILETYPE'=>'IMAGE'), $arSection[$picName]);
+				if(empty($arFile) && strpos($val, $this->params['ELEMENT_MULTIPLE_SEPARATOR'])!==false)
+				{
+					$arVals = array_diff(array_map('trim', explode($this->params['ELEMENT_MULTIPLE_SEPARATOR'], $val)), array(''));
+					if(count($arVals) > 0 && ($val = current($arVals)))
+					{
+						$arFile = $this->GetFileArray($val, array(), array('FILETYPE'=>'IMAGE'), $arSection[$picName]);
+					}
+				}
+				$arFields[$picName] = $arFile;
+			}
+			else unset($arFields[$picName]);
 		}
 	}
 	
@@ -4208,10 +4616,12 @@ class Importer {
 		}
 	}
 	
-	public function SaveSKUWithGenerate($ID, $NAME, $IBLOCK_ID, $arItem)
+	public function SaveSKUWithGenerate($ID, $NAME, $IBLOCK_ID, $arItem, $arFParams=false)
 	{
+		if(!is_array($arFParams)) $arFParams = $this->fparams;
 		$ret = false;
 		$this->SetSkuMode(true, $ID, $IBLOCK_ID);
+		$isChanges = false;
 		if(!empty($this->fieldsForSkuGen))
 		{
 			$convertedFields = array();
@@ -4219,7 +4629,7 @@ class Importer {
 			$arItemParams = array();
 			foreach($this->fieldsForSkuGen as $key)
 			{
-				$conversions = $this->fparams[$key]['CONVERSION'];
+				$conversions = $arFParams[$key]['CONVERSION'];
 				$arItem['~~'.$key] = $arItem[$key];
 				if(is_array($arItem[$key]))
 				{
@@ -4246,20 +4656,25 @@ class Importer {
 					$arItem[$key] = $this->ApplyConversions($arItem[$key], $conversions, $arItem, array('KEY'=>$key,'INDEX'=>0));
 					$arItemParams[$key] = array_map('trim', explode($this->params['ELEMENT_MULTIPLE_SEPARATOR'], $arItem[$key]));
 				}
+				if(is_array($arItemParams[$key]) && count($arItemParams[$key]) > 1)
+				{
+					$arItemParams[$key] = array_diff($arItemParams[$key], array(''));
+					if(count($arItemParams[$key])==0) $arItemParams[$key] = array('');
+				}
 				$convertedFields[] = $key;
 			}
 			$arItemSKUParams = array();
 			$this->GenerateSKUParamsRecursion($arItemSKUParams, $arItemParams);
-			
 			$extraFields = array();
-			foreach($filedList as $key=>$fieldFull)
+			foreach($filedList+array_flip($this->fieldsBindToGenSku) as $key=>$fieldFull)
 			{
 				if(in_array($key, $this->fieldsForSkuGen)) continue;
 				list($xpath, $field) = explode(';', $fieldFull, 2);
-				$conversions = $this->fparams[$key]['CONVERSION'];
+				$conversions = $arFParams[$key]['CONVERSION'];
 				$val = $arItem[$key];
 				if(!is_array($val)) $val = $this->ApplyConversions($val, $conversions, $arItem);
 				if(preg_match('/^OFFER_(ICAT_QUANTITY|ICAT_PURCHASING_PRICE|ICAT_PRICE\d+_PRICE|ICAT_STORE\d+_AMOUNT|ICAT_QUANTITY_TRACE|ICAT_CAN_BUY_ZERO|ICAT_NEGATIVE_AMOUNT_TRACE|ICAT_SUBSCRIBE|IE_ACTIVE)$/', $field)
+					 || in_array($key, $this->fieldsBindToGenSku)
 					|| (is_array($val) && count($val)==count($arItemSKUParams)))
 				{
 					$val = $arItem[$key];
@@ -4293,7 +4708,6 @@ class Importer {
 					}
 				}
 			}
-			
 			foreach($arItemSKUParams as $k=>$v)
 			{
 				$arSubItem = $arItem;
@@ -4303,20 +4717,19 @@ class Importer {
 					if(isset($extraFields[$k2][$k])) $arSubItem[$k2] = $extraFields[$k2][$k];
 					else $arSubItem[$k2] = current($extraFields[$k2]);
 				}
-				$ret = (bool)($this->SaveSKU($ID, $NAME, $IBLOCK_ID, $arSubItem, $convertedFields) || $ret);
+				$ret = (bool)($this->SaveSKU($ID, $NAME, $IBLOCK_ID, $arSubItem, $convertedFields, $arFParams) || $ret);
+				$isChanges = (bool)($isChanges || $this->IsChangedElement());
 			}
 		}
 		else
 		{
-			$ret = $this->SaveSKU($ID, $NAME, $IBLOCK_ID, $arItem);
+			$ret = $this->SaveSKU($ID, $NAME, $IBLOCK_ID, $arItem, array(), $arFParams);
+			$isChanges = (bool)($isChanges || $this->IsChangedElement());
 		}
-		if($ret)
+		if(!$this->isPacket && $ret && $isChanges)
 		{
 			\CIBlockElement::UpdateSearch($ID, true);
-			if(class_exists('\Bitrix\Iblock\PropertyIndex\Manager'))
-			{
-				\Bitrix\Iblock\PropertyIndex\Manager::updateElementIndex($IBLOCK_ID, $ID);
-			}
+			/*\Bitrix\KitImportxml\DataManager\IblockElementTable::updateElementIndex($IBLOCK_ID, $ID);*/
 		}
 		$this->SetSkuMode(false);
 		return $ret;
@@ -4343,9 +4756,10 @@ class Importer {
 		}
 	}
 	
-	public function SaveSKU($ID, $NAME, $IBLOCK_ID, $arItem, $convertedFields=array())
+	public function SaveSKU($ID, $NAME, $IBLOCK_ID, $arItem, $convertedFields=array(), $arFParams=false)
 	{
 		if(!($arOfferIblock = $this->GetCachedOfferIblock($IBLOCK_ID))) return false;
+		if(!is_array($arFParams)) $arFParams = $this->fparams;
 		$OFFERS_IBLOCK_ID = $arOfferIblock['OFFERS_IBLOCK_ID'];
 		$OFFERS_PROPERTY_ID = $arOfferIblock['OFFERS_PROPERTY_ID'];
 		
@@ -4370,42 +4784,49 @@ class Importer {
 			$arFieldsPropsOrig = array();
 		}
 		$arFieldsIpropTemp = array();
-		$arFieldsForSkuGen = array_map('strval', $this->fieldsForSkuGen);
-		//foreach($filedList as $key=>$field)
-		foreach($this->params['FIELDS'] as $key=>$fieldFull)
+		$arFields = $this->params['FIELDS'];
+		if(count($this->fieldsForSkuGen) > 0 || count($this->fieldsBindToGenSku) > 0)
+		{
+			$arFieldsForSkuGen = array_merge(array_map('strval', $this->fieldsForSkuGen), array_map('strval', $this->fieldsBindToGenSku));
+			foreach($arFieldsForSkuGen as $k=>$v)
+			{
+				if(preg_match('/\-\d+$/', $v) && !array_key_exists($v, $arFields)) $arFields[$v] = ';'.$this->propertyMap['MAP'][preg_replace('/\-\d+$/', '', $v)][preg_replace('/^.*\-(\d+)$/', '$1', $v)];
+			}
+		}
+		foreach($arFields as $key=>$fieldFull)
 		{
 			list($xpath, $field) = explode(';', $fieldFull, 2);
 
 			if(strpos($field, 'OFFER_')!==0) continue;
-			$conversions = $this->fparams[$key]['CONVERSION'];
+			$conversions = $arFParams[$key]['CONVERSION'];
 			$field = substr($field, 6);
 			
 			$k = $key;
-			if(strpos($k, '_')!==false) $k = substr($k, 0, strpos($k, '_'));
+			if(strpos($k, '_')!==false) $k = mb_substr($k, 0, mb_strpos($k, '_'));
 			if(!array_key_exists($k, $arItem)) continue;
 			$value = $arItem[$k];
-			if($this->fparams[$key]['NOT_TRIM']=='Y') $value = $arItem['~'.$k];
+			if($arFParams[$key]['NOT_TRIM']=='Y') $value = $arItem['~'.$k];
 			$origValue = $arItem['~'.$k];
 
-			$this->PrepareFieldsBeforeConv($value, $origValue, $field, $this->fparams[$key]);
-			if(!empty($conversions) && !in_array($key, $convertedFields))
+			$this->PrepareFieldsBeforeConv($value, $origValue, $field, $arFParams[$key]);
+			if(!empty($conversions) && !in_array($key, $convertedFields, true))
 			{
 				if(is_array($value))
 				{
 					foreach($value as $k2=>$v2)
 					{
-						$value[$k2] = $this->ApplyConversions($value[$k2], $conversions, $arItem, array('KEY'=>$key, 'NAME'=>$field, 'INDEX'=>$k2), $iblockFields);
-						$origValue[$k2] = $this->ApplyConversions($origValue[$k2], $conversions, $arItem, array('KEY'=>$key, 'NAME'=>$field, 'INDEX'=>$k2), $iblockFields);
+						$value[$k2] = $this->ApplyConversions($value[$k2], $conversions, $arItem, array('KEY'=>$key, 'NAME'=>$field, 'INDEX'=>$k2, 'PARENT_ID'=>$ID), $iblockFields);
+						$origValue[$k2] = $this->ApplyConversions($origValue[$k2], $conversions, $arItem, array('KEY'=>$key, 'NAME'=>$field, 'INDEX'=>$k2, 'PARENT_ID'=>$ID), $iblockFields);
 					}
 				}
 				else
 				{
-					$value = $this->ApplyConversions($value, $conversions, $arItem, array('KEY'=>$key, 'NAME'=>$field), $iblockFields);
-					$origValue = $this->ApplyConversions($origValue, $conversions, $arItem, array('KEY'=>$key, 'NAME'=>$field), $iblockFields);
+					$value = $this->ApplyConversions($value, $conversions, $arItem, array('KEY'=>$key, 'NAME'=>$field, 'PARENT_ID'=>$ID), $iblockFields);
+					$origValue = $this->ApplyConversions($origValue, $conversions, $arItem, array('KEY'=>$key, 'NAME'=>$field, 'PARENT_ID'=>$ID), $iblockFields);
 				}
 				if($value===false || (is_array($value) && count(array_diff($value, array(false)))==0)) continue;
 			}
-			$this->PrepareElementFields($value, $origValue, $field, $this->fparams[$key]);
+			$this->PrepareElementFields($value, $origValue, $field, $arFParams[$key]);
 			
 			if(strpos($field, 'IE_')===0)
 			{
@@ -4429,19 +4850,26 @@ class Importer {
 					if(!in_array($val, array('', '-')))
 					{
 						//$val = $this->GetFloatVal($val);
-						$val = $this->ApplyMargins($val, $this->fparams[$key]);
+						$val = $this->ApplyMargins($val, $arFParams[$key]);
 					}
 				}
 				elseif(substr($field, -6)=='_EXTRA')
 				{
-					$val = $this->GetFloatVal($val);
+					$val = $this->GetFloatVal($val, 0, true);
 				}
 				
 				$arPrice = explode('_', substr($field, 10), 2);
 				$pkey = $arPrice[1];
-				if($pkey=='PRICE' && $this->fparams[$key]['PRICE_USE_EXT']=='Y')
+				if($pkey=='PRICE')
 				{
-					$pkey = $pkey.'|QUANTITY_FROM='.$this->GetFloatVal($this->fparams[$key]['PRICE_QUANTITY_FROM']).'|QUANTITY_TO='.$this->GetFloatVal($this->fparams[$key]['PRICE_QUANTITY_TO']);
+					if($arFParams[$key]['PRICE_USE_EXT']=='Y')
+					{
+						$pkey = $pkey.'|QUANTITY_FROM='.$this->GetFloatVal($arFParams[$key]['PRICE_QUANTITY_FROM']).'|QUANTITY_TO='.$this->GetFloatVal($arFParams[$key]['PRICE_QUANTITY_TO']);
+					}
+					if($arFParams[$key]['EXT_UPDATE_FIRST']=='Y')
+					{
+						$arFieldsPrices[$arPrice[0]]['SAVE_QUANTITY'] = 'Y';
+					}
 				}
 				$arFieldsPrices[$arPrice[0]][$pkey] = $val;
 			}
@@ -4461,7 +4889,24 @@ class Importer {
 						$arFieldsProductDiscount[$adata[0]] = $adata[1];
 					}
 				}
-				$arFieldsProductDiscount[substr($field, 14)] = $value;
+				$field = substr($field, 14);
+				if($field=='VALUE' && isset($arFParams[$key]))
+				{
+					$fse = $arFParams[$key];
+					if(!empty($fse['CATALOG_GROUP_IDS']))
+					{
+						$arFieldsProductDiscount['CATALOG_GROUP_IDS'] = $fse['CATALOG_GROUP_IDS'];
+					}
+					if(is_array($fse['SITE_IDS']) && !empty($fse['SITE_IDS']))
+					{
+						foreach($fse['SITE_IDS'] as $siteId)
+						{
+							$arFieldsProductDiscount['LID_VALUES'][$siteId] = array('VALUE'=>$value);
+							if(isset($arFieldsProductDiscount['VALUE_TYPE'])) $arFieldsProductDiscount['LID_VALUES'][$siteId]['VALUE_TYPE'] = $arFieldsProductDiscount['VALUE_TYPE'];
+						}
+					}
+				}
+				$arFieldsProductDiscount[$field] = $value;
 			}
 			elseif(strpos($field, 'ICAT_')===0)
 			{
@@ -4471,20 +4916,16 @@ class Importer {
 					if($val=='') continue;
 					$val = $this->GetFloatVal($val);
 				}
-				elseif($field=='ICAT_MEASURE')
-				{
-					$val = $this->GetMeasureByStr($val);
-				}
 				$arFieldsProduct[substr($field, 5)] = $val;
 			}
 			elseif(strpos($field, 'IP_PROP')===0)
 			{
 				$fieldName = substr($field, 7);
-				$this->GetPropField($arFieldsProps, $arFieldsPropsOrig, $this->fparams[$key], $propsDef[$fieldName], $fieldName, $value, $origValue);
+				$this->GetPropField($arFieldsProps, $arFieldsPropsOrig, $arFParams[$key], $propsDef[$fieldName], $fieldName, $value, $origValue);
 			}
 			elseif(strpos($field, 'IP_LIST_PROPS')===0)
 			{
-				$this->GetPropList($arFieldsProps, $arFieldsPropsOrig, $this->fparams[$key], $OFFERS_IBLOCK_ID, $value);
+				$this->GetPropList($arFieldsProps, $arFieldsPropsOrig, $arFParams[$key], $OFFERS_IBLOCK_ID, $value, true);
 			}
 			elseif(strpos($field, 'IPROP_TEMP_')===0)
 			{
@@ -4492,61 +4933,11 @@ class Importer {
 				$arFieldsIpropTemp[$fieldName] = $value;
 			}
 		}
-		
-		$this->AddGroupsProperties($arFieldsProps, $arFieldsPropsOrig, $OFFERS_IBLOCK_ID, true);
 
-		$arUid = array();
-		if(!is_array($this->params['ELEMENT_UID_SKU'])) $this->params['ELEMENT_UID_SKU'] = array($this->params['ELEMENT_UID_SKU']);
-		if(!in_array('OFFER_IP_PROP'.$OFFERS_PROPERTY_ID, $this->params['ELEMENT_UID_SKU'])) $this->params['ELEMENT_UID_SKU'][] = 'OFFER_IP_PROP'.$OFFERS_PROPERTY_ID;
-		foreach($this->params['ELEMENT_UID_SKU'] as $tuid)
-		{
-			$tuid = substr($tuid, 6);
-			$uid = $valUid = $valUid2 = '';
-			if(strpos($tuid, 'IE_')===0)
-			{
-				$uid = substr($tuid, 3);
-				if(strpos($uid, '|')!==false) $uid = current(explode('|', $uid));
-				$valUid = $arFieldsElementOrig[$uid];
-				$valUid2 = $arFieldsElement[$uid];
-			}
-			elseif(strpos($tuid, 'IP_PROP')===0)
-			{
-				$uid = substr($tuid, 7);
-				$valUid = $arFieldsPropsOrig[$uid];
-				$valUid2 = $arFieldsProps[$uid];
-				if($propsDef[$uid]['PROPERTY_TYPE']=='L')
-				{
-					$uid = 'PROPERTY_'.$uid.'_VALUE';
-				}
-				elseif($propsDef[$uid]['PROPERTY_TYPE']=='N' && !is_numeric($valUid))
-				{
-					$valUid = $valUid2 = '';
-				}
-				else
-				{
-					if($propsDef[$uid]['PROPERTY_TYPE']=='S' && $propsDef[$uid]['USER_TYPE']=='directory')
-					{
-						$valUid = $this->GetHighloadBlockValue($propsDef[$uid], $valUid);
-						$valUid2 = $this->GetHighloadBlockValue($propsDef[$uid], $valUid2);
-					}
-					elseif($propsDef[$uid]['PROPERTY_TYPE']=='E')
-					{
-						$valUid = $this->GetIblockElementValue($propsDef[$uid], $valUid, $this->fieldSettings['OFFER_'.$tuid]);
-						$valUid2 = $this->GetIblockElementValue($propsDef[$uid], $valUid2, $this->fieldSettings['OFFER_'.$tuid]);
-					}
-					$uid = 'PROPERTY_'.$uid;
-				}
-				if(strlen($valUid)==0) $valUid = $valUid2 = false;
-			}
-			if($uid)
-			{
-				$arUid[] = array(
-					'uid' => $uid,
-					'valUid' => $valUid,
-					'valUid2' => $valUid2
-				);
-			}
-		}
+		$this->AddGroupsProperties($arFieldsElement, $arFieldsElementOrig, $arFieldsProps, $arFieldsPropsOrig, $arFieldsPrices, $arFieldsProductStores, $arFieldsProductDiscount, $arFieldsProduct, $arItem, $OFFERS_IBLOCK_ID, ($OFFERS_PROPERTY_ID > 0 ? $OFFERS_PROPERTY_ID : true));
+		$this->AddGroupsStore($arFieldsProductStores, $arItem);
+
+		$arUid = $this->GetFilterUids($arFieldsElement, $arFieldsElementOrig, $arFieldsProps, $arFieldsPropsOrig, $OFFERS_IBLOCK_ID, $OFFERS_PROPERTY_ID, $ID);
 
 		$emptyFields = $notEmptyFields = array();
 		foreach($arUid as $k=>$v)
@@ -4556,11 +4947,12 @@ class Importer {
 			else $emptyFields[] = $v['uid'];
 		}
 		
-		if(($ID > 0 && count($notEmptyFields) < 2) || ($ID <= 0 && (count($notEmptyFields) < 1 || count($emptyFields) > 1)))
+		if(($ID > 0 && count($notEmptyFields) < 2) || ($ID <= 0 && (count($notEmptyFields) < 1 || count($emptyFields) > 0)))
 		{
 			return false;
 		}
 		
+		if(array_key_exists($OFFERS_PROPERTY_ID, $arFieldsProps)) unset($arFieldsProps[$OFFERS_PROPERTY_ID]);
 		$arDates = array('ACTIVE_FROM', 'ACTIVE_TO', 'DATE_CREATE');
 		foreach($arDates as $keyDate)
 		{
@@ -4578,14 +4970,9 @@ class Importer {
 		{
 			$arFieldsElement['ACTIVE'] = 'Y';
 		}
-
-		if(($this->params['ELEMENT_NO_QUANTITY_DEACTIVATE']=='Y' && isset($arFieldsProduct['QUANTITY']) && $this->GetFloatVal($arFieldsProduct['QUANTITY'])<=0)
-			|| ($this->params['ELEMENT_NO_PRICE_DEACTIVATE']=='Y' && $this->IsEmptyPrice($arFieldsPrices)))
-		{
-			$arFieldsElement['ACTIVE'] = 'N';
-		}
 		
-		$arKeys = array_merge(array('ID', 'NAME', 'IBLOCK_SECTION_ID', 'PROPERTY_'.$OFFERS_PROPERTY_ID), array_keys($arFieldsElement));
+		$arKeys = array_merge(array('ID', 'NAME', 'IBLOCK_SECTION_ID', 'PREVIEW_PICTURE', 'WF_STATUS_ID'), array_keys($arFieldsElement));
+		if(!$ID) $arKeys[] = 'PROPERTY_'.$OFFERS_PROPERTY_ID;
 		
 		$arFilter = array('IBLOCK_ID'=>$OFFERS_IBLOCK_ID, 'CHECK_PERMISSIONS' => 'N');
 		foreach($arUid as $v)
@@ -4618,178 +5005,110 @@ class Importer {
 		{
 			$arFieldsElement['IPROPERTY_TEMPLATES'] = $arFieldsIpropTemp;
 		}
+		
+		$arElemFields = array(
+			'ELEMENT' => $arFieldsElement,
+			'PROPS' => $arFieldsProps,
+			'PRODUCT' => $arFieldsProduct,
+			'PRICES' => $arFieldsPrices,
+			'STORES' => $arFieldsProductStores,
+			'DISCOUNT' => $arFieldsProductDiscount,
+			'ITEM' => $arItem
+		);
+		
+		if($this->isPacket /*&& $ID <= 0 && $this->params['SEARCH_OFFERS_WO_PRODUCTS']=='Y' && $this->params['CREATE_NEW_OFFERS']!='Y'*/)
+		{
+			if(!isset($this->arPacketOffers[$this->xmlCurrentRow])) $this->arPacketOffers[$this->xmlCurrentRow] = array();
+			$this->arPacketOffers[$this->xmlCurrentRow][] = array(
+				'ITEM' => $arItem,
+				'FILTER' => $arFilter,
+				'FIELDS' => $arElemFields
+			);
+			return true;
+		}
+		
+		$arProductIds = array();
+		if($ID) $arProductIds[] = $ID;
 
 		$elemName = '';
-		$dbRes = \CIblockElement::GetList(array(), $arFilter, false, false, $arKeys);
+		$duplicate = false;
+		//$dbRes = \CIblockElement::GetList(array(), $arFilter, false, false, $arKeys);
+		$dbRes = \Bitrix\KitImportxml\DataManager\IblockElementTable::GetListComp($arFilter, $arKeys);
 		while($arElement = $dbRes->Fetch())
 		{
 			$OFFER_ID = $arElement['ID'];
-			$arFieldsProps2 = $arFieldsProps;
-			$arFieldsElement2 = $arFieldsElement;
-			$arFieldsProduct2 = $arFieldsProduct;
-			$arFieldsPrices2 = $arFieldsPrices;
-			$arFieldsProductStores2 = $arFieldsProductStores;
-			if($this->conv->SetElementId($OFFER_ID)
-				&& $this->conv->UpdateProperties($arFieldsProps2, $OFFER_ID)!==false
-				&& $this->conv->UpdateElementFields($arFieldsElement2, $OFFER_ID)!==false
-				&& $this->conv->UpdateProduct($arFieldsProduct2, $arFieldsPrices2, $arFieldsProductStores2, $OFFER_ID)!==false
-				&& $this->conv->SetElementId(0))
-			{
-				$this->BeforeElementSave($OFFER_ID, 'update');
-				if($this->params['ONLY_CREATE_MODE_ELEMENT']!='Y')
-				{
-					$this->UnsetUidFields($arFieldsElement2, $arFieldsProps2, $this->params['ELEMENT_UID_SKU']);
-					if(!empty($this->fieldOnlyNewOffer))
-					{
-						$this->UnsetExcessFields($this->fieldOnlyNewOffer, $arFieldsElement2, $arFieldsProps2, $arFieldsProduct2, $arFieldsPrices2, $arFieldsProductStores2, $arFieldsProductDiscount);
-					}
-					
-					$this->SaveProperties($OFFER_ID, $OFFERS_IBLOCK_ID, $arFieldsProps2);
-					$this->SaveProduct($OFFER_ID, $OFFERS_IBLOCK_ID, $arFieldsProduct2, $arFieldsPrices2, $arFieldsProductStores2, $ID);
-					
-					$el = new \CIblockElement();
-					if($this->UpdateElement($el, $OFFER_ID, $OFFERS_IBLOCK_ID, $arFieldsElement2, $arElement))
-					{
-						//$this->SetTimeBegin($OFFER_ID);
-					}
-					else
-					{
-						$this->stepparams['error_line']++;
-						$this->errors[] = sprintf(Loc::getMessage("KIT_IX_UPDATE_OFFER_ERROR"), $el->LAST_ERROR, '');
-					}
-						
-					$elemName = $arElement['NAME'];
-					$this->SaveDiscount($OFFER_ID, $OFFERS_IBLOCK_ID, $arFieldsProductDiscount, $elemName, true);
-					$this->stepparams['sku_updated_line']++;
-				}
-			}
-			$this->SaveElementId($OFFER_ID, true);
-			if(!$ID && $arElement['PROPERTY_'.$OFFERS_PROPERTY_ID.'_VALUE'])
-			{
-				$this->SaveElementId($arElement['PROPERTY_'.$OFFERS_PROPERTY_ID.'_VALUE']);
-			}
+			$res = $this->SaveRecordOfferUpdate($elemName, $ID, $IBLOCK_ID, $OFFERS_IBLOCK_ID, $OFFERS_PROPERTY_ID, $arElement, $arElemFields, array(), $duplicate);
+			$duplicate = true;
 		}
 		if($elemName && !$arFieldsElement['NAME']) $arFieldsElement['NAME'] = $elemName;
+		if(strlen($elemName)==0) $elemName = $NAME;
 		
-		if($dbRes->SelectedRowsCount()==0 && $ID && $this->params['SEARCH_OFFERS_WO_PRODUCTS']!='Y')
+		if($dbRes->SelectedRowsCount()==0)
 		{
-			if($this->params['ONLY_UPDATE_MODE_ELEMENT']!='Y')
-			{
-				$this->UnsetUidFields($arFieldsElement, $arFieldsProps, $this->params['ELEMENT_UID_SKU'], true);
-				if(isset($arFieldsElement['ID']))
-				{
-					$this->stepparams['error_line']++;
-					$this->errors[] = sprintf(Loc::getMessage("KIT_IX_NEW_OFFER_WITH_ID"), $arFieldsElement['ID'], '');
-					return false;
-				}
-				if(strlen($arFieldsElement['NAME'])==0)
-				{
-					$arFieldsElement['NAME'] = $NAME;
-				}
-				if($this->params['ELEMENT_NEW_DEACTIVATE']=='Y')
-				{
-					$arFieldsElement['ACTIVE'] = 'N';
-				}
-				elseif(!$arFieldsElement['ACTIVE'])
-				{
-					$arFieldsElement['ACTIVE'] = 'Y';
-				}
-				$arFieldsElement['IBLOCK_ID'] = $OFFERS_IBLOCK_ID;
-				$this->PrepareElementPictures($arFieldsElement, true);
-				$this->GetDefaultElementFields($arFieldsElement, $iblockFields);
-				$el = new \CIblockElement();
-				$OFFER_ID = $el->Add(array_merge($arFieldsElement, array('PROPERTY_VALUES'=>array($OFFERS_PROPERTY_ID => $ID))), false, true, true);
-				
-				if($OFFER_ID)
-				{
-					$this->BeforeElementSave($OFFER_ID, 'add');
-					$this->logger->AddElementChanges('IE_', $arFieldsElement);
-					$this->AddTagIblock($IBLOCK_ID);
-					//$this->SetTimeBegin($OFFER_ID);
-					$this->SaveProperties($OFFER_ID, $OFFERS_IBLOCK_ID, $arFieldsProps, true);
-					$this->PrepareProductAdd($arFieldsProduct, $OFFER_ID, $OFFERS_IBLOCK_ID);
-					$this->SaveProduct($OFFER_ID, $OFFERS_IBLOCK_ID, $arFieldsProduct, $arFieldsPrices, $arFieldsProductStores, $ID);
-					$this->SaveDiscount($OFFER_ID, $OFFERS_IBLOCK_ID, $arFieldsProductDiscount, $arFieldsElement['NAME'], true);
-					//if(!empty($arFieldsElement['IPROPERTY_TEMPLATES']))
-					if(true)
-					{
-						$ipropValues = new \Bitrix\Iblock\InheritedProperty\ElementValues($OFFERS_IBLOCK_ID, $OFFER_ID);
-						$ipropValues->clearValues();
-					}
-					$this->stepparams['sku_added_line']++;
-					$this->SaveElementId($OFFER_ID, true);
-				}
-				else
-				{
-					$this->stepparams['error_line']++;
-					$this->errors[] = sprintf(Loc::getMessage("KIT_IX_ADD_OFFER_ERROR"), $el->LAST_ERROR, '');
-					return false;
-				}
-			}
-			else
-			{
-				$this->logger->SaveElementNotFound($arFilter);
-			}
+			$OFFER_ID = $this->SaveRecordOfferAdd($ID, $elemName, $IBLOCK_ID, $OFFERS_IBLOCK_ID, $OFFERS_PROPERTY_ID, $arElemFields, $arFilter);
 		}
 
-		if($OFFER_ID)
+		/*if($OFFER_ID)
 		{
 			if($this->params['ONAFTERSAVE_HANDLER'])
 			{
 				$this->ExecuteOnAfterSaveHandler($this->params['ONAFTERSAVE_HANDLER'], $OFFER_ID);
 			}
-		}
+		}*/
 		
 		/*Update product*/
-		if($ID && $OFFER_ID && ($this->params['ELEMENT_NO_QUANTITY_DEACTIVATE']=='Y' || $this->params['ELEMENT_NO_PRICE_DEACTIVATE']=='Y') && class_exists('\Bitrix\Catalog\ProductTable') && class_exists('\Bitrix\Catalog\PriceTable'))
+		/*if($OFFER_ID && ($this->params['ELEMENT_NO_QUANTITY_DEACTIVATE']=='Y' || $this->params['ELEMENT_NO_PRICE_DEACTIVATE']=='Y' || ($this->params['ELEMENT_LOADING_ACTIVATE']=='Y' && !$ID)) && class_exists('\Bitrix\Catalog\ProductTable') && class_exists('\Bitrix\Catalog\PriceTable'))
 		{
-			$arOfferIds = array();
-			$offersActive = false;
-			$dbRes = \CIblockElement::GetList(array(), array(
-				'IBLOCK_ID' => $OFFERS_IBLOCK_ID, 
-				'PROPERTY_'.$OFFERS_PROPERTY_ID => $ID,
-				'CHECK_PERMISSIONS' => 'N'), 
-				false, false, array('ID', 'ACTIVE'));
-			while($arr = $dbRes->Fetch())
+			foreach($arProductIds as $prodId)
 			{
-				$arOfferIds[] = $arr['ID'];
-				$offersActive = (bool)($offersActive || ($arr['ACTIVE']=='Y'));
-			}
-			
-			if(!empty($arOfferIds))
-			{
-				$active = false;
-				if(!$offersActive) $active = 'N';
-				else
+				$arOfferIds = array();
+				$offersActive = false;
+				$dbRes = \CIblockElement::GetList(array(), array(
+					'IBLOCK_ID' => $OFFERS_IBLOCK_ID, 
+					'PROPERTY_'.$OFFERS_PROPERTY_ID => $prodId,
+					'CHECK_PERMISSIONS' => 'N'), 
+					false, false, array('ID', 'ACTIVE'));
+				while($arr = $dbRes->Fetch())
 				{
-					if($this->params['ELEMENT_LOADING_ACTIVATE']=='Y') $active = 'Y';
-					if($this->params['ELEMENT_NO_QUANTITY_DEACTIVATE']=='Y')
-					{
-						$existQuantity = \Bitrix\Catalog\ProductTable::getList(array(
-							'select' => array('ID', 'QUANTITY'),
-							'filter' => array('@ID' => $arOfferIds, '>QUANTITY' => 0),
-							'limit' => 1
-						))->fetch();
-						if(!$existQuantity)  $active = 'N';
-					}
-					if($this->params['ELEMENT_NO_PRICE_DEACTIVATE']=='Y')
-					{
-						$existPrice = \Bitrix\Catalog\PriceTable::getList(array(
-							'select' => array('ID', 'PRICE'),
-							'filter' => array('@PRODUCT_ID' => $arOfferIds, '>PRICE' => 0),
-							'limit' => 1
-						))->fetch();
-						if(!$existPrice)  $active = 'N';
-					}
+					$arOfferIds[] = $arr['ID'];
+					$offersActive = (bool)($offersActive || ($arr['ACTIVE']=='Y'));
 				}
-				if($active!==false)
+				
+				if(!empty($arOfferIds))
 				{
-					$arElem = \CIblockElement::GetList(array(), array('ID'=>$ID, 'CHECK_PERMISSIONS' => 'N'), false, false, array('ACTIVE'))->Fetch();
-					if($arElem['ACTIVE']!=$active)
+					$active = false;
+					if(!$offersActive) $active = 'N';
+					else
 					{
-						$el = new \CIblockElement();
-						$el->Update($ID, array('ACTIVE'=>$active), false, true, true);
-						$this->AddTagIblock($IBLOCK_ID);
+						if($this->params['ELEMENT_LOADING_ACTIVATE']=='Y') $active = 'Y';
+						if($this->params['ELEMENT_NO_QUANTITY_DEACTIVATE']=='Y')
+						{
+							$existQuantity = \Bitrix\Catalog\ProductTable::getList(array(
+								'select' => array('ID', 'QUANTITY'),
+								'filter' => array('@ID' => $arOfferIds, '>QUANTITY' => '0'),
+								'limit' => 1
+							))->fetch();
+							if(!$existQuantity)  $active = 'N';
+						}
+						if($this->params['ELEMENT_NO_PRICE_DEACTIVATE']=='Y')
+						{
+							$existPrice = \Bitrix\Catalog\PriceTable::getList(array(
+								'select' => array('ID', 'PRICE'),
+								'filter' => array('@PRODUCT_ID' => $arOfferIds, '>PRICE' => '0'),
+								'limit' => 1
+							))->fetch();
+							if(!$existPrice)  $active = 'N';
+						}
+					}
+					if($active!==false)
+					{
+						$arElem = \Bitrix\KitImportxml\DataManager\IblockElementTable::GetListComp(array('ID'=>$prodId, 'CHECK_PERMISSIONS' => 'N'), array('ACTIVE'))->Fetch();
+						if($arElem['ACTIVE']!=$active)
+						{
+							$el = new \CIblockElement();
+							$el->Update($prodId, array('ACTIVE'=>$active), false, true, true);
+							$this->AddTagIblock($IBLOCK_ID);
+						}
 					}
 				}
 			}
@@ -4797,19 +5116,154 @@ class Importer {
 		if($ID && $OFFER_ID && defined('\Bitrix\Catalog\ProductTable::TYPE_SKU'))
 		{
 			$this->SaveProduct($ID, $IBLOCK_ID, array('TYPE'=>\Bitrix\Catalog\ProductTable::TYPE_SKU), array(), array());
-		}
+		}*/
 		/*/Update product*/
 		
 		return (bool)($OFFER_ID && $OFFER_ID > 0);
 	}
 	
-	public function GetElementSections($ID)
+	public function GetFilterUids($arFieldsElement, $arFieldsElementOrig, $arFieldsProps, $arFieldsPropsOrig, $IBLOCK_ID, $offerPropId=false, $parentId=0)
+	{
+		$arFieldsDef = $this->fl->GetFields($IBLOCK_ID);
+		$propsDef = $this->GetIblockProperties($IBLOCK_ID);
+		$currentUid = $this->params[$offerPropId===false ? 'ELEMENT_UID' : 'ELEMENT_UID_SKU'];
+		if(!is_array($currentUid)) $currentUid = array($currentUid);
+		if($offerPropId!==false && $parentId > 0 && !in_array('OFFER_IP_PROP'.$offerPropId, $currentUid)) $currentUid[] = 'OFFER_IP_PROP'.$offerPropId;
+		
+		$arUid = array();
+		foreach($currentUid as $tuid)
+		{
+			$fs = $this->fieldSettings[$tuid];
+			if($offerPropId!==false) $tuid = substr($tuid, 6);
+			$uid = $valUid = $valUid2 = $nameUid = '';
+			$canSubstring = true;
+			if(strpos($tuid, 'IE_')===0)
+			{
+				$nameUid = $arFieldsDef['element']['items'][$tuid];
+				$uid = substr($tuid, 3);
+				if(strpos($uid, '|')!==false) $uid = current(explode('|', $uid));
+				$valUid = $arFieldsElementOrig[$uid];
+				$valUid2 = $arFieldsElement[$uid];
+				
+				if($uid == 'ACTIVE_FROM' || $uid == 'ACTIVE_TO')
+				{
+					$uid = 'DATE_'.$uid;
+					$valUid = $this->GetDateVal($valUid);
+					$valUid2 = $this->GetDateVal($valUid2);
+				}
+			}
+			elseif(strpos($tuid, 'IP_PROP')===0)
+			{
+				$nameUid = $arFieldsDef['prop']['items'][$tuid];
+				$uid = substr($tuid, 7);
+				$valUid = $arFieldsPropsOrig[$uid];
+				$valUid2 = $arFieldsProps[$uid];
+				$p = $propsDef[$uid];
+				if($p['MULTIPLE']=='Y')
+				{
+					if(!is_array($valUid))
+					{
+						$valUid = $this->GetMultipleProperty($valUid, $uid);
+						$valUid2 = $this->GetMultipleProperty($valUid2, $uid);
+					}
+					elseif(array_key_exists('VALUE', $valUid) && !is_array($valUid['VALUE']))
+					{
+						$valUid['VALUE'] = $this->GetMultipleProperty($valUid['VALUE'], $uid);
+						$valUid2['VALUE'] = $this->GetMultipleProperty($valUid2['VALUE'], $uid);
+					}
+				}
+				if($p['PROPERTY_TYPE']=='L')
+				{
+					$uid = 'PROPERTY_'.$uid.'_VALUE';
+					if(is_array($valUid))
+					{
+						if(array_key_exists('VALUE', $valUid)) $valUid = $valUid['VALUE'];
+						elseif(($lval = $this->GetListPropertyValue($p, $valUid))!==false)
+						{
+							$valUid = $valUid2 = $lval;
+							$uid = str_replace('_VALUE', '', $uid);
+						}
+						if(is_array($valUid2) && array_key_exists('VALUE', $valUid2)) $valUid2 = $valUid2['VALUE'];
+					}					
+				}
+				elseif($p['PROPERTY_TYPE']=='N' && ((!is_array($valUid) && !is_numeric($this->Trim($valUid))) || (is_array($valUid) && count(preg_grep('/^\s*\d+\s*$/', $valUid))==0)))
+				{
+					$valUid = $valUid2 = '';
+				}
+				else
+				{
+					if($p['PROPERTY_TYPE']=='S')
+					{
+						if($p['USER_TYPE']=='directory')
+						{
+							$valUid = $this->GetHighloadBlockValue($p, $valUid, false, true);
+							$valUid2 = $this->GetHighloadBlockValue($p, $valUid2, false, true);
+							$canSubstring = false;
+						}
+						elseif($p['USER_TYPE']=='Date')
+						{
+							$valUid = $this->GetDateValToDB($valUid, 'PART');
+							$valUid2 = $this->GetDateValToDB($valUid2, 'PART');
+						}
+						elseif($p['USER_TYPE']=='DateTime')
+						{
+							$valUid = $this->GetDateValToDB($valUid);
+							$valUid2 = $this->GetDateValToDB($valUid2);
+						}
+						elseif($p['USER_TYPE']=='HTML')
+						{
+							$valUid = array($valUid, serialize(array('TEXT'=>$valUid, 'TYPE'=>'TEXT')), serialize(array('TEXT'=>$valUid, 'TYPE'=>'HTML')));
+							$valUid2 = array($valUid2, serialize(array('TEXT'=>$valUid2, 'TYPE'=>'TEXT')), serialize(array('TEXT'=>$valUid2, 'TYPE'=>'HTML')));
+						}
+					}
+					elseif($p['PROPERTY_TYPE']=='E' && $uid!=$offerPropId)
+					{
+						$valUid = $this->GetIblockElementValue($p, $valUid, $fs, false, false, true);
+						$valUid2 = $this->GetIblockElementValue($p, $valUid2, $fs, false, false, true);
+						if($valUid===false) $valUid = '';
+						if($valUid2===false) $valUid2 = '';
+						$canSubstring = false;
+					}
+					$uid = 'PROPERTY_'.$uid;
+				}
+			}
+			if($uid)
+			{
+				$substringMode = $fs['UID_SEARCH_SUBSTRING'];
+				if(!in_array($substringMode, array('Y', 'B', 'E'))) $substringMode = '';
+				$arUid[] = array(
+					'uid' => $uid,
+					'nameUid' => $nameUid,
+					'valUid' => $valUid,
+					'valUid2' => $valUid2,
+					'substring' => ($substringMode && $canSubstring ? $substringMode : '')
+				);
+			}
+		}
+		return $arUid;
+	}
+	
+	public function GetElementSections($ID, $SECTION_ID, $unique=true)
 	{
 		$arSections = array();
+		$main = 0;
+		if($SECTION_ID > 0) $main = $SECTION_ID;
 		$dbRes = \CIBlockElement::GetElementGroups($ID, true, array('ID'));
-		while($arr = $dbRes->Fetch())
+		if($unique)
 		{
-			$arSections[] = $arr['ID'];
+			if($SECTION_ID > 0) $arSections[] = $SECTION_ID;
+			while($arr = $dbRes->Fetch())
+			{
+				if(!in_array($arr['ID'], $arSections)) $arSections[] = $arr['ID'];
+			}
+		}
+		else
+		{
+			while($arr = $dbRes->Fetch())
+			{
+				if($arr['ID']==$main) array_unshift($arSections, $arr['ID']);
+				else $arSections[] = $arr['ID'];
+			}
 		}
 		return $arSections;
 	}
@@ -4818,35 +5272,54 @@ class Importer {
 	{
 		foreach($arUids as $field)
 		{
+			if(strpos($field, 'OFFER_')===0) $field = substr($field, 6);
 			if(strpos($field, 'IE_')===0)
 			{
 				$fieldKey = substr($field, 3);
-				if(isset($arFieldsElement[$fieldKey]) && is_array($arFieldsElement[$fieldKey]))
+				if(isset($arFieldsElement[$fieldKey]))
 				{
-					if($saveVal)
+					$arFilter[$field] = $arFieldsElement[$fieldKey];
+					if(is_array($arFieldsElement[$fieldKey]))
 					{
-						$arFieldsElement[$fieldKey] = array_diff($arFieldsElement[$fieldKey], array(''));
-						if(count($arFieldsElement[$fieldKey]) > 0) $arFieldsElement[$fieldKey] = end($arFieldsElement[$fieldKey]);
-						else $arFieldsElement[$fieldKey] = '';
+						if($saveVal)
+						{
+							$arFieldsElement[$fieldKey] = array_diff($arFieldsElement[$fieldKey], array(''));
+							if(count($arFieldsElement[$fieldKey]) > 0) $arFieldsElement[$fieldKey] = end($arFieldsElement[$fieldKey]);
+							else $arFieldsElement[$fieldKey] = '';
+						}
+						else unset($arFieldsElement[$fieldKey]);
 					}
-					else unset($arFieldsElement[$fieldKey]);
+					elseif(!$saveVal)
+					{
+						unset($arFieldsElement[$fieldKey]);
+					}
 				}
 			}
 			elseif(strpos($field, 'IP_PROP')===0)
 			{
 				$fieldKey = substr($field, 7);
-				if(isset($arFieldsProps[$fieldKey]) && is_array($arFieldsProps[$fieldKey]))
+				if(isset($arFieldsProps[$fieldKey]))
 				{
-					if($saveVal)
+					$arFilter[$field] = $arFieldsProps[$fieldKey];
+					if(is_array($arFieldsProps[$fieldKey]))
 					{
-						$arFieldsProps[$fieldKey] = array_diff($arFieldsProps[$fieldKey], array(''));
-						if(count($arFieldsProps[$fieldKey]) > 0) $arFieldsProps[$fieldKey] = end($arFieldsProps[$fieldKey]);
-						else $arFieldsProps[$fieldKey] = '';
+						if($saveVal)
+						{
+							$arFieldsProps[$fieldKey] = array_diff($arFieldsProps[$fieldKey], array(''));
+							if(array_key_exists('PRIMARY', $arFieldsProps[$fieldKey]) || count(preg_grep('/\D/', array_keys($arFieldsProps[$fieldKey]))) > 0){}
+							elseif(count($arFieldsProps[$fieldKey]) > 0) $arFieldsProps[$fieldKey] = end($arFieldsProps[$fieldKey]);
+							else $arFieldsProps[$fieldKey] = '';
+						}
+						else unset($arFieldsProps[$fieldKey]);
 					}
-					else unset($arFieldsProps[$fieldKey]);
+					elseif(!$saveVal)
+					{
+						unset($arFieldsProps[$fieldKey]);
+					}
 				}
 			}
 		}
+		$this->logger->AddElementData('FILTER_', $arFilter);
 	}
 	
 	public function UnsetExcessFields($fieldsList, &$arFieldsElement, &$arFieldsProps, &$arFieldsProduct, &$arFieldsPrices, &$arFieldsProductStores, &$arFieldsProductDiscount)
@@ -4945,14 +5418,29 @@ class Importer {
 		$arFieldsPropsItem = &$arFieldsProps[$fieldName];
 		$arFieldsPropsOrigItem = &$arFieldsPropsOrig[$fieldName];
 		
-		if($propDef	&& $propDef['USER_TYPE']=='directory')
+		if($propDef)
 		{
-			if($fieldSettingsExtra['HLBL_FIELD']) $key2 = $fieldSettingsExtra['HLBL_FIELD'];
-			else $key2 = 'UF_NAME';
-			if(!isset($arFieldsPropsItem[$key2])) $arFieldsPropsItem[$key2] = null;
-			if(!isset($arFieldsPropsOrigItem[$key2])) $arFieldsPropsOrigItem[$key2] = null;
-			$arFieldsPropsItem = &$arFieldsPropsItem[$key2];
-			$arFieldsPropsOrigItem = &$arFieldsPropsOrigItem[$key2];
+			if($propDef['USER_TYPE']=='directory')
+			{
+				if($fieldSettingsExtra['HLBL_FIELD']) $key2 = $fieldSettingsExtra['HLBL_FIELD'];
+				else $key2 = 'UF_NAME';
+				if(!isset($arFieldsPropsItem[$key2])) $arFieldsPropsItem[$key2] = null;
+				if(!isset($arFieldsPropsOrigItem[$key2])) $arFieldsPropsOrigItem[$key2] = null;
+				$arFieldsPropsItem = &$arFieldsPropsItem[$key2];
+				$arFieldsPropsOrigItem = &$arFieldsPropsOrigItem[$key2];
+			}
+			elseif($propDef['PROPERTY_TYPE']=='E' && $propDef['MULTIPLE']!='Y')
+			{
+				if($fieldSettingsExtra['REL_ELEMENT_EXTRA_FIELD']) $key1 = $fieldSettingsExtra['REL_ELEMENT_EXTRA_FIELD'];
+				else $key1 = 'PRIMARY';
+				if($fieldSettingsExtra['REL_ELEMENT_FIELD']) $key2 = $fieldSettingsExtra['REL_ELEMENT_FIELD'];
+				else $key2 = 'IE_ID';
+				if(!is_array($arFieldsPropsItem) && strlen($arFieldsPropsItem) > 0) return;
+				if(!isset($arFieldsPropsItem[$key1][$key2])) $arFieldsPropsItem[$key1][$key2] = null;
+				if(!isset($arFieldsPropsOrigItem[$key1][$key2])) $arFieldsPropsOrigItem[$key1][$key2] = null;
+				$arFieldsPropsItem = &$arFieldsPropsItem[$key1][$key2];
+				$arFieldsPropsOrigItem = &$arFieldsPropsOrigItem[$key1][$key2];
+			}
 		}
 		
 		if(($propDef['MULTIPLE']=='Y' || in_array('IP_PROP'.$fieldName, $arUids)) && !is_null($arFieldsPropsItem))
@@ -4977,13 +5465,24 @@ class Importer {
 		}
 	}
 	
-	public function GetPropList(&$arFieldsProps, &$arFieldsPropsOrig, $fieldSettingsExtra, $IBLOCK_ID, $value)
+	public function GetPropList(&$arFieldsProps, &$arFieldsPropsOrig, $fieldSettingsExtra, $IBLOCK_ID, $value, $isOffer = false)
 	{
+		$this->conv->ResetTmpConversion();
 		if(strlen($fieldSettingsExtra['PROPLIST_PROPS_SEP'])==0 || strlen($fieldSettingsExtra['PROPLIST_PROPVALS_SEP'])==0) return;
-		$arProps = explode($fieldSettingsExtra['PROPLIST_PROPS_SEP'], $value);
+		$propsSep = $this->GetSeparator($fieldSettingsExtra['PROPLIST_PROPS_SEP']);
+		$propValsSep = $this->GetSeparator($fieldSettingsExtra['PROPLIST_PROPVALS_SEP']);
+		if(is_array($value))
+		{
+			$arProps = array();
+			foreach($value as $v)
+			{
+				$arProps = array_merge($arProps, explode($propsSep, $v));
+			}
+		}
+		else $arProps = explode($propsSep, $value);
 		foreach($arProps as $prop)
 		{
-			$arCurProp = explode($fieldSettingsExtra['PROPLIST_PROPVALS_SEP'], $prop, 2);
+			$arCurProp = explode($propValsSep, $prop, 2);
 			if(count($arCurProp)!=2) continue;
 			$arCurProp = array_map('trim', $arCurProp);
 			if(strlen($arCurProp[0])==0) continue;
@@ -4992,21 +5491,26 @@ class Importer {
 			if($propDef!==false)
 			{
 				$this->GetPropField($arFieldsProps, $arFieldsPropsOrig, array(), $propDef, $propDef['ID'], $arCurProp[1], $arCurProp[1]);
+				if($fieldSettingsExtra['NOT_CHANGE_OLD_VALUES']=='Y') $this->conv->AddTmpConversion(($isOffer ? 'OFFER_' : '').'IP_PROP'.$propDef['ID'], array('CELL'=>'IP_PROP'.$propDef['ID'], 'WHEN'=>'NOT_EMPTY', 'FROM'=>'', 'THEN'=>'NOT_LOAD', 'TO'=>''));
 			}
 		}
 	}
 	
-	public function SaveElementId($ID, $offer=false)
+	public function IsFacetChanges($val=null)
 	{
-		$fn = ($offer ? $this->fileOffersId : $this->fileElementsId);
-		$handle = fopen($fn, 'a');
-		fwrite($handle, $ID."\r\n");
-		fclose($handle);
-		$this->logger->SaveElementChanges($ID);
+		if(is_bool($val)) $this->facetChanges = $val;
+		else return $this->facetChanges;
+	}
+	
+	public function AfterElementAdd($IBLOCK_ID, $ID)
+	{
+		\Bitrix\KitImportxml\DataManager\InterhitedpropertyValues::ClearElementValues($IBLOCK_ID, $ID);
+		if($this->IsFacetChanges()) \Bitrix\KitImportxml\DataManager\IblockElementTable::updateElementIndex($IBLOCK_ID, $ID);
 	}
 	
 	public function BeforeElementSave($ID, $type="update")
 	{
+		$this->IsFacetChanges(false);
 		$this->logger->SetNewElement($ID, $type);
 	}
 	
@@ -5023,10 +5527,34 @@ class Importer {
 		$this->stepparams['element_removed_line']++;
 	}
 	
+	public function BeforeSectionSave($ID, $type="update")
+	{
+		$this->logger->SetNewSection($ID, $type);
+	}
+	
+	public function DeleteSection($ID, $IBLOCK_ID)
+	{
+		$this->BeforeSectionDelete($ID, $IBLOCK_ID);
+		\CIBlockSection::Delete($ID);
+		$this->AfterSectionDelete($ID, $IBLOCK_ID);
+	}
+	
+	public function BeforeSectionDelete($ID, $IBLOCK_ID)
+	{
+		$this->logger->SetNewSection($ID, 'delete');
+	}
+	
+	public function AfterSectionDelete($ID, $IBLOCK_ID)
+	{
+		$this->AddTagIblock($IBLOCK_ID);
+		$this->logger->AddSectionChanges(array('ID'=>$ID));
+		$this->logger->SaveSectionChanges($ID);
+	}
+	
 	public function AfterSectionSave($ID, $IBLOCK_ID, $arFields, $arSection=array())
 	{
 		$this->AddTagIblock($IBLOCK_ID);
-		//$this->logger->AddSectionChanges($arFields, $arSection);
+		$this->logger->AddSectionChanges($arFields, $arSection);
 		
 		if($this->params['REMOVE_COMPOSITE_CACHE_PART']=='Y')
 		{
@@ -5035,374 +5563,6 @@ class Importer {
 				$this->ClearCompositeCache($arSection['SECTION_PAGE_URL']);
 			}
 		}
-	}
-	
-	public function ApplyMargins($val, $fieldKey)
-	{
-		if(is_array($val))
-		{
-			foreach($val as $k=>$v)
-			{
-				$val[$k] = $this->ApplyMargins($v, $fieldKey);
-			}
-			return $val;
-		}
-		
-		if(is_array($fieldKey)) $arParams = $fieldKey;
-		else $arParams = $this->fieldSettings[$fieldKey];
-		$val = $this->GetFloatVal($val);
-		$sval = $val;
-		$margins = $arParams['MARGINS'];
-		if(is_array($margins) && count($margins) > 0)
-		{
-			foreach($margins as $margin)
-			{
-				if((strlen(trim($margin['PRICE_FROM']))==0 || $sval >= $this->GetFloatVal($margin['PRICE_FROM']))
-					&& (strlen(trim($margin['PRICE_TO']))==0 || $sval <= $this->GetFloatVal($margin['PRICE_TO'])))
-				{
-					if($margin['PERCENT_TYPE']=='F')
-						$val += ($margin['TYPE'] > 0 ? 1 : -1)*$this->GetFloatVal($margin['PERCENT']);
-					else
-						$val *= (1 + ($margin['TYPE'] > 0 ? 1 : -1)*$this->GetFloatVal($margin['PERCENT'])/100);
-				}
-			}
-		}
-		
-		/*Rounding*/
-		$roundRule = $arParams['PRICE_ROUND_RULE'];
-		$roundRatio = $arParams['PRICE_ROUND_COEFFICIENT'];
-		$roundRatio = str_replace(',', '.', $roundRatio);
-		if(!preg_match('/^[\d\.]+$/', $roundRatio)) $roundRatio = 1;
-		
-		if($roundRule=='ROUND')	$val = round($val / $roundRatio) * $roundRatio;
-		elseif($roundRule=='CEIL') $val = ceil($val / $roundRatio) * $roundRatio;
-		elseif($roundRule=='FLOOR') $val = floor($val / $roundRatio) * $roundRatio;
-		/*/Rounding*/
-		
-		return $val;
-	}
-	
-	function GetFilesByExt($path, $arExt=array())
-	{
-		$arFiles = array();
-		$arDirFiles = array_diff(scandir($path), array('.', '..'));
-		foreach($arDirFiles as $file)
-		{
-			if(is_file($path.$file) && (empty($arExt) || preg_match('/\.('.implode('|', $arExt).')$/i', ToLower($file))))
-			{
-				$arFiles[] = $path.$file;
-			}
-		}
-		foreach($arDirFiles as $file)
-		{
-			if(is_dir($path.$file))
-			{
-				$arFiles = array_merge($arFiles, $this->GetFilesByExt($path.$file.'/', $arExt));
-			}
-		}
-		return $arFiles;
-	}
-	
-	public function AddTmpFile($fileOrig, $file)
-	{
-		$this->arTmpImages[$fileOrig] = array('file'=>$file, 'size'=>filesize($file));
-	}
-	
-	public function GetTmpFile($fileOrig)
-	{
-		if(array_key_exists($fileOrig, $this->arTmpImages))
-		{
-			if(filesize($this->arTmpImages[$fileOrig]['file'])==$this->arTmpImages[$fileOrig]['size']) return $this->arTmpImages[$fileOrig]['file'];
-			else unset($this->arTmpImages[$fileOrig]);
-		}
-		return false;
-	}
-	
-	public function CreateTmpImageDir()
-	{
-		$tmpsubdir = $this->imagedir.($this->filecnt++).'/';
-		CheckDirPath($tmpsubdir);
-		$this->arTmpImageDirs[] = $tmpsubdir;
-		return $tmpsubdir;
-	}
-	
-	public function RemoveTmpImageDirs()
-	{
-		if(!empty($this->arTmpImageDirs))
-		{
-			foreach($this->arTmpImageDirs as $k=>$v)
-			{
-				DeleteDirFilesEx(substr($v, strlen($_SERVER['DOCUMENT_ROOT'])));
-			}
-			$this->arTmpImageDirs = array();
-		}
-		$this->arTmpImages = array();
-	}
-	
-	public function GetFileArray($file, $arDef=array(), $arParams=array())
-	{
-		$bNeedImage = (bool)($arParams['FILETYPE']=='IMAGE');
-		$bMultiple = (bool)($arParams['MULTIPLE']=='Y');
-		$fileTypes = array();
-		if($bNeedImage) $fileTypes = array('jpg', 'jpeg', 'png', 'gif', 'bmp');
-		elseif($arParams['FILE_TYPE']) $fileTypes = array_diff(array_map('trim', explode(',', ToLower($arParams['FILE_TYPE']))), array(''));
-		
-		if(is_array($file))
-		{
-			if($bMultiple)
-			{
-				$arFiles = array();
-				foreach($file as $subfile)
-				{
-					$arFiles[] = $this->GetFileArray($subfile, $arDef, $arParams);
-				}
-				return $arFiles;
-			}
-			else
-			{
-				$file = current($file);
-			}
-		}
-		
-		$fileOrig = $file = trim($file);
-		if($file=='-')
-		{
-			return array('del'=>'Y');
-		}
-		elseif($tmpFile = $this->GetTmpFile($fileOrig))
-		{
-			$file = $tmpFile;
-		}
-		elseif($tmpFile = $this->GetFileFromArchive($fileOrig))
-		{
-			$file = $tmpFile;
-		}
-		elseif(strpos($file, '/')===0)
-		{
-			$file = \Bitrix\Main\IO\Path::convertLogicalToPhysical($file);
-			$tmpsubdir = $this->CreateTmpImageDir();
-			$arFile = \CFile::MakeFileArray($file);
-			$file = $tmpsubdir.$arFile['name'];
-			copy($arFile['tmp_name'], $file);
-		}
-		elseif(strpos($file, 'zip://')===0)
-		{
-			$tmpsubdir = $this->CreateTmpImageDir();
-			$oldfile = $file;
-			$file = $tmpsubdir.basename($oldfile);
-			copy($oldfile, $file);
-		}
-		elseif(preg_match('/ftp(s)?:\/\//', $file))
-		{
-			$tmpsubdir = $this->CreateTmpImageDir();
-			$arFile = $this->sftp->MakeFileArray($file, $arParams);
-			if($bMultiple && array_key_exists('0', $arFile))
-			{
-				$arFiles = array();
-				foreach($arFile as $subfile)
-				{
-					if(is_array($subfile)) $arFiles[] = $subfile;
-					else $arFiles[] = $this->GetFileArray($subfile, $arDef, $arParams);
-				}
-				return $arFiles;
-			}
-			$file = $tmpsubdir.$arFile['name'];
-			copy($arFile['tmp_name'], $file);
-		}
-		elseif($service = $this->cloud->GetService($file))
-		{
-			$tmpsubdir = $this->CreateTmpImageDir();
-			if($arFile = $this->cloud->MakeFileArray($service, $file))
-			{
-				$file = $tmpsubdir.$arFile['name'];
-				copy($arFile['tmp_name'], $file);
-			}
-		}
-		elseif(preg_match('/http(s)?:\/\//', $file))
-		{
-			//$file = urldecode($file);
-			$file = preg_replace_callback('/[^:\/?=&#@\+]+/', create_function('$m', 'return urldecode($m[0]);'), $file);
-			$arUrl = parse_url($file);
-			//Cyrillic domain
-			if(preg_match('/[^A-Za-z0-9\-\.]/', $arUrl['host']))
-			{
-				if(!class_exists('idna_convert')) require_once(dirname(__FILE__).'/idna_convert.class.php');
-				if(class_exists('idna_convert'))
-				{
-					$idn = new \idna_convert();
-					$oldHost = $arUrl['host'];
-					if(!\CUtil::DetectUTF8($oldHost)) $oldHost = \Bitrix\KitImportxml\Utils::Win1251Utf8($oldHost);
-					$file = str_replace($arUrl['host'], $idn->encode($oldHost), $file);
-				}
-			}
-			if(class_exists('\Bitrix\Main\Web\HttpClient'))
-			{
-				$tmpsubdir = $this->CreateTmpImageDir();
-				$basename = preg_replace('/\?.*$/', '', bx_basename($file));
-				if(preg_match('/^[_+=!?]*\./', $basename) || strlen(trim($basename))==0) $basename = 'f'.$basename;
-				$tempPath = $tmpsubdir.$basename;
-				$tempPath2 = $tmpsubdir.(\Bitrix\Main\IO\Path::convertLogicalToPhysical($basename));
-				$arOptions = array();
-				if($this->useProxy) $arOptions = $this->proxySettings;
-				$arOptions['disableSslVerification'] = true;
-				$arOptions['socketTimeout'] = $arOptions['streamTimeout'] = 10;
-				$ob = new \Bitrix\Main\Web\HttpClient($arOptions);
-				//$ob->setHeader('User-Agent', 'BitrixSM HttpClient class');
-				$ob->setHeader('User-Agent', \Bitrix\KitImportxml\Utils::GetUserAgent());
-				try{
-					if(!\CUtil::DetectUTF8($file)) $file = \Bitrix\KitImportxml\Utils::Win1251Utf8($file);
-					$file = preg_replace_callback('/[^:\/?=&#@]+/', create_function('$m', 'return rawurlencode($m[0]);'), $file);
-					if($ob->download($file, $tempPath) && $ob->getStatus()!=404) $file = $tempPath2;
-					else return array();
-				}catch(Exception $ex){}
-				
-				if(strpos($ob->getHeaders()->get("content-type"), 'text/html')!==false 
-					&& (in_array('jpg', $fileTypes) || in_array('jpeg', $fileTypes))
-					&& ($arFile = \CFile::MakeFileArray($file))
-					&& stripos($arFile['type'], 'image')===false)
-				{
-					$fileContent = file_get_contents($file);
-					if(preg_match_all('/src=[\'"]([^\'"]*)[\'"]/is', $fileContent, $m))
-					{
-						if($bMultiple)
-						{
-							$arFiles = array();
-							foreach($m[1] as $img)
-							{
-								$img = trim($img);
-								if(preg_match('/data:image\/(.{3,4});base64,/is', $img, $m))
-								{
-									$subfile = $this->CreateTmpImageDir().'img.'.$m[1];
-									file_put_contents($subfile, base64_decode(substr($img, strlen($m[0]))));
-									$arFiles[] = $this->GetFileArray($subfile, $arDef, $arParams);
-								}
-							}
-							if(!empty($arFiles)) return array('VALUES' => $arFiles);
-						}
-						else
-						{
-							$img = trim(current($m[1]));
-							if(preg_match('/data:image\/(.{3,4});base64,/is', $img, $m))
-							{
-								file_put_contents($file, base64_decode(substr($img, strlen($m[0]))));
-							}
-						}
-					}
-				}
-			}
-		}
-		$this->AddTmpFile($fileOrig, $file);
-		$arFile = \CFile::MakeFileArray($file);
-		
-		if(!file_exists($file) && !$arFile['name'] && !\CUtil::DetectUTF8($file))
-		{
-			$file = \Bitrix\KitImportxml\Utils::Win1251Utf8($file);
-			$arFile = \CFile::MakeFileArray($file);
-		}
-		
-		$dirname = '';
-		if(file_exists($file) && is_dir($file))
-		{
-			$dirname = $file;
-		}
-		elseif(in_array($arFile['type'], array('application/zip', 'application/x-zip-compressed')) && !empty($fileTypes) && !in_array('zip', $fileTypes))
-		{
-			$archiveParams = $this->GetArchiveParams($fileOrig);
-			if(!$archiveParams['exists'])
-			{
-				CheckDirPath($archiveParams['path']);
-				$zipObj = \CBXArchive::GetArchive($arFile['tmp_name'], 'ZIP');
-				$zipObj->Unpack($archiveParams['path']);
-			}
-			$dirname = $archiveParams['file'];
-		}
-		if(strlen($dirname) > 0)
-		{
-			$arFile = array();
-			if(file_exists($dirname) && is_file($dirname)) $arFiles = array($dirname);
-			else $arFiles = $this->GetFilesByExt($dirname, $fileTypes);
-			if($bMultiple && count($arFiles) > 1)
-			{
-				foreach($arFiles as $k=>$v)
-				{
-					$arFiles[$k] = \CFile::MakeFileArray($v);
-				}
-				$arFile = array('VALUES'=>$arFiles);
-			}
-			elseif(count($arFiles) > 0)
-			{
-				$tmpfile = current($arFiles);
-				$arFile = \CFile::MakeFileArray($tmpfile);
-			}
-		}
-		
-		if(strpos($arFile['type'], 'image/')===0)
-		{
-			$ext = ToLower(str_replace('image/', '', $arFile['type']));
-			if($this->IsWrongExt($arFile['name'], $ext))
-			{
-				if(($ext!='jpeg' || (($ext='jpg') && $this->IsWrongExt($arFile['name'], $ext)))
-					&& ($ext!='svg+xml' || (($ext='svg') && $this->IsWrongExt($arFile['name'], $ext)))
-				)
-				{
-					$arFile['name'] = $arFile['name'].'.'.$ext;
-				}
-			}
-		}
-		elseif($bNeedImage) $arFile = array();
-
-		if(!empty($arDef) && !empty($arFile))
-		{
-			if(isset($arFile['VALUES']))
-			{
-				foreach($arFile['VALUES'] as $k=>$v)
-				{
-					$arFile['VALUES'][$k] = $this->PictureProcessing($v, $arDef);
-				}
-			}
-			else
-			{
-				$arFile = $this->PictureProcessing($arFile, $arDef);
-			}
-		}
-		if(!empty($arFile) && strpos($arFile['type'], 'image/')===0)
-		{
-			$arCacheKeys = array('width'=>$width, 'height'=>$height, 'size'=>$arFile['size']);
-			if($this->params['ELEMENT_NOT_CHECK_NAME_IMAGES']!='Y') $arCacheKeys['name'] = $arFile['name'];
-			list($width, $height, $type, $attr) = getimagesize($arFile['tmp_name']);
-			$arFile['external_id'] = 'i_'.md5(serialize($arCacheKeys));
-		}
-		if(!empty($arFile) && strpos($arFile['type'], 'html')!==false)
-		{
-			$arFile = array();
-		}
-		
-		return $arFile;
-	}
-	
-	public function IsWrongExt($name, $ext)
-	{
-		return (bool)(substr($name, -(strlen($ext) + 1))!='.'.$ext);
-	}
-	
-	public function GetArchiveParams($file)
-	{
-		$arUrl = parse_url($file);
-		$fragment = (isset($arUrl['fragment']) ? $arUrl['fragment'] : '');
-		if(strlen($fragment) > 0) $file = substr($file, 0, -strlen($fragment) - 1);
-		$archivePath = $this->archivedir.md5($file).'/';
-		return array(
-			'path' => $archivePath, 
-			'exists' => file_exists($archivePath),
-			'file' => $archivePath.ltrim($fragment, '/')
-		);
-	}
-	
-	public function GetFileFromArchive($file)
-	{
-		$archiveParams = $this->GetArchiveParams($file);
-		if(!$archiveParams['exists']) return false;
-		return $archiveParams['file'];
 	}
 	
 	public function SetTimeBegin($ID)
@@ -5415,70 +5575,9 @@ class Importer {
 		}
 	}
 	
-	public function IsEmptyPrice($arPrices)
-	{
-		if(is_array($arPrices))
-		{
-			foreach($arPrices as $arPrice)
-			{
-				if($arPrice['PRICE'] > 0)
-				{
-					return false;
-				}
-			}
-		}
-		return true;
-	}
-	
-	public function GetHLBoolValue($val)
-	{
-		$res = $this->GetBoolValue($val);
-		if($res=='Y') return 1;
-		else return 0;
-	}
-	
-	public function GetBoolValue($val, $numReturn = false, $defaultValue = false)
-	{
-		$trueVals = array_map('trim', explode(',', Loc::getMessage("KIT_IX_FIELD_VAL_Y")));
-		$falseVals = array_map('trim', explode(',', Loc::getMessage("KIT_IX_FIELD_VAL_N")));
-		if(in_array(ToLower($val), $trueVals))
-		{
-			return ($numReturn ? 1 : 'Y');
-		}
-		elseif(in_array(ToLower($val), $falseVals))
-		{
-			return ($numReturn ? 0 : 'N');
-		}
-		else
-		{
-			return $defaultValue;
-		}
-	}
-	
 	public function SaveSection($arFields, $IBLOCK_ID, $parent=0, $level=0, $arParams=array())
 	{
-		$iblockFields = $this->GetIblockFields($IBLOCK_ID);
-		$sectionFields = $this->GetIblockSectionFields($IBLOCK_ID);
 		$sectId = false;
-		$arPictures = array('PICTURE', 'DETAIL_PICTURE');
-		foreach($arPictures as $picName)
-		{
-			if($arFields[$picName])
-			{
-				$val = $arFields[$picName];
-				if(is_array($val)) $arFields[$val] = current($val);
-				$arFile = $this->GetFileArray($val, array(), array('FILETYPE'=>'IMAGE'));
-				if(empty($arFile) && strpos($val, $this->params['ELEMENT_MULTIPLE_SEPARATOR'])!==false)
-				{
-					$arVals = array_diff(array_map('trim', explode($this->params['ELEMENT_MULTIPLE_SEPARATOR'], $val)), array(''));
-					if(count($arVals) > 0 && ($val = current($arVals)))
-					{
-						$arFile = $this->GetFileArray($val, array(), array('FILETYPE'=>'IMAGE'));
-					}
-				}
-				$arFields[$picName] = $arFile;
-			}
-		}
 		
 		if(isset($arFields['ACTIVE']))
 		{
@@ -5497,12 +5596,96 @@ class Importer {
 				}
 			}
 		}
+		$this->PrepareSectionUFields($arFields, $IBLOCK_ID);
 		
+		$arSections = array();
+		$arParents = (is_array($parent) ? $parent : array($parent));
+		foreach($arParents as $parent)
+		{
+			if($parent > 0) $arFields['IBLOCK_SECTION_ID'] = $parent;
+			
+			$sectionUid = $this->params['SECTION_UID'];
+			if($this->IsEmptyField($sectionUid, $arFields)) $sectionUid = 'NAME';
+			if($this->IsEmptyField($sectionUid, $arFields)) return false;
+			$arFilter = array(
+				$sectionUid=>$arFields[$sectionUid],
+				'IBLOCK_ID'=>$IBLOCK_ID,
+				'CHECK_PERMISSIONS' => 'N'
+			);
+			if(!is_array($arFields[$sectionUid]) && strlen($arFields[$sectionUid])!=strlen(trim($arFields[$sectionUid])))
+			{
+				$arFilter[$sectionUid] = array($arFields[$sectionUid], trim($arFields[$sectionUid]));
+			}
+			if(!isset($arFields['IGNORE_PARENT_SECTION']) || $arFields['IGNORE_PARENT_SECTION']!='Y') $arFilter['SECTION_ID'] = $parent;
+			else unset($arFields['IGNORE_PARENT_SECTION']);
+			
+			if($arParams['SECTION_SEARCH_IN_SUBSECTIONS']=='Y')
+			{
+				if($parent && $arParams['SECTION_SEARCH_WITHOUT_PARENT']!='Y')
+				{
+					$dbRes2 = \CIBlockSection::GetList(array(), array('IBLOCK_ID'=>$IBLOCK_ID, 'ID'=>$parent, 'CHECK_PERMISSIONS' => 'N'), false, array('ID', 'LEFT_MARGIN', 'RIGHT_MARGIN'));
+					if($arParentSection = $dbRes2->Fetch())
+					{
+						$arFilter['>LEFT_MARGIN'] = $arParentSection['LEFT_MARGIN'];
+						$arFilter['<RIGHT_MARGIN'] = $arParentSection['RIGHT_MARGIN'];
+					}
+				}
+				unset($arFilter['SECTION_ID']);
+			}
+			$dbRes = \CIBlockSection::GetList(array(), $arFilter, false, array_merge(array('ID'), array_keys($arFields)));
+			$arPartSections = array();
+			while($arSect = $dbRes->Fetch())
+			{
+				$sectId = $arSect['ID'];
+				if($this->params['ONLY_CREATE_MODE_SECTION']!='Y' && $this->conv->UpdateSectionFields($arFields, $sectId)!==false)
+				{
+					$this->PrepareSectionPictures($arFields, $IBLOCK_ID, $arSect);
+					if(($arParams['SECTION_SEARCH_IN_SUBSECTIONS']=='Y' || $arParams['SECTION_SEARCH_WITHOUT_PARENT']=='Y') && isset($arFields['IBLOCK_SECTION_ID']))
+					{
+						unset($arFields['IBLOCK_SECTION_ID']);
+					}
+					$this->UpdateSection($sectId, $IBLOCK_ID, $arFields, $arSect, $sectionUid);
+				}
+				$arSections[] = $sectId;
+				$arPartSections[] = $sectId;
+			}
+			if(empty($arPartSections) && $this->params['ONLY_UPDATE_MODE_SECTION']!='Y')
+			{
+				if(strlen(trim($arFields['NAME']))==0) return false;
+				$this->PrepareSectionPictures($arFields, $IBLOCK_ID);
+				$this->PrepareNewSectionFields($arFields, $IBLOCK_ID);
+				$bs = new \CIBlockSection;
+				$sectId = $j = 0;
+				$code = $arFields['CODE'];
+				$jmax = ($sectionUid=='CODE' ? 1 : 1000);
+				while($j<$jmax && !($sectId = $bs->Add($arFields, true, true, true)) && ($arFields['CODE'] = $code.strval(++$j))){}
+				if($sectId)
+				{
+					$this->BeforeSectionSave($sectId, "add");
+					$this->AfterSectionSave($sectId, $IBLOCK_ID, $arFields);
+					$this->SaveElementId($sectId, 'S');
+					$this->stepparams['section_added_line']++;
+				}
+				else
+				{
+					$this->errors[] = sprintf(Loc::getMessage("KIT_IX_ADD_SECTION_ERROR"), $arFields['NAME'], $bs->LAST_ERROR, '');
+				}
+				$arSections[] = $sectId;
+			}
+		}
+		return $arSections;
+	}
+	
+	public function PrepareSectionUFields(&$arFields, $IBLOCK_ID, $bFile=false)
+	{
+		$sectionFields = $this->GetIblockSectionFields($IBLOCK_ID);
 		foreach($arFields as $k=>$v)
 		{
 			if(isset($sectionFields[$k]))
 			{
 				$sParams = $sectionFields[$k];
+				if(!$bFile && $sParams['USER_TYPE_ID']=='file') continue;
+				if($bFile && $sParams['USER_TYPE_ID']!='file') continue;
 				//$fieldSettings = $this->fieldSettings['ISECT'.$level.'_'.$k];
 				$fieldSettings = $this->fieldSettings['ISECT_'.$k];
 				if(!is_array($fieldSettings)) $fieldSettings = array();
@@ -5527,107 +5710,92 @@ class Importer {
 					$arFields[$k] = $this->GetSectionField($arFields[$k], $sParams, $fieldSettings);
 				}
 			}
-			if(strpos($k, 'IPROP_TEMP_')===0)
+			if(!$bFile && strpos($k, 'IPROP_TEMP_')===0)
 			{
 				$arFields['IPROPERTY_TEMPLATES'][substr($k, 11)] = $v;
 				unset($arFields[$k]);
 			}
 		}
-		
-		if($parent > 0) $arFields['IBLOCK_SECTION_ID'] = $parent;
-		
-		$sectionUid = $this->params['SECTION_UID'];
-		if(!$arFields[$sectionUid]) $sectionUid = 'NAME';
-		if((!is_array($arFields[$sectionUid]) && strlen(trim($arFields[$sectionUid]))==0) || empty($arFields[$sectionUid])) return false;
-		$arFilter = array(
-			$sectionUid=>$arFields[$sectionUid],
-			'IBLOCK_ID'=>$IBLOCK_ID,
-			'CHECK_PERMISSIONS' => 'N'
-		);
-		if(!is_array($arFields[$sectionUid]) && strlen($arFields[$sectionUid])!=strlen(trim($arFields[$sectionUid])))
+	}
+	
+	public function PrepareNewSectionFields(&$arFields, $IBLOCK_ID)
+	{
+		$iblockFields = $this->GetIblockFields($IBLOCK_ID);
+		if(!isset($arFields['ACTIVE'])) $arFields['ACTIVE'] = 'Y';
+		$arFields['IBLOCK_ID'] = $IBLOCK_ID;
+
+		if(($iblockFields['SECTION_CODE']['IS_REQUIRED']=='Y' || $iblockFields['SECTION_CODE']['DEFAULT_VALUE']['TRANSLITERATION']=='Y') && strlen($arFields['CODE'])==0)
 		{
-			$arFilter[$sectionUid] = array($arFields[$sectionUid], trim($arFields[$sectionUid]));
-		}
-		if(!isset($arFields['IGNORE_PARENT_SECTION']) || $arFields['IGNORE_PARENT_SECTION']!='Y') $arFilter['SECTION_ID'] = $parent;
-		else unset($arFields['IGNORE_PARENT_SECTION']);
-		
-		if($arParams['SECTION_SEARCH_IN_SUBSECTIONS']=='Y')
-		{
-			if($parent && $arParams['SECTION_SEARCH_WITHOUT_PARENT']!='Y')
+			$arFields['CODE'] = $this->Str2Url($arFields['NAME'], $iblockFields['SECTION_CODE']['DEFAULT_VALUE']);
+			if($iblockFields['SECTION_CODE']['DEFAULT_VALUE']['UNIQUE']=='Y' && $sectionUid!='CODE')
 			{
-				$dbRes2 = \CIBlockSection::GetList(array(), array('IBLOCK_ID'=>$IBLOCK_ID, 'ID'=>$parent, 'CHECK_PERMISSIONS' => 'N'), false, array('ID', 'LEFT_MARGIN', 'RIGHT_MARGIN'));
-				if($arParentSection = $dbRes2->Fetch())
-				{
-					$arFilter['>LEFT_MARGIN'] = $arParentSection['LEFT_MARGIN'];
-					$arFilter['<RIGHT_MARGIN'] = $arParentSection['RIGHT_MARGIN'];
-				}
+				$j = 0;
+				$jmax = 1000;
+				$code = $arFields['CODE'];
+				while($j<$jmax && (\CIBlockSection::GetList(array(), array('IBLOCK_ID'=>$IBLOCK_ID, 'CODE'=>$arFields['CODE']), false, array('ID'))->Fetch()) && ($arFields['CODE'] = $code.strval(++$j))){}
 			}
-			unset($arFilter['SECTION_ID']);
 		}
-		$dbRes = \CIBlockSection::GetList(array(), $arFilter, false, array_merge(array('ID'), array_keys($arFields)));
-		$arSections = array();
-		while($arSect = $dbRes->Fetch())
+		
+		$sectionFields = $this->GetIblockSectionFields($IBLOCK_ID);
+		foreach($sectionFields as $fname=>$arField)
 		{
-			$sectId = $arSect['ID'];
-			if($this->params['ONLY_CREATE_MODE_SECTION']!='Y' && $this->conv->UpdateSectionFields($arFields, $sectId)!==false)
+			if($arField['MANDATORY']=='Y' && !array_key_exists($fname, $arFields))
 			{
-				foreach($arSect as $k=>$v)
+				if(is_array($arField['SETTINGS']) && array_key_exists('DEFAULT_VALUE', $arField['SETTINGS']))
 				{
-					if(isset($arFields[$k]) && ($arFields[$k]==$v || ($k=='NAME' && ToLower($arFields[$k])==ToLower($v)) || $k==$sectionUid)) unset($arFields[$k]);
+					$arFields[$fname] = $arField['SETTINGS']['DEFAULT_VALUE'];
 				}
-				if(($arParams['SECTION_SEARCH_IN_SUBSECTIONS']=='Y' || $arParams['SECTION_SEARCH_WITHOUT_PARENT']=='Y') && isset($arFields['IBLOCK_SECTION_ID']))
+				else
 				{
-					unset($arFields['IBLOCK_SECTION_ID']);
-				}
-				if(!empty($arFields))
-				{
-					$bs = new \CIBlockSection;
-					$bs->Update($sectId, $arFields, true, true, true);
-					$this->AfterSectionSave($sectId, $IBLOCK_ID, $arFields, $arSect);
-					if(true)
+					$userType = $arField['USER_TYPE_ID'];
+					if($userType=='enumeration')
 					{
-						$ipropValues = new \Bitrix\Iblock\InheritedProperty\SectionValues($IBLOCK_ID, $sectId);
-						$ipropValues->clearValues();
+						$arFields[$fname] = $this->GetUserFieldEnumDefaultVal($arField);
 					}
 				}
-				$this->stepparams['section_updated_line']++;
 			}
-			$arSections[] = $sectId;
 		}
-		if(empty($arSections) && $this->params['ONLY_UPDATE_MODE_SECTION']!='Y')
+	}
+	
+	public function UpdateSection($ID, $IBLOCK_ID, $arFields, $arSection, $sectionUid=false)
+	{
+		$this->BeforeSectionSave($ID, "update");
+		foreach($arSection as $k=>$v)
 		{
-			if(strlen(trim($arFields['NAME']))==0) return false;
-			if(!isset($arFields['ACTIVE'])) $arFields['ACTIVE'] = 'Y';
-			$arFields['IBLOCK_ID'] = $IBLOCK_ID;
-
-			if(($iblockFields['SECTION_CODE']['IS_REQUIRED']=='Y' || $iblockFields['SECTION_CODE']['DEFAULT_VALUE']['TRANSLITERATION']=='Y') && strlen($arFields['CODE'])==0)
+			if($k=='PICTURE' || $k=='DETAIL_PICTURE')
 			{
-				$arFields['CODE'] = $this->Str2Url($arFields['NAME'], $iblockFields['SECTION_CODE']['DEFAULT_VALUE']);
-				if($iblockFields['SECTION_CODE']['DEFAULT_VALUE']['UNIQUE']=='Y' && $sectionUid!='CODE')
+				if(empty($arFields[$k]) || !$this->IsChangedImage($v, $arFields[$k])) unset($arFields[$k]);
+			}
+			elseif(isset($arFields[$k]) && ($arFields[$k]==$v || ($k=='NAME' && ToLower($arFields[$k])==ToLower($v)) || $k==$sectionUid)) unset($arFields[$k]);
+		}
+		if(isset($arFields['IPROPERTY_TEMPLATES']) && is_array($arFields['IPROPERTY_TEMPLATES']) && count($arFields['IPROPERTY_TEMPLATES']) > 0)
+		{
+			$ipropValues = new \Bitrix\Iblock\InheritedProperty\SectionTemplates($IBLOCK_ID, $ID);
+			$arTemplates = $ipropValues->findTemplates();
+			foreach($arFields['IPROPERTY_TEMPLATES'] as $k=>$v)
+			{
+				if(isset($arTemplates[$k]) && is_array($arTemplates[$k]) && isset($arTemplates[$k]['TEMPLATE']) && $arTemplates[$k]['TEMPLATE']==$v)
 				{
-					$j = 0;
-					$jmax = 1000;
-					$code = $arFields['CODE'];
-					while($j<$jmax && (\CIBlockSection::GetList(array(), array('IBLOCK_ID'=>$IBLOCK_ID, 'CODE'=>$arFields['CODE']), false, array('ID'))->Fetch()) && ($arFields['CODE'] = $code.strval(++$j))){}
+					unset($arFields['IPROPERTY_TEMPLATES'][$k]);
 				}
 			}
-			$bs = new \CIBlockSection;
-			$sectId = $j = 0;
-			$code = $arFields['CODE'];
-			$jmax = ($sectionUid=='CODE' ? 1 : 1000);
-			while($j<$jmax && !($sectId = $bs->Add($arFields, true, true, true)) && ($arFields['CODE'] = $code.strval(++$j))){}
-			if($sectId)
-			{
-				$this->AfterSectionSave($sectId, $IBLOCK_ID, $arFields);
-				$this->stepparams['section_added_line']++;
-			}
-			else
-			{
-				$this->errors[] = sprintf(Loc::getMessage("KIT_IX_ADD_SECTION_ERROR"), $arFields['NAME'], $bs->LAST_ERROR, '');
-			}
-			$arSections[] = $sectId;
+			if(empty($arFields['IPROPERTY_TEMPLATES'])) unset($arFields['IPROPERTY_TEMPLATES']);
 		}
-		return $arSections;
+		if(!empty($arFields))
+		{
+			$bs = new \CIBlockSection;
+			$bs->Update($ID, $arFields, true, true, true);
+			$this->AfterSectionSave($ID, $IBLOCK_ID, $arFields, $arSection);
+			\Bitrix\KitImportxml\DataManager\InterhitedpropertyValues::ClearSectionValues($IBLOCK_ID, $ID, $arFields);
+		}
+		if($sectionUid)
+		{
+			if($this->SaveElementId($ID, 'S')) $this->stepparams['section_updated_line']++;
+		}
+		else
+		{
+			$this->logger->SaveSectionChanges($ID);
+		}
 	}
 	
 	public function GetSectionField($val, $sParams, $fieldSettings)
@@ -5636,24 +5804,31 @@ class Importer {
 		if($userType=='file')
 		{
 			$val = $this->GetFileArray($val);
+			if($sParams['MULTIPLE']!='Y' && is_array($val) && empty($val)) $val = '';
 		}
 		elseif($userType=='boolean')
 		{
 			$val = $this->GetBoolValue($val, true);
+		}
+		elseif($userType=='enumeration')
+		{
+			$val = $this->GetUserFieldEnum($val, $sParams);
 		}
 		elseif($userType=='iblock_element')
 		{
 			$arProp = array('LINK_IBLOCK_ID' => $sParams['SETTINGS']['IBLOCK_ID']);
 			$val = $this->GetIblockElementValue($arProp, $val, $fieldSettings);
 		}
+		elseif($userType=='iblock_section')
+		{
+			$arProp = array('LINK_IBLOCK_ID' => $sParams['SETTINGS']['IBLOCK_ID']);
+			$val = $this->GetIblockSectionValue($arProp, $val, $fieldSettings);
+		}
 		return $val;
 	}
 	
 	public function GetSections(&$arElement, $IBLOCK_ID, $SECTION_ID, $arSections)
 	{
-		if(isset($arElement['IBLOCK_SECTION']) && !empty($arElement['IBLOCK_SECTION']) && $this->params['ELEMENT_ADD_NEW_SECTIONS']!='Y') return;
-		//if(!isset($arElement['SECTION_PATH'])) return;
-	
 		$arMultiSections = array();
 		if(is_array($arElement['SECTION_PATH']))
 		{
@@ -5662,14 +5837,21 @@ class Importer {
 				if(is_array($sectionPath))
 				{
 					$tmpSections = array();
+					$add = false;
 					foreach($sectionPath as $k=>$name)
 					{
+						if(strlen(trim($name)) > 0) $add = true;
 						$tmpSections[$k+1]['NAME'] = $name;
 					}
-					$arMultiSections[] = $tmpSections;
+					if($add) $arMultiSections[] = $tmpSections;
 				}
 			}
 			unset($arElement['SECTION_PATH']);
+		}
+		if(isset($arElement['IBLOCK_SECTION']) && !empty($arElement['IBLOCK_SECTION']) && $this->params['ELEMENT_ADD_NEW_SECTIONS']!='Y')
+		{
+			if(!empty($arMultiSections) && $this->params['ELEMENT_ADD_NEW_SECTIONS']!='Y') unset($arElement['IBLOCK_SECTION']);
+			else return;
 		}
 
 		/*if no 1st level*/
@@ -5690,9 +5872,10 @@ class Importer {
 			if($SECTION_ID > 0)
 			{
 				if($this->params['ELEMENT_ADD_NEW_SECTIONS']=='Y' && is_array($arElement['IBLOCK_SECTION']))
-					$arElement['IBLOCK_SECTION'][] = $SECTION_ID;
-				else
-					$arElement['IBLOCK_SECTION'] = array($SECTION_ID);
+				{
+					if(!in_array($SECTION_ID, $arElement['IBLOCK_SECTION'])) $arElement['IBLOCK_SECTION'][] = $SECTION_ID;
+				}
+				else $arElement['IBLOCK_SECTION'] = array($SECTION_ID);
 				return true;
 			}
 			return false;
@@ -5744,13 +5927,13 @@ class Importer {
 			while(++$i && !empty($arSections[$i]))
 			{
 				$sectionUid = $this->params['SECTION_UID'];
-				if(!$arSections[$i][$sectionUid]) $sectionUid = 'NAME';
-				if(!$arSections[$i][$sectionUid]) continue;
+				if($this->IsEmptyField($sectionUid, $arSections[$i])) $sectionUid = 'NAME';
+				if($this->IsEmptyField($sectionUid, $arSections[$i])) continue;
 
 				if($fromSectionPath) $fsKey = 'IE_SECTION_PATH';
 				else $fsKey = 'ISECT'.$i.'_'.$sectionUid;
 				
-				if(($this->fieldSettings[$fsKey]['SECTION_UID_SEPARATED']=='Y' || is_array($arSections[$i][$sectionUid])) && empty($arSections[$i+1]))
+				if(($this->fieldSettings[$fsKey]['SECTION_UID_SEPARATED']=='Y' || is_array($arSections[$i][$sectionUid])) /*&& empty($arSections[$i+1])*/)
 				{
 					if(is_array($arSections[$i][$sectionUid])) $arNames = $arSections[$i][$sectionUid];
 					else $arNames = explode($this->params['ELEMENT_MULTIPLE_SEPARATOR'], $arSections[$i][$sectionUid]);
@@ -5764,23 +5947,28 @@ class Importer {
 				$arParents = array();
 				
 				$parentLvl = array();
-				foreach($arNames as $name)
+				$parent2 = (is_array($parent) ? $parent : array($parent));
+				foreach($parent2 as $parent)
 				{
-					if(isset($this->sections[$parent][$name]) && !empty($this->sections[$parent][$name]))
+					foreach($arNames as $name)
 					{
-						$parentLvl = $this->sections[$parent][$name];
+						if(isset($this->sections[$parent][$name]) && !empty($this->sections[$parent][$name]) && count($arSections[$i]) < 2)
+						{
+							$parentLvl = array_merge($parentLvl, $this->sections[$parent][$name]);
+						}
+						else
+						{				
+							$arFields = $arSections[$i];
+							$arFields[$sectionUid] = $name;
+							$sectId = $this->SaveSection($arFields, $IBLOCK_ID, $parent, $i, $this->fieldSettings[$fsKey]);
+							$this->sections[$parent][$name] = $sectId;
+							if(!empty($sectId)) $parentLvl = array_merge($parentLvl, $sectId);
+						}
+						$arParents = array_merge($arParents, $parentLvl);
 					}
-					else
-					{				
-						$arFields = $arSections[$i];
-						$arFields[$sectionUid] = $name;
-						$sectId = $this->SaveSection($arFields, $IBLOCK_ID, $parent, $i, $this->fieldSettings[$fsKey]);
-						$this->sections[$parent][$name] = $sectId;
-						if(!empty($sectId)) $parentLvl = $sectId;
-					}
-					$arParents = array_merge($arParents, $parentLvl);
 				}
-				$parent = current(array_diff($parentLvl, array(0)));
+				$parent = array_diff($parentLvl, array(0, false));
+				if(is_array($parent) && count($parent)==1) $parent = current($parent);
 				if(!$parent)
 				{
 					$parent = 0;
@@ -5797,6 +5985,57 @@ class Importer {
 		}
 	}
 	
+	public function GetIblockDefaultProperties($IBLOCK_ID)
+	{
+		if(!array_key_exists($IBLOCK_ID, $this->defprops))
+		{
+			$arSectionProps = array();
+			if(class_exists('\Bitrix\Iblock\SectionPropertyTable'))
+			{
+				$dbRes = \Bitrix\Iblock\SectionPropertyTable::getList(array('filter'=>array(
+					'IBLOCK_ID' => $IBLOCK_ID,
+					'>SECTION_ID' => 0
+				), 
+				'select'=>array('PROPERTY_ID'), 'group'=>array('PROPERTY_ID')));
+				$arSectionProps = array();
+				while($arr = $dbRes->Fetch())
+				{
+					$arSectionProps[$arr['PROPERTY_ID']] = $arr['PROPERTY_ID'];
+				}
+			}
+			$arDefProps = array();
+			$arListsId = array();
+			$arProps = $this->GetIblockProperties($IBLOCK_ID);
+			foreach($arProps as $arProp)
+			{
+				if(isset($arSectionProps[$arProp['ID']])) continue;
+				if($arProp['PROPERTY_TYPE']=='L')
+				{
+					$arListsId[] = $arProp['ID'];
+				}
+				elseif($arProp['USER_TYPE']=='directory')
+				{
+					$val = $this->GetHighloadBlockValue($arProp, array('UF_DEF'=>1));
+					if(!is_array($val) && $val!==false && strlen($val) > 0 && $val!='purple') $arDefProps[$arProp['ID']] = $val;
+				}
+				elseif(!is_array($arProp['DEFAULT_VALUE']) && strlen(trim($arProp['DEFAULT_VALUE'])) > 0)
+				{
+					$arDefProps[$arProp['ID']] = $arProp['DEFAULT_VALUE'];
+				}
+			}
+			if(count($arListsId) > 0 && class_exists('\Bitrix\Iblock\PropertyEnumerationTable'))
+			{
+				$dbRes = \Bitrix\Iblock\PropertyEnumerationTable::getList(array('filter'=>array('PROPERTY_ID'=>$arListsId, 'DEF'=>'Y'), 'select'=>array('PROPERTY_ID', 'ID')));
+				while($arr = $dbRes->Fetch())
+				{
+					$arDefProps[$arr['PROPERTY_ID']] = $arr['ID'];
+				}
+			}
+			$this->defprops[$IBLOCK_ID] = $arDefProps;
+		}
+		return $this->defprops[$IBLOCK_ID];
+	}
+	
 	public function GetIblockProperties($IBLOCK_ID, $byName = false)
 	{
 		if(!$this->props[$IBLOCK_ID])
@@ -5804,6 +6043,8 @@ class Importer {
 			$this->props[$IBLOCK_ID] = array();
 			$this->propsByNames[$IBLOCK_ID] = array();
 			$this->propsByCodes[$IBLOCK_ID] = array();
+			$this->propsByXmlId[$IBLOCK_ID] = array();
+			$this->propsXmlIds[$IBLOCK_ID] = array();
 			$dbRes = \CIBlockProperty::GetList(array(), array('IBLOCK_ID'=>$IBLOCK_ID));
 			while($arProp = $dbRes->Fetch())
 			{
@@ -5811,35 +6052,32 @@ class Importer {
 				$lName = ToLower($arProp['NAME']);
 				if(!isset($this->propsByNames[$IBLOCK_ID][$lName]) || $arProp['ACTIVE']=='Y') $this->propsByNames[$IBLOCK_ID][$lName] = $arProp;
 				$lCode = ToLower($arProp['CODE']);
-				if(!isset($this->propsByCodes[$IBLOCK_ID][$lCode]) || $arProp['ACTIVE']=='Y') $this->propsByCodes[$IBLOCK_ID][$lCode] = $arProp;
+				if(strlen($lCode) > 0 && (!isset($this->propsByCodes[$IBLOCK_ID][$lCode]) || $arProp['ACTIVE']=='Y')) $this->propsByCodes[$IBLOCK_ID][$lCode] = $arProp;
+				$lXmlId = ToLower($arProp['XML_ID']);
+				if(strlen($lXmlId) > 0 && (!isset($this->propsByXmlId[$IBLOCK_ID][$lXmlId]) || $arProp['ACTIVE']=='Y'))
+				{
+					$this->propsByXmlId[$IBLOCK_ID][$lXmlId] = $arProp;
+					$this->propsXmlIds[$IBLOCK_ID][$arProp['ID']] = $lXmlId;
+				}
 			}
 		}
 		if(is_string($byName) && $byName=='CODE') return $this->propsByCodes[$IBLOCK_ID];
+		elseif(is_string($byName) && $byName=='XML_ID') return $this->propsByXmlId[$IBLOCK_ID];
 		elseif($byName) return $this->propsByNames[$IBLOCK_ID];
 		else return $this->props[$IBLOCK_ID];
 	}
 	
-	public function GetIblockPropertyByName($name, $IBLOCK_ID, $createNew = false)
+	public function GetIblockPropertyByName($name, $IBLOCK_ID, $createNew = false, $paramNewProps = array(), $propFields = array(), $checkPropXmlId = false)
 	{
-		$maxLen = 50;
 		$name = trim($name);
 		$lowerName = ToLower($name);
 		$arProps = $this->GetIblockProperties($IBLOCK_ID, true);
-		if(isset($arProps[$lowerName])) return $arProps[$lowerName];
+		if(isset($arProps[$lowerName]) && (!$checkPropXmlId || !isset($this->propsXmlIds[$IBLOCK_ID][$arProps[$lowerName]['ID']]))) return $arProps[$lowerName];
 		
 		$arPropsByCodes = $this->GetIblockProperties($IBLOCK_ID, 'CODE');
-		$arParams = array(
-			'max_len' => $maxLen,
-			'change_case' => 'U',
-			'replace_space' => '_',
-			'replace_other' => '_',
-			'delete_repeat_replace' => 'Y',
-		);
-		$code = \CUtil::translit($name, LANGUAGE_ID, $arParams);
-		$code = preg_replace('/[^a-zA-Z0-9_]/', '', $code);
-		$code = preg_replace('/^[0-9_]+/', '', $code);
+		$code = (isset($propFields['CODE']) && strlen($propFields['CODE']) > 0 ? substr($propFields['CODE'], 0, 50) : $this->GetPropCodeByName($name));
 		$lowerCode = ToLower($code);
-		if(isset($arPropsByCodes[$lowerCode]) && strlen($lowerCode)>=$maxLen)
+		if(isset($arPropsByCodes[$lowerCode]) && strlen($lowerCode)>=50)
 		{
 			$i = 1;
 			while(isset($arPropsByCodes[$lowerCode]) && $i < 10000)
@@ -5849,38 +6087,133 @@ class Importer {
 				$i++;
 			}
 		}
-		if(isset($arPropsByCodes[$lowerCode])) return $arPropsByCodes[$lowerCode];
+		if(strlen($lowerCode) > 0 && isset($arPropsByCodes[$lowerCode]) && (!$checkPropXmlId || !isset($this->propsXmlIds[$IBLOCK_ID][$arPropsByCodes[$lowerCode]['ID']]))) return $arPropsByCodes[$lowerCode];
 			
 		if($createNew)
-		{			
-			$arFields = Array(
-				"NAME" => $name,
-				"ACTIVE" => "Y",
-				"CODE" => $code,
-				"PROPERTY_TYPE" => "S",
-				"IBLOCK_ID" => $IBLOCK_ID
-			);
-			$this->PreparePropertyCode($arFields);
-			$ibp = new \CIBlockProperty;
-			$propID = $ibp->Add($arFields);
-			if(!$propID) return false;
-			
-			$dbRes = \CIBlockProperty::GetList(array(), array('ID'=>$propID));
-			if($arProp = $dbRes->Fetch())
-			{
-				$this->props[$IBLOCK_ID][$arProp['ID']] = $arProp;
-				$this->propsByNames[$IBLOCK_ID][ToLower($arProp['NAME'])] = $arProp;
-				$this->propsByCodes[$IBLOCK_ID][ToLower($arProp['CODE'])] = $arProp;
-				return $arProp;
-			}
+		{
+			return $this->CreateNewProp(array("NAME"=>$name, "CODE"=>$code, "IBLOCK_ID"=>$IBLOCK_ID), $paramNewProps, $propFields);
 		}
 		return false;
+	}
+	
+	public function GetIblockPropertyByXmlId($code, $IBLOCK_ID, $createNew = false, $paramNewProps = array(), $propFields = array())
+	{
+		$code = trim($code);
+		$lowerCode = ToLower($code);
+		$arProps = $this->GetIblockProperties($IBLOCK_ID, 'XML_ID');
+		if(isset($arProps[$lowerCode])) return $arProps[$lowerCode];
+		if($createNew && strlen($code) > 0)
+		{
+			return $this->CreateNewProp(array("XML_ID"=>$code, "IBLOCK_ID"=>$IBLOCK_ID), $paramNewProps, $propFields);
+		}
+		return false;
+	}
+	
+	public function GetPropCodeByName($name)
+	{
+		$arParams = array(
+			'max_len' => 50,
+			'change_case' => 'U',
+			'replace_space' => '_',
+			'replace_other' => '_',
+			'delete_repeat_replace' => 'Y',
+		);
+		$code = \CUtil::translit($name, LANGUAGE_ID, $arParams);
+		$code = preg_replace('/[^a-zA-Z0-9_]/', '', $code);
+		$code = preg_replace('/^[0-9_]+/', '', $code);
+		return $code;
+	}
+	
+	public function CreateNewProp($arFields, $paramNewProps, $propFields)
+	{
+		$IBLOCK_ID = (int)$arFields["IBLOCK_ID"];
+		if($IBLOCK_ID<=0) return false;
+		if(!isset($arFields['ACTIVE'])) $arFields['ACTIVE'] = 'Y';
+		if(!isset($arFields['PROPERTY_TYPE'])) $arFields['PROPERTY_TYPE'] = 'S';
+		if(!isset($arFields['NAME']) && isset($propFields['NAME'])) $arFields['NAME'] = $propFields['NAME'];
+		if(!isset($arFields['XML_ID']) && isset($propFields['XML_ID'])) $arFields['XML_ID'] = $propFields['XML_ID'];
+		if(!isset($arFields['CODE']) && isset($propFields['CODE'])) $arFields['CODE'] = $propFields['CODE'];
+		if(!isset($arFields['CODE'])) $arFields['CODE'] = $this->GetPropCodeByName($arFields['NAME']);
+		$arFeaturesFields = array();
+		if(is_array($paramNewProps) && count($paramNewProps) > 0)
+		{
+			$arFields = array_merge($arFields, $paramNewProps);
+			if(strpos($arFields['PROPERTY_TYPE'], ':')!==false)
+			{
+				list($ptype, $utype) = explode(':', $arFields['PROPERTY_TYPE'], 2);
+				$arFields['PROPERTY_TYPE'] = $ptype;
+				$arFields['USER_TYPE'] = $utype;
+			}
+			if($arFields['SMART_FILTER'] == 'Y')
+			{
+				if(\CIBlock::GetArrayByID($IBLOCK_ID, "SECTION_PROPERTY") != "Y")
+				{
+					$ib = new \CIBlock;
+					$ib->Update($IBLOCK_ID, array('SECTION_PROPERTY'=>'Y'));
+				}
+			}
+			if(isset($arFields['CODE_PREFIX']))
+			{
+				$arFields['CODE'] = $arFields['CODE_PREFIX'].$arFields['CODE'];
+				unset($arFields['CODE_PREFIX']);
+			}
+			$arFeaturesFields = $this->GetPropFeatureFields($arFields);
+		}
+		$this->PreparePropertyCode($arFields);
+		if(!isset($arFields['NAME'])) return false;
+
+		$ibp = new \CIBlockProperty;
+		$propID = $ibp->Add($arFields);
+		if(!$propID) return false;
+		if(!empty($arFeaturesFields)) \Bitrix\Iblock\Model\PropertyFeature::setFeatures($propID, $arFeaturesFields);
+		
+		$dbRes = \CIBlockProperty::GetList(array(), array('ID'=>$propID));
+		if($arProp = $dbRes->Fetch())
+		{
+			$this->props[$IBLOCK_ID][$arProp['ID']] = $arProp;
+			$this->propsByNames[$IBLOCK_ID][ToLower($arProp['NAME'])] = $arProp;
+			if(strlen($arProp['CODE']) > 0) $this->propsByCodes[$IBLOCK_ID][ToLower($arProp['CODE'])] = $arProp;
+			if(strlen($arProp['XML_ID']) > 0)
+			{
+				$this->propsByXmlId[$IBLOCK_ID][ToLower($arProp['XML_ID'])] = $arProp;
+				$this->propsXmlIds[$IBLOCK_ID][$arProp['ID']] = ToLower($arProp['XML_ID']);
+			}
+			return $arProp;
+		} else  return false;
+	}
+	
+	public function GetPropFeatureFields(&$arPropFields)
+	{
+		if(!isset($this->propFeatures))
+		{
+			$this->propFeatures = array();
+			if(is_callable(array('\Bitrix\Iblock\Model\PropertyFeature', 'isEnabledFeatures')) && \Bitrix\Iblock\Model\PropertyFeature::isEnabledFeatures())
+			{
+				$this->propFeatures = \Bitrix\Iblock\Model\PropertyFeature::getPropertyFeatureList(array());
+			}
+		}
+		$arFeatures = $this->propFeatures;
+		$arFeaturesFields = array();
+		foreach($arFeatures as $arFeature)
+		{
+			$featureKey = $arFeature['MODULE_ID'].':'.$arFeature['FEATURE_ID'];
+			if(!array_key_exists($featureKey, $arPropFields)) continue;
+			$arFeaturesFields[$featureKey] = array(
+				'PROPERTY_ID' => $arr['ID'],	
+				'MODULE_ID' => $arFeature['MODULE_ID'],	
+				'FEATURE_ID' => $arFeature['FEATURE_ID'],	
+				'IS_ENABLED' => $arPropFields[$featureKey]
+			);
+			unset($arPropFields[$featureKey]);
+		}
+		return $arFeaturesFields;
 	}
 	
 	public function PreparePropertyCode(&$arFields)
 	{
 		if(strlen($arFields['CODE']) > 0)
 		{
+			$arFields['CODE'] = substr($arFields['CODE'], 0, 50);
 			$index = 0;
 			while(($dbRes2 = \CIBlockProperty::GetList(array(), array('CODE'=>$arFields['CODE'], 'IBLOCK_ID'=>$arFields['IBLOCK_ID']))) && ($arr2 = $dbRes2->Fetch()))
 			{
@@ -5919,29 +6252,123 @@ class Importer {
 		}
 		if(is_array($arIds) && !empty($arIds))
 		{
+			if($this->conv->IsAlreadyLoaded($ID)) return false;
 			$arIblockProps = $this->GetIblockProperties($IBLOCK_ID);
-			$arProps = array();
+			$arProps = $arFieldsProductStores = $arFieldsProduct = $arFieldsPrices = array();
 			foreach($arIds as $k=>$v)
 			{
-				if(strpos($v, 'IP_PROP')===0) $pid = (int)substr($v, strlen('IP_PROP'));
-				else $pid = (int)$v;
-				if($pid > 0)
+				if(strpos($v, 'ICAT_STORE')===0)
 				{
-					if($arIblockProps[$pid]['PROPERTY_TYPE']=='F') $arProps[$pid] = array("del"=>"Y");
-					else $arProps[$pid] = false;
+					$arStore = explode('_', substr($v, 10), 2);
+					$arFieldsProductStores[$arStore[0]][$arStore[1]] = '-';
+				}
+				else
+				{
+					if(strpos($v, 'IP_PROP')===0) $pid = (int)substr($v, strlen('IP_PROP'));
+					else $pid = (int)$v;
+					if($pid > 0)
+					{
+						if($arIblockProps[$pid]['PROPERTY_TYPE']=='F') $arProps[$pid] = array("del"=>"Y");
+						else $arProps[$pid] = false;
+					}
 				}
 			}
 			if(!empty($arProps))
 			{
 				\CIBlockElement::SetPropertyValuesEx($ID, $IBLOCK_ID, $arProps);
 			}
+			if(!empty($arFieldsProductStores))
+			{
+				$this->SaveProduct($ID, $IBLOCK_ID, $arFieldsProduct, $arFieldsPrices, $arFieldsProductStores);
+			}
 		}
+	}
+	
+	public function GetMultiplePropertyChange(&$val)
+	{
+		if(is_array($val))
+		{
+			if(isset($val['VALUE']) && !is_array($val['VALUE']))
+			{
+				$val2 = $val['VALUE'];
+				$valOrig = $val;
+				if($this->GetMultiplePropertyChangeItem($val2))
+				{
+					$val = array();
+					foreach($val2 as $k=>$v)
+					{
+						$val[$k] = array_merge($valOrig, array('VALUE'=>$v));
+					}
+					return true;
+				}
+			}
+			else
+			{
+				$newVals = array();
+				foreach($val as $k=>$v)
+				{
+					if(is_numeric($k) && $this->GetMultiplePropertyChange($v))
+					{
+						$newVals = array_merge($newVals, $v);
+						unset($val[$k]);
+					}
+				}
+				if(count($newVals) > 0)
+				{
+					$val = array_merge($val, $newVals);
+					return true;
+				}
+			}
+		}
+		else
+		{
+			if($this->GetMultiplePropertyChangeItem($val)) return true;
+		}
+		return false;
+	}
+	
+	public function GetMultiplePropertyChangeItem(&$val)
+	{
+		if(preg_match_all('/(\+|\-)\s*\{\s*(((["\'])(.*)\4[,\s]*)+)\s*\}/Uis', $val, $m))
+		{
+			$rest = $val;
+			foreach($m[0] as $k=>$v)
+			{
+				$rest = str_replace($v, '', $rest);
+			}
+			if(strlen(trim($rest))==0)
+			{
+				$addVals = array();
+				$removeVals = array();
+				foreach($m[0] as $k=>$v)
+				{
+					if(preg_match_all('/(["\'])(.*)\1/Uis', $v, $m2))
+					{
+						$sign = $m[1][$k];
+						foreach($m2[2] as $v2)
+						{
+							if($sign=='+') $addVals[] = $v2;
+							elseif($sign=='-') $removeVals[] = $v2;
+						}
+					}
+				}
+				if(count($addVals) > 0 || count($removeVals) > 0)
+				{
+					$val = array();
+					foreach($addVals as $av) $val['ADD_'.md5($av)] = $av;
+					foreach($removeVals as $rv) $val['REMOVE_'.md5($rv)] = $rv;
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 	
 	public function GetMultipleProperty($val, $k)
 	{
 		$separator = $this->params['ELEMENT_MULTIPLE_SEPARATOR'];
 		$fsKey = 'IP_PROP'.$k;
+		if(!isset($this->fieldSettings[$fsKey])) $fsKey = 'OFFER_'.$fsKey;
 		//$fsKey = ($this->conv->GetSkuMode() ? 'OFFER_' : '').'IP_PROP'.$k;
 		if($this->fieldSettings[$fsKey]['CHANGE_MULTIPLE_SEPARATOR']=='Y')
 		{
@@ -5953,32 +6380,46 @@ class Importer {
 			foreach($val as $subval)
 			{
 				if(is_array($subval)) $arVal[] = $subval;
-				else $arVal = array_merge($arVal, explode($separator, $subval));
+				else $arVal = array_merge($arVal, array_map('trim', explode($separator, $subval)));
 			}
 		}
 		else
 		{
 			if(is_array($val)) $arVal = $val;
-			else $arVal = explode($separator, $val);
+			else $arVal = array_map('trim', explode($separator, $val));
 		}
 		return $arVal;
 	}
 	
-	public function SaveProperties($ID, $IBLOCK_ID, $arProps, $needUpdate = false)
+	public function PropReplaceId(&$v, $k=false)
+	{
+		if(strpos($v, '#ID#')!==false)
+		{
+			if(preg_match_all('/%0(\d+)d#ID#/', $v, $m))
+			{
+				foreach($m[0] as $k1=>$v2)
+				{
+					$v = str_replace($v2, sprintf('%0'.$m[1][$k1].'d', $this->propReplaceProdId), $v);
+				}
+			}
+			$v = str_replace('#ID#', $this->propReplaceProdId, $v);
+		}
+	}
+	
+	public function SaveProperties($ID, $IBLOCK_ID, $arProps, $arOldVals=array(), $needUpdate = false, $parentId = 0)
 	{
 		if(empty($arProps)) return false;
 		$propsDef = $this->GetIblockProperties($IBLOCK_ID);
-		
+		$this->propReplaceProdId = $ID;
+
 		foreach($arProps as $k=>$prop)
 		{
-			if(!is_array($prop) && strpos($prop, '#ID#')!==false)
+			if($this->params['BIND_PROPERTIES_TO_SECTIONS']=='Y' && is_numeric($k) && !in_array('IP_PROP'.$k, $this->params['BIND_PROPERTIES_TO_SECTIONS_EXCLUDE']) && !in_array($k, $this->stepparams['bound_properties']))
 			{
-				$arProps[$k] = str_replace('#ID#', $ID, $prop);
+				$this->stepparams['bound_properties'][] = $k;
 			}
-		}
-		
-		foreach($arProps as $k=>$prop)
-		{
+			if(!is_array($prop)) $this->PropReplaceId($arProps[$k]);
+			else array_walk_recursive($arProps[$k], array($this, 'PropReplaceId'));
 			if(!is_numeric($k)) continue;
 			if($propsDef[$k]['USER_TYPE']=='directory' && $propsDef[$k]['MULTIPLE']=='Y' && is_array($prop))
 			{
@@ -5993,6 +6434,67 @@ class Importer {
 				}
 				$arProps[$k] = $newProp;
 			}
+			if($propsDef[$k]['ACTIVE']=='N')
+			{
+				unset($arProps[$k]);
+			}
+		}
+		
+		if(!empty($arProps))
+		{
+			$arOldProps = array();
+			$arOldPropIds = array();
+			if(!empty($arOldVals))
+			{
+				foreach($arOldVals as $arr)
+				{
+					if(isset($arProps[$arr['ID']]))
+					{
+						if($arr['MULTIPLE']=='Y')
+						{
+							if(!is_array($arOldProps[$arr['ID']])) $arOldProps[$arr['ID']] = array();
+							if(!is_array($arOldPropIds[$arr['ID']])) $arOldPropIds[$arr['ID']] = array();
+							foreach($arr['VALUES'] as $arr2)
+							{
+								$arOldProps[$arr['ID']][] = (strlen($arr2['DESCRIPTION']) > 0 ? array('VALUE' => $arr2['VALUE'], 'DESCRIPTION' => $arr2['DESCRIPTION']) : $arr2['VALUE']);
+								$arOldPropIds[$arr['ID']][] = $arr2['PROPERTY_VALUE_ID'];
+							}
+						}
+						else
+						{
+							$arOldProps[$arr['ID']] = (strlen($arr['DESCRIPTION']) > 0 ? array('VALUE' => $arr['VALUE'], 'DESCRIPTION' => $arr['DESCRIPTION']) : $arr['VALUE']);
+							$arOldPropIds[$arr['ID']] = $arr['PROPERTY_VALUE_ID'];
+						}
+					}
+				}
+			}
+			else
+			{
+				$dbRes = \CIBlockElement::GetProperty($IBLOCK_ID, $ID, array(), Array("ID"=>array_keys($arProps)));
+				while($arr = $dbRes->Fetch())
+				{
+					if(isset($arProps[$arr['ID']]))
+					{
+						if($arr['MULTIPLE']=='Y')
+						{
+							if(!is_array($arOldProps[$arr['ID']])) $arOldProps[$arr['ID']] = array();
+							if(!is_array($arOldPropIds[$arr['ID']])) $arOldPropIds[$arr['ID']] = array();
+							$arOldProps[$arr['ID']][] = (strlen($arr['DESCRIPTION']) > 0 ? array('VALUE' => $arr['VALUE'], 'DESCRIPTION' => $arr['DESCRIPTION']) : $arr['VALUE']);
+							$arOldPropIds[$arr['ID']][] = $arr['PROPERTY_VALUE_ID'];
+						}
+						else
+						{
+							$arOldProps[$arr['ID']] = (strlen($arr['DESCRIPTION']) > 0 ? array('VALUE' => $arr['VALUE'], 'DESCRIPTION' => $arr['DESCRIPTION']) : $arr['VALUE']);
+							$arOldPropIds[$arr['ID']] = $arr['PROPERTY_VALUE_ID'];
+						}
+					}
+				}
+			}
+			
+			foreach($arProps as $pk=>$pv)
+			{
+				if(!array_key_exists($pk, $arOldProps) && is_numeric($pk)) $arOldProps[$pk] = '';
+			}
 		}
 		
 		foreach($arProps as $k=>$prop)
@@ -6000,25 +6502,33 @@ class Importer {
 			if(strpos($k, '_DESCRIPTION')!==false) continue;
 			if($propsDef[$k]['MULTIPLE']=='Y')
 			{
-				if($propsDef[$k]['USER_TYPE']=='directory') $arVal = $prop;
+				$isChanges = $this->GetMultiplePropertyChange($prop);
+				if($propsDef[$k]['USER_TYPE']=='directory') $arVal = (is_array($prop) ? $prop : array($prop));
+				elseif($isChanges && is_array($prop)) $arVal = $prop;
 				else $arVal = $this->GetMultipleProperty($prop, $k);
+				if($propsDef[$k]['PROPERTY_TYPE']=='F') $arVal = array_unique($arVal);
 				
-				$fsKey = 'IP_PROP'.$k;
-				if(isset($this->offerParentId) && $this->offerParentId > 0) $fsKey = 'OFFER_'.$fsKey;
+				$limitVals = false;
+				$fsKey = (isset($this->offerParentId) && $this->offerParentId > 0 ? 'OFFER_' : '').'IP_PROP'.$k;
 				$fromValue = $this->fieldSettings[$fsKey]['MULTIPLE_FROM_VALUE'];
 				$toValue = $this->fieldSettings[$fsKey]['MULTIPLE_TO_VALUE'];
 				if(is_numeric($fromValue) || is_numeric($toValue))
 				{
 					$from = (is_numeric($fromValue) ? ((int)$fromValue >= 0 ? ((int)$fromValue - 1) : (int)$fromValue) : 0);
 					$to = (is_numeric($toValue) ? ((int)$toValue >= 0 ? ((int)$toValue - max(0, $from)) : (int)$toValue) : 0);
+					$limitVals = true;
+				}
+				if($limitVals && $propsDef[$k]['PROPERTY_TYPE']=='F' && count(preg_grep('/^[^\{\}\*#]+\.[\w]{2,4}$/', $arVal))==count($arVal))
+				{
 					if($to!=0) $arVal = array_slice($arVal, $from, $to);
 					else $arVal = array_slice($arVal, $from);
+					$limitVals = false;
 				}
 				
 				$newVals = array();
 				foreach($arVal as $k2=>$val)
 				{
-					$arVal[$k2] = $this->GetPropValue($propsDef[$k], (is_string($val) ? trim($val) : $val));
+					$arVal[$k2] = $this->GetPropValue($propsDef[$k], (is_string($val) ? trim($val) : $val), $IBLOCK_ID, $arOldProps[$k]);
 					if(is_array($arVal[$k2]) && isset($arVal[$k2]['VALUES']))
 					{
 						$newVals = array_merge($newVals, $arVal[$k2]['VALUES']);
@@ -6026,14 +6536,40 @@ class Importer {
 					}
 				}
 				if(!empty($newVals)) $arVal = array_merge($arVal, $newVals);
-				$arProps[$k] = $arVal;
+				
+				if($limitVals)
+				{
+					if($to!=0) $arVal = array_slice($arVal, $from, $to);
+					else $arVal = array_slice($arVal, $from);
+				}
+				if($this->fieldSettings[$fsKey]['EXCLUDE_CURRENT_ELEMENT']=='Y')
+				{
+					$arVal = array_diff($arVal, array($ID, $parentId));
+					if(count($arVal)==0) $arVal = array(false);
+				}
+				
+				$arProps[$k] = ($isChanges ? $arVal : array_values($arVal));
+				if(is_array($arProps[$k.'_DESCRIPTION'])) $arProps[$k.'_DESCRIPTION'] = array_values($arProps[$k.'_DESCRIPTION']);
+				
+				/*$oldPropVal = $arOldProps[$k];
+				if(is_array($oldPropVal) && isset($oldPropVal[0])) $oldPropVal = $oldPropVal[0];
+				if(is_array($oldPropVal) && isset($oldPropVal['VALUE']))
+				{
+					foreach($arProps[$k] as $k2=>$v2)
+					{
+						if(!array_key_exists('VALUE', $v2))
+						{
+							$arProps[$k][$k2] = array('VALUE'=>$v2);
+						}
+					}
+				}*/
 			}
 			else
 			{
-				$arProps[$k] = $this->GetPropValue($propsDef[$k], $prop);
+				$arProps[$k] = $this->GetPropValue($propsDef[$k], $prop, $IBLOCK_ID, $arOldProps[$k]);
 			}
 			
-			if($propsDef[$k]['PROPERTY_TYPE']=='F' && is_array($arProps[$k]) && count($arProps[$k])==0)
+			if($propsDef[$k]['PROPERTY_TYPE']=='F' && is_array($arProps[$k]) && count(array_diff($arProps[$k], array('')))==0)
 			{
 				unset($arProps[$k]);
 			}
@@ -6069,12 +6605,12 @@ class Importer {
 						{
 							foreach($arProps[$pk] as $k2=>$v2)
 							{
-								$arProps[$pk][$k2] = \CFile::MakeFileArray($v2);
+								$arProps[$pk][$k2] = self::MakeFileArray($v2);
 							}
 						}
 						else
 						{
-							$arProps[$pk] = \CFile::MakeFileArray($arProps[$pk]);
+							$arProps[$pk] = self::MakeFileArray($arProps[$pk]);
 						}
 					}
 				}
@@ -6105,6 +6641,7 @@ class Importer {
 				}
 				else
 				{
+					if(is_array($prop)) $prop = current($prop);
 					if(is_array($arProps[$pk]) && isset($arProps[$pk]['VALUE']))
 					{
 						$arProps[$pk]['DESCRIPTION'] = $prop;
@@ -6120,107 +6657,172 @@ class Importer {
 			}
 			unset($arProps[$k]);
 		}
-		
+
 		/*Delete unchanged props*/
-		if(!empty($arProps) && $this->params['ELEMENT_IMAGES_FORCE_UPDATE']!='Y')
+		if(!empty($arProps))
 		{
-			$arOldProps = array();
-			$dbRes = \CIBlockElement::GetProperty($IBLOCK_ID, $ID, array(), Array("ID"=>array_keys($arProps)));
-			while($arr = $dbRes->Fetch())
-			{
-				if(isset($arProps[$arr['ID']]))
-				{
-					if($arr['MULTIPLE']=='Y')
-					{
-						if(!is_array($arOldProps[$arr['ID']])) $arOldProps[$arr['ID']] = array();
-						$arOldProps[$arr['ID']][] = (strlen($arr['DESCRIPTION']) > 0 ? array('VALUE' => $arr['VALUE'], 'DESCRIPTION' => $arr['DESCRIPTION']) : $arr['VALUE']);
-					}
-					else
-					{
-						$arOldProps[$arr['ID']] = (strlen($arr['DESCRIPTION']) > 0 ? array('VALUE' => $arr['VALUE'], 'DESCRIPTION' => $arr['DESCRIPTION']) : $arr['VALUE']);
-					}
-				}
-			}
 			foreach($arOldProps as $pk=>$pv)
 			{
 				$fsKey = ($this->conv->GetSkuMode() ? 'OFFER_' : '').'IP_PROP'.$pk;
-				$saveOldVals = (bool)($this->fieldSettings[$fsKey]['MULTIPLE_SAVE_OLD_VALUES']=='Y');
-
-				if($propsDef[$pk]['MULTIPLE']=='Y' && $propsDef[$pk]['PROPERTY_TYPE']!='F' && $saveOldVals)
+				$saveOldVals = false;
+				if($propsDef[$pk]['MULTIPLE']=='Y')
 				{
+					$saveOldVals = (bool)($this->fieldSettings[$fsKey]['MULTIPLE_SAVE_OLD_VALUES']=='Y');
+					//if(!in_array($fsKey, $fieldList) && $this->fieldSettings['IP_LIST_PROPS']['PROPLIST_NEWPROP_SAVE_OLD_VALUES']=='Y') $saveOldVals = true;
+					if(!$saveOldVals && isset($arProps[$pk]) && is_array($arProps[$pk]) && count(preg_grep('/^(ADD|REMOVE)_/', array_keys($arProps[$pk])))>0) $saveOldVals = true;
+				}
+				if($this->params['ELEMENT_IMAGES_FORCE_UPDATE']=='Y' && !$saveOldVals) continue;
+
+				if($propsDef[$pk]['MULTIPLE']=='Y')
+				{
+					$isEmptyVals = false;
 					foreach($arProps[$pk] as $fpk2=>$fpv2)
 					{
-						foreach($pv as $fpk=>$fpv)
+						if(count($arProps[$pk]) > 1 && ((!is_array($fpv2) && strlen($fpv2)==0) || (is_array($fpv2) && isset($fpv2['VALUE']) && !is_array($fpv2['VALUE']) && strlen($fpv2['VALUE'])==0)))
 						{
-							if(is_array($fpv2) && isset($fpv2['VALUE']) && ((is_array($fpv) && $fpv2['VALUE']==$fpv['VALUE']) || (!is_array($fpv) && $fpv2['VALUE']==$fpv)))
-							{
-								unset($pv[$fpk]);
-								break;
-							}
-							elseif($fpv==$fpv2)
-							{
-								unset($arProps[$pk][$fpk2]);
-								break;
-							}
+							$isEmptyVals = true;
+							unset($arProps[$pk][$fpk2]);
 						}
 					}
-					$arProps[$pk] = array_merge($pv, $arProps[$pk]);
-					$arProps[$pk] = array_diff($arProps[$pk], array(''));
+					if($isEmptyVals) $arProps[$pk] = array_values($arProps[$pk]);
+
+					if($propsDef[$pk]['PROPERTY_TYPE']!='F' && $saveOldVals)
+					{
+						$pv2 = $pv;
+						foreach($arProps[$pk] as $fpk2=>$fpv2)
+						{
+							foreach($pv2 as $fpk=>$fpv)
+							{
+								if($this->IsEqProps($fpv, $fpv2) || (is_array($fpv) && is_array($fpv2) && $fpv['VALUE']==$fpv2['VALUE']))
+								{
+									if(strpos($fpk2, 'REMOVE_')===0) unset($pv2[$fpk]);
+									unset($arProps[$pk][$fpk2]);
+									break;
+								}
+							}
+							if(strpos($fpk2, 'REMOVE_')===0) unset($arProps[$pk][$fpk2]);
+						}
+						$arProps[$pk] = array_merge($pv2, $arProps[$pk]);
+						$arProps[$pk] = array_diff($arProps[$pk], array(''));
+						if($propsDef[$pk]['PROPERTY_TYPE']=='L') $arProps[$pk] = array_unique($arProps[$pk], SORT_REGULAR);
+						if(count($arProps[$pk])==0 && count($pv) > 0) $arProps[$pk] = false;
+					}
 				}
 				
-				if($arProps[$pk]==$pv && (is_array($arProps[$pk]) || is_array($pv) || strlen($arProps[$pk])==strlen($pv)))
+				if($this->IsEqProps($arProps[$pk], $pv, $propsDef[$k]))
 				{
 					unset($arProps[$pk]);
 				}
-				else
+				elseif(in_array($propsDef[$pk]['PROPERTY_TYPE'], array('L', 'E', 'G')) && $propsDef[$pk]['MULTIPLE']=='Y' && is_array($arProps[$pk]) && is_array($pv) && !isset($pv['VALUE']) && (count($arProps[$pk])==count($pv) || (($arProps[$pk]=\Bitrix\KitImportxml\Utils::ArrayUnique($arProps[$pk])) && count($arProps[$pk])==count($pv))))
 				{
-					if($propsDef[$pk]['PROPERTY_TYPE']=='F')
+					$newVal1 = array();
+					$newVal2 = array();
+					foreach($arProps[$pk] as $tmpKey=>$tmpVal)
 					{
-						if($propsDef[$pk]['MULTIPLE']=='Y')
+						if(!is_array($tmpVal) || !array_key_exists('VALUE', $tmpVal)) $tmpVal = array('VALUE'=>$tmpVal);
+						if(is_array($tmpVal)){ksort($tmpVal); $tmpVal = serialize($tmpVal);}
+						$newVal1[$tmpKey] = $tmpVal;
+					}
+					foreach($pv as $tmpKey=>$tmpVal)
+					{
+						if(!is_array($tmpVal) || !array_key_exists('VALUE', $tmpVal)) $tmpVal = array('VALUE'=>$tmpVal);
+						if(is_array($tmpVal)){ksort($tmpVal); $tmpVal = serialize($tmpVal);}
+						$newVal2[$tmpKey] = $tmpVal;
+					}
+					if(count(array_diff($newVal1, $newVal2))==0 && count(array_diff($newVal2, $newVal1))==0) unset($arProps[$pk]);
+				}
+				elseif($propsDef[$pk]['PROPERTY_TYPE']=='S' && $propsDef[$pk]['USER_TYPE']=='HTML')
+				{
+					if((!is_array($pv) && strlen($pv) > 0 && is_array($newVal2 = unserialize($pv))) || (is_array($pv) && ($newVal2 = $pv)))
+					{
+						if((!is_array($arProps[$pk]) && $arProps[$pk]==$newVal2['TEXT']) || (is_array($arProps[$pk]) && $arProps[$pk]['VALUE']==$newVal2))
 						{
-							if($saveOldVals)
+							unset($arProps[$pk]);
+						}
+					}
+				}
+				elseif($propsDef[$pk]['PROPERTY_TYPE']=='F')
+				{
+					if($propsDef[$pk]['MULTIPLE']=='Y')
+					{
+						if($saveOldVals)
+						{
+							foreach($arProps[$pk] as $fpk2=>$fpv2)
 							{
-								foreach($arProps[$pk] as $fpk2=>$fpv2)
-								{
-									foreach($pv as $fpk=>$fpv)
-									{
-										if(!$this->IsChangedImage($fpv, $fpv2))
-										{
-											unset($arProps[$pk][$fpk2]);
-											break;
-										}
-									}
-								}
-								$arProps[$pk] = array_merge($pv, $arProps[$pk]);
-								foreach($arProps[$pk] as $fpk2=>$fpv2)
-								{
-									if(is_numeric($fpv2)) $arProps[$pk][$fpk2] = \CFile::MakeFileArray($fpv2);
-								}
-								$arProps[$pk] = array_diff($arProps[$pk], array(''));
-							}
-							
-							if(count($pv)==count($arProps[$pk]))
-							{
-								$isChange = false;
 								foreach($pv as $fpk=>$fpv)
 								{
-									if($this->IsChangedImage($fpv, $arProps[$pk][$fpk]))
+									if(!$this->IsChangedImage($fpv, $fpv2))
 									{
-										$isChange = true;
+										unset($arProps[$pk][$fpk2]);
+										break;
 									}
 								}
-								if(!$isChange)
+							}
+							if(!is_array($arProps[$pk])) $arProps[$pk] = array();
+							$arProps[$pk] = array_merge($pv, $arProps[$pk]);
+							foreach($arProps[$pk] as $fpk2=>$fpv2)
+							{
+								$fileId = $fpv2;
+								if(is_array($fileId) && isset($fileId['VALUE'])) $fileId = $fileId['VALUE'];
+								if(is_numeric($fileId)) $arProps[$pk][$fpk2] = self::MakeFileArray($fileId);
+								if(is_array($fpv2) && $fpv2['DESCRIPTION']) $arProps[$pk][$fpk2]['description'] = $fpv2['DESCRIPTION'];
+							}
+							$arProps[$pk] = array_diff($arProps[$pk], array(''));
+						}
+						$isChange = false;
+						$isDel = false;
+						$arTmpProp = array();
+						foreach($arProps[$pk] as $fpk=>$fpv)
+						{
+							$unset = false;
+							if(empty($fpv)) $unset = true;
+							elseif($fpv['del']=='Y')
+							{
+								if($isDel) $unset = true;
+								$isDel = true;
+							}
+							if($unset)
+							{
+								unset($arProps[$pk][$fpk]);
+								continue;
+							}
+							$isOneChange = true;
+							foreach($pv as $fpk2=>$fpv2)
+							{
+								if(!$this->IsChangedImage($fpv2, $fpv))
 								{
-									unset($arProps[$pk]);
+									$arTmpProp[$arOldPropIds[$pk][$fpk2]] = array('VALUE'=>array('name' => '', 'type' => '', 'tmp_name' => '', 'error' => 4, 'size' => 0), 'DESCRIPTION'=>(isset($arOldProps[$pk][$fpk2]['DESCRIPTION']) ? $arOldProps[$pk][$fpk2]['DESCRIPTION'] : ''));
+									$isOneChange = false;
+									unset($pv[$fpk2]);
+									break;
 								}
 							}
-						}
-						else
-						{
-							if(!$this->IsChangedImage($pv, $arProps[$pk]))
+							if($isOneChange) 
 							{
-								unset($arProps[$pk]);
+								$arTmpProp['n'.$fpk] = $fpv;
+								$isChange = true;
 							}
+						}
+						$pv = array_diff($pv, array(''));
+						if(count($pv) > 0)
+						{
+							$isChange = true;
+							foreach($pv as $fpk=>$fpv)
+							{
+								if(!$arOldPropIds[$pk][$fpk]) continue;
+								$arFile = array('del'=>'Y');
+								if($this->logger->NeedSaveLog() && ($arOldFile = \CFile::GetFileArray($fpv)) && is_array($arOldFile)) $arFile = array_merge($arFile, array_intersect_key($arOldFile, array('ID'=>0,'HEIGHT'=>0,'WIDTH'=>0,'FILE_SIZE'=>0,'ORIGINAL_NAME'=>0)));
+								$arTmpProp[$arOldPropIds[$pk][$fpk]] = array('VALUE'=>$arFile);
+							}
+						}
+						if(!$isChange) unset($arProps[$pk]);
+						else $arProps[$pk] = $arTmpProp;
+					}
+					else
+					{
+						if(!$this->IsChangedImage($pv, $arProps[$pk]))
+						{
+							unset($arProps[$pk]);
 						}
 					}
 				}
@@ -6232,23 +6834,73 @@ class Importer {
 		{
 			\CIBlockElement::SetPropertyValuesEx($ID, $IBLOCK_ID, $arProps);
 			$this->logger->AddElementChanges('IP_PROP', $arProps, $arOldProps);
-			$this->SetProductQuantity($ID, $IBLOCK_ID);
 			
 			if($needUpdate)
 			{
 				$el = new \CIblockElement();
-				$el->Update($ID, array(), false, true);
+				$this->el->UpdateComp($ID, array(), false, true);
 				$this->AddTagIblock($IBLOCK_ID);
 			}
 			elseif($this->params['ELEMENT_NOT_UPDATE_WO_CHANGES']=='Y')
 			{
 				$arFilterProp = $this->GetFilterProperties($IBLOCK_ID);
-				if(!empty($arFilterProp) && count(array_intersect(array_keys($arProps), $arFilterProp)) > 0 && class_exists('\Bitrix\Iblock\PropertyIndex\Manager'))
+				if(!empty($arFilterProp) && count(array_intersect(array_keys($arProps), $arFilterProp)) > 0)
 				{
-					\Bitrix\Iblock\PropertyIndex\Manager::updateElementIndex($IBLOCK_ID, $ID);
+					$this->IsFacetChanges(true);
+				}
+				$arSearchProp = $this->GetSearchProperties($IBLOCK_ID);
+				if(!empty($arSearchProp) && count(array_intersect(array_keys($arProps), $arSearchProp)) > 0)
+				{
+					\CIBlockElement::UpdateSearch($ID, true);
 				}
 			}
 		}
+	}
+	
+	public function IsEqProps($v1, $v2, $propDef=array())
+	{
+		$eq = true;
+		if(is_array($v1) || is_array($v2))
+		{
+			if(!is_array($v1))
+			{
+				if(is_array($v2) && array_key_exists('VALUE', $v2))
+				{
+					$v1 = array('VALUE'=>$v1);
+					if(array_key_exists('DESCRIPTION', $v2)) $v1['DESCRIPTION'] = '';
+				}
+				else $v1 = array($v1);
+			}
+			elseif(!is_array($v2))
+			{
+				if(is_array($v1) && array_key_exists('VALUE', $v1))
+				{
+					$v2 = array('VALUE'=>$v2);
+					if(array_key_exists('DESCRIPTION', $v1)) $v2['DESCRIPTION'] = '';
+				}
+				else $v2 = array($v2);
+			}
+			else
+			{
+				if(array_key_exists('VALUE', $v1) && !array_key_exists('VALUE', $v2)) $v2 = array('VALUE'=>$v2);
+				elseif(!array_key_exists('VALUE', $v1) && array_key_exists('VALUE', $v2)) $v1 = array('VALUE'=>$v1);
+			}
+			if($propDef['USER_TYPE']!='HTML' || !isset($v1['TYPE']) || !isset($v2['TYPE']))
+			{
+				if(isset($v1['TYPE'])) unset($v1['TYPE']);
+				if(isset($v2['TYPE'])) unset($v2['TYPE']);
+			}
+			if(count($v1)==count($v2))
+			{
+				foreach($v1 as $k=>$v)
+				{
+					if(!$this->IsEqProps($v, $v2[$k], $propDef)) $eq = false;
+				}
+			} else $eq = false;
+		}
+		//else $eq = (bool)($v1==$v2 && (is_array($v1) || is_array($v2) || strlen($v1)==strlen($v2)));
+		else $eq = (bool)((string)$v1==(string)$v2);
+		return $eq;
 	}
 	
 	public function GetFilterProperties($IBLOCK_ID)
@@ -6259,7 +6911,15 @@ class Importer {
 			$arProps = array();
 			if(class_exists('\Bitrix\Iblock\SectionPropertyTable'))
 			{
-				$dbRes = \Bitrix\Iblock\SectionPropertyTable::getList(array('filter'=>array('IBLOCK_ID'=>$IBLOCK_ID, 'SMART_FILTER'=>'Y'), 'group'=>array('PROPERTY_ID'), 'select'=>array('PROPERTY_ID')));
+				$filterIblockId = $IBLOCK_ID;
+				if(($arOfferIblock = \Bitrix\KitImportxml\Utils::GetOfferIblockByOfferIblock($IBLOCK_ID)) && isset($arOfferIblock['IBLOCK_ID']) && $arOfferIblock['IBLOCK_ID'] > 0)
+				{
+					$filterIblockId = array(
+						$filterIblockId,
+						$arOfferIblock['IBLOCK_ID']
+					);
+				}
+				$dbRes = \Bitrix\Iblock\SectionPropertyTable::getList(array('filter'=>array('IBLOCK_ID'=>$filterIblockId, 'SMART_FILTER'=>'Y'), 'group'=>array('PROPERTY_ID'), 'select'=>array('PROPERTY_ID')));
 				while($arr = $dbRes->fetch())
 				{
 					$arProps[] = $arr['PROPERTY_ID'];
@@ -6270,63 +6930,148 @@ class Importer {
 		return $this->arFilterProperties[$IBLOCK_ID];
 	}
 	
-	public function GetPropValue($arProp, $val)
+	public function GetSearchProperties($IBLOCK_ID)
+	{
+		if(!isset($this->arSearchProperties)) $this->arSearchProperties = array();
+		if(!isset($this->arSearchProperties[$IBLOCK_ID]))
+		{
+			$arProps = array();
+			if(class_exists('\Bitrix\Iblock\PropertyTable'))
+			{
+				$dbRes = \Bitrix\Iblock\PropertyTable::getList(array('filter'=>array('IBLOCK_ID'=>$IBLOCK_ID, 'SEARCHABLE'=>'Y'), 'select'=>array('ID')));
+				while($arr = $dbRes->fetch())
+				{
+					$arProps[] = $arr['ID'];
+				}
+			}
+			$this->arSearchProperties[$IBLOCK_ID] = $arProps;
+		}
+		return $this->arSearchProperties[$IBLOCK_ID];
+	}
+	
+	public function GetPropValueById(&$val, $valIds)
+	{
+		if(is_array($val))
+		{
+			foreach($val as $k=>$v)
+			{
+				$this->GetPropValueById($val[$k], $valIds);
+			}
+		}
+		else
+		{
+			if(isset($valIds[$val])) $val = $valIds[$val];
+		}
+	}
+	
+	public function GetPropValue($arProp, $val, $IBLOCK_ID=0, $oldVal=false)
 	{
 		$fieldSettings = (isset($this->fieldSettings['OFFER_IP_PROP'.$arProp['ID']]) ? $this->fieldSettings['OFFER_IP_PROP'.$arProp['ID']] : $this->fieldSettings['IP_PROP'.$arProp['ID']]);
+		if(!is_array($fieldSettings)) $fieldSettings = array();
 		if(is_array($val) && isset($val[0])) $val = $val[0];
+		if(isset($this->propertyValIds[$arProp['ID']]))
+		{
+			$this->GetPropValueById($val, $this->propertyValIds[$arProp['ID']]);
+		}
+		
+		if($arProp['USER_TYPE'])
+		{
+			if($arProp['PROPERTY_TYPE']=='S' && $arProp['USER_TYPE']=='directory')
+			{
+				$val = $this->GetHighloadBlockValue($arProp, $val, true);
+			}
+			elseif($arProp['PROPERTY_TYPE']=='S' && $arProp['USER_TYPE']=='HTML')
+			{
+				if($fieldSettings['TEXT_HTML']=='text') $val = array('VALUE'=>array('TEXT'=>$val, 'TYPE'=>'TEXT'));
+				elseif($fieldSettings['TEXT_HTML']=='html') $val = array('VALUE'=>array('TEXT'=>$val, 'TYPE'=>'HTML'));
+			}
+			elseif($arProp['PROPERTY_TYPE']=='S' && $arProp['USER_TYPE']=='UserID')
+			{
+				if(!is_array($val) && strlen(trim($val)) > 0 && $fieldSettings['USER_REL_FIELD'] && is_callable('\Bitrix\Main\UserTable', 'getList'))
+				{
+					if($arUser = \Bitrix\Main\UserTable::getList(array('filter'=>array($fieldSettings['USER_REL_FIELD']=>trim($val)), 'select'=>array('ID')))->Fetch())
+					{
+						$val = $arUser['ID'];
+					}
+					else $val = false;
+				}
+			}
+			elseif($arProp['USER_TYPE']=='DateTime' || $arProp['USER_TYPE']=='Date')
+			{
+				$val = $this->GetDateVal($val, ($arProp['USER_TYPE']=='Date' ? 'PART' : 'FULL'));
+			}
+			elseif($arProp['PROPERTY_TYPE']=='S' && $arProp['USER_TYPE']=='video')
+			{
+				if(!is_array($val))
+				{
+					$width = (int)$this->GetFloatVal($fieldSettings['VIDEO_WIDTH']);
+					$height = (int)$this->GetFloatVal($fieldSettings['VIDEO_HEIGHT']);
+					$val = Array('VALUE' => Array(
+						'PATH' => $val,
+						'WIDTH' => ($width > 0 ? $width : 400),
+						'HEIGHT' => ($height > 0 ? $height : 300),
+						'TITLE' => '',
+						'DURATION' => '',
+						'AUTHOR' => '',
+						'DATE' => '',
+						'DESC' => ''
+					));
+				}
+			}
+			elseif($arProp['USER_TYPE']=='CitrusArealtyMetroStation' && Loader::includeModule('citrus.arealty'))
+			{
+				if(strlen($val) > 0 && !is_numeric($val) && class_exists('\Citrus\Arealty\Entity\Metro\StationTable'))
+				{
+					if($arStation = \Citrus\Arealty\Entity\Metro\StationTable::getList(array('filter'=>array('NAME'=>$val), 'select'=>array('ID')))->fetch()) $val = $arStation['ID'];
+				}
+			}
+			elseif($arProp['PROPERTY_TYPE']=='N' && $arProp['USER_TYPE']=='ym_service_category')
+			{
+				$val = $this->GetYMCategoryValue($val);
+			}
+			elseif($arProp['USER_TYPE']=='SCPHXSection')
+			{
+				$arProp['PROPERTY_TYPE'] = 'G';
+				if(!$arProp['LINK_IBLOCK_ID']) $arProp['LINK_IBLOCK_ID'] = $IBLOCK_ID;
+			}
+			elseif($tmpIblockId = \Bitrix\KitImportxml\Utils::GetELinkedIblock($arProp))
+			{
+				$arProp['PROPERTY_TYPE'] = 'E';
+				$arProp['LINK_IBLOCK_ID'] = $tmpIblockId;
+			}
+		}
+		
 		if($arProp['PROPERTY_TYPE']=='F')
 		{
 			$picSettings = array();
-			if($fieldSettings['PICTURE_PROCESSING'])
-			{
-				$picSettings = $fieldSettings['PICTURE_PROCESSING'];
-			}
-			$val = $this->GetFileArray($val, $picSettings, $arProp);
+			if($fieldSettings['PICTURE_PROCESSING']) $picSettings = $fieldSettings['PICTURE_PROCESSING'];
+			$arProp['FILE_TIMEOUT'] = $fieldSettings['FILE_TIMEOUT'];
+			$arProp['FILE_HEADERS'] = $fieldSettings['FILE_HEADERS'];
+			$val = $this->GetFileArray($val, $picSettings, $arProp, $oldVal);
 			if($arProp['MULTIPLE']=='Y' && is_array($val) && array_key_exists('0', $val)) $val = array('VALUES'=>$val);
 		}
 		elseif($arProp['PROPERTY_TYPE']=='L')
 		{
+			/*if(isset($this->propertyValIds[$arProp['ID']]) && isset($this->propertyValIds[$arProp['ID']][$val])) $val = $this->propertyValIds[$arProp['ID']][$val];
+			else $val = $this->GetListPropertyValue($arProp, $val);*/
 			$val = $this->GetListPropertyValue($arProp, $val);
-		}
-		elseif($arProp['PROPERTY_TYPE']=='S' && $arProp['USER_TYPE']=='directory')
-		{
-			$val = $this->GetHighloadBlockValue($arProp, $val, true);
-		}
-		elseif($arProp['PROPERTY_TYPE']=='S' && $arProp['USER_TYPE']=='HTML')
-		{
-			if($fieldSettings['TEXT_HTML']=='text') $val = array('VALUE'=>array('TEXT'=>$val, 'TYPE'=>'TEXT'));
-			elseif($fieldSettings['TEXT_HTML']=='html') $val = array('VALUE'=>array('TEXT'=>$val, 'TYPE'=>'HTML'));
-		}
-		elseif($arProp['PROPERTY_TYPE']=='S' && $arProp['USER_TYPE']=='video')
-		{
-			if(!is_array($val))
-			{
-				$width = (int)$this->GetFloatVal($fieldSettings['VIDEO_WIDTH']);
-				$height = (int)$this->GetFloatVal($fieldSettings['VIDEO_HEIGHT']);
-				$val = Array('VALUE' => Array(
-					'PATH' => $val,
-					'WIDTH' => ($width > 0 ? $width : 400),
-					'HEIGHT' => ($height > 0 ? $height : 300),
-					'TITLE' => '',
-					'DURATION' => '',
-					'AUTHOR' => '',
-					'DATE' => '',
-					'DESC' => ''
-				));
-			}
-		}
-		elseif($arProp['USER_TYPE']=='DateTime' || $arProp['USER_TYPE']=='Date')
-		{
-			$val = $this->GetDateVal($val);
 		}
 		elseif($arProp['PROPERTY_TYPE']=='N')
 		{
-			/*if(preg_match('/\d/', $val)) $val = $this->GetFloatVal($val);
-			else $val = '';*/
+			if(strlen($val) > 0 && (int)$arProp['VERSION']==2)
+			{
+				if(preg_match('/\d/', $val)) $val = $this->GetFloatVal($val);
+				else $val = '';
+			}
 		}
 		elseif($arProp['PROPERTY_TYPE']=='E')
 		{
-			$val = $this->GetIblockElementValue($arProp, $val, $fieldSettings, true);
+			$isMultiple = (bool)($arProp['MULTIPLE']=='Y');
+			$val = $this->GetIblockElementValue($arProp, $val, $fieldSettings, true, true, $isMultiple);
+			if($isMultiple && is_array($val))
+			{
+				$val = array('VALUES'=>$val);
+			}
 		}
 		elseif($arProp['PROPERTY_TYPE']=='G')
 		{
@@ -6351,20 +7096,28 @@ class Importer {
 		return $val;
 	}
 	
-	public function GetListPropertyValue($arProp, $val)
+	public function GetListPropertyValue($arProp, $val, $bField=false)
 	{
-		if(is_string($val)) $val = array('VALUE'=>$val);
+		if(!is_array($val)) $val = array('VALUE'=>$val);
 		if($val['VALUE']!==false && strlen($val['VALUE']) > 0)
 		{
 			$cacheVals = $val['VALUE'];
+			if($bField!==false && (!isset($val[$bField]) || strlen($val[$bField])==0)) $bField = false;
+			if($bField!==false) $cacheVals = $bField.'|'.$val[$bField];
 			if(!isset($this->propVals[$arProp['ID']][$cacheVals]))
 			{
-				$dbRes = \CIBlockPropertyEnum::GetList(array(), array("PROPERTY_ID"=>$arProp['ID'], "VALUE"=>$val['VALUE']));
+				$arFilter = array('=VALUE'=>$val['VALUE']);
+				if($bField!==false) $arFilter = array('='.$bField=>$val[$bField]);
+				$arFilter['PROPERTY_ID'] = $arProp['ID'];
+				$dbRes = $this->GetIblockPropEnum($arFilter);
 				if($arPropEnum = $dbRes->Fetch())
 				{
 					$arPropFields = $val;
-					unset($arPropFields['VALUE']);
-					$this->CheckXmlIdOfListProperty($arPropFields, $arProp['ID']);
+					if($bField!=='XML_ID')
+					{
+						unset($arPropFields['VALUE']);
+						$this->CheckXmlIdOfListProperty($arPropFields, $arProp['ID']);
+					}
 					if(count($arPropFields) > 0)
 					{
 						$ibpenum = new \CIBlockPropertyEnum;
@@ -6392,6 +7145,36 @@ class Importer {
 		return (!is_array($val) ? $val : false);
 	}
 	
+	public function GetListPropertyValueByXmlId($arProp, $val)
+	{
+		if(is_array($val))
+		{
+			foreach($val as $k=>$v)
+			{
+				$val[$k] = $this->GetListPropertyValueByXmlId($arProp, $v);
+			}
+			return $val;
+		}
+		if(strlen($val) > 0)
+		{
+			$cacheVals = $val;
+			if(!isset($this->propValsByXmlId[$arProp['ID']][$cacheVals]))
+			{
+				$dbRes = $this->GetIblockPropEnum(array("PROPERTY_ID"=>$arProp['ID'], "=XML_ID"=>$val));
+				if($arPropEnum = $dbRes->Fetch())
+				{
+					$this->propValsByXmlId[$arProp['ID']][$cacheVals] = $arPropEnum['VALUE'];
+				}
+				else
+				{
+					$this->propValsByXmlId[$arProp['ID']][$cacheVals] = false;
+				}
+			}
+			$val = $this->propValsByXmlId[$arProp['ID']][$cacheVals];
+		}
+		return $val;
+	}
+	
 	public function CheckXmlIdOfListProperty(&$val, $propID)
 	{
 		if(isset($val['XML_ID']))
@@ -6403,7 +7186,7 @@ class Importer {
 			}
 			else
 			{
-				$dbRes2 = \CIBlockPropertyEnum::GetList(array(), array("PROPERTY_ID"=>$propID, "XML_ID"=>$val['XML_ID']));
+				$dbRes2 = $this->GetIblockPropEnum(array("PROPERTY_ID"=>$propID, "=XML_ID"=>$val['XML_ID']));
 				if($arPropEnum2 = $dbRes2->Fetch())
 				{
 					unset($val['XML_ID']);
@@ -6431,22 +7214,9 @@ class Importer {
 					if((int)$arElement[$fieldName] > 0) $arElement[$fieldName] = ConvertTimeStamp(time()+(int)$arElement[$fieldName]*24*60*60, "FULL");
 				}
 			}
+			elseif(isset($arElement[$fieldName]) && is_array($arElement[$fieldName])) $arElement[$fieldName] = current($arElement[$fieldName]);
 		}
 		$this->GenerateElementCode($arElement, $iblockFields);
-	}
-	
-	public function GenerateElementCode(&$arElement, $iblockFields)
-	{
-		if(($iblockFields['CODE']['IS_REQUIRED']=='Y' || $iblockFields['CODE']['DEFAULT_VALUE']['TRANSLITERATION']=='Y') && strlen($arElement['CODE'])==0 && strlen($arElement['NAME'])>0)
-		{
-			$arElement['CODE'] = $this->Str2Url($arElement['NAME'], $iblockFields['CODE']['DEFAULT_VALUE']);
-			if($iblockFields['CODE']['DEFAULT_VALUE']['UNIQUE']=='Y')
-			{
-				$i = 0;
-				while(($tmpCode = $arElement['CODE'].($i ? '-'.mt_rand() : '')) && \CIblockElement::GetList(array(), array('IBLOCK_ID'=>$arElement['IBLOCK_ID'], 'CODE'=>$tmpCode, 'CHECK_PERMISSIONS' => 'N'), array()) > 0 && ++$i){}
-				$arElement['CODE'] = $tmpCode;
-			}
-		}
 	}
 	
 	public function GetIblockFields($IBLOCK_ID)
@@ -6475,26 +7245,51 @@ class Importer {
 	
 	public function GetIblockElementValue($arProp, $val, $fsettings, $bAdd = false, $allowNF = false, $allowMultiple = false)
 	{
-		if(strlen($val)==0) return $val;
-		$relField = $fsettings['REL_ELEMENT_FIELD'];
+		if(is_array($val) && count(preg_grep('/\D/', array_keys($val)))==0)
+		{
+			foreach($val as $k=>$v)
+			{
+				$val[$k] = $this->GetIblockElementValue($arProp, $v, $fsettings, $bAdd, $allowNF);
+			}
+			return $val;
+		}
+		if($arProp['USER_TYPE']=='ElementXmlID')
+		{
+			$bAdd = false;
+			if(!$arProp['LINK_IBLOCK_ID']) $arProp['LINK_IBLOCK_ID'] = $this->iblockId;
+		}
+		
+		if(is_array($val) && isset($val['PRIMARY'])) return $this->GetIblockElementValueEx($arProp, $val, $bAdd, $allowNF, $allowMultiple);
+		$relField = (isset($fsettings['REL_ELEMENT_FIELD']) ? $fsettings['REL_ELEMENT_FIELD'] : '');
 		if((!$relField || $relField=='IE_ID') && !is_numeric($val))
 		{
 			$relField = 'IE_NAME';
 			$bAdd = false;
 		}
+		$arElemFields = array();
+		if(is_array($val))
+		{
+			$arElemFields = $val;
+			if(isset($arElemFields[substr($relField, 3)])) $val = $arElemFields[substr($relField, 3)];
+			elseif(isset($arElemFields['NAME'])) $val = $arElemFields['NAME'];
+			else $val = '';
+		}
+		if(strlen($val)==0) return $val;
 		if($relField && $relField!='IE_ID' && $arProp['LINK_IBLOCK_ID'])
 		{
 			$arFilter = array('IBLOCK_ID'=>$arProp['LINK_IBLOCK_ID'], 'CHECK_PERMISSIONS' => 'N');
+			$filterVal = $val;
+			if(!is_array($filterVal) && strlen($this->Trim($filterVal))!=strlen($filterVal)) $filterVal = array($filterVal, $this->Trim($filterVal));
 			if(strpos($relField, 'IE_')===0)
 			{
-				$arFilter[substr($relField, 3)] = $val;
+				$arFilter['='.substr($relField, 3)] = $filterVal;
 			}
 			elseif(strpos($relField, 'IP_PROP')===0)
 			{
 				$uid = substr($relField, 7);
 				if($propsDef[$uid]['PROPERTY_TYPE']=='L')
 				{
-					$arFilter['PROPERTY_'.$uid.'_VALUE'] = $val;
+					$arFilter['=PROPERTY_'.$uid.'_VALUE'] = $filterVal;
 				}
 				else
 				{
@@ -6502,21 +7297,22 @@ class Importer {
 					{
 						$val = $this->GetHighloadBlockValue($arProp, $val);
 					}*/
-					$arFilter['PROPERTY_'.$uid] = $val;
+					$arFilter['=PROPERTY_'.$uid] = $filterVal;
 				}
 			}
 
-			$dbRes = \Bitrix\KitImportxml\DataManager\IblockElement::GetList($arFilter, array('ID'), array('ID'=>'ASC'), ($allowMultiple ? false : 1));
+			$resField = ($arProp['USER_TYPE']=='ElementXmlID' ? 'XML_ID' : 'ID');
+			$dbRes = \Bitrix\KitImportxml\DataManager\IblockElementTable::GetListComp($arFilter, array('ID', 'XML_ID'), array('ID'=>'ASC'), ($allowMultiple ? false : 1));
 			//$dbRes = \CIblockElement::GetList(array('ID'=>'ASC'), $arFilter, false, ($allowMultiple ? false : array('nTopCount'=>1)), array('ID'));
 			if($arElem = $dbRes->Fetch())
 			{
-				$val = $arElem['ID'];
+				$val = $arElem[$resField];
 				if($allowMultiple)
 				{
 					$arVals = array();
 					while($arElem = $dbRes->Fetch())
 					{
-						$arVals[] = $arElem['ID'];
+						$arVals[] = $arElem[$resField];
 					}
 					if(count($arVals) > 0)
 					{
@@ -6524,23 +7320,277 @@ class Importer {
 						$val = array_values($arVals);
 					}
 				}
+				elseif(count($arElemFields) > 1)
+				{
+					$el = new \CIblockElement();
+					$el->Update($arElem['ID'], $arElemFields, false, true, true);
+				}				
 			}
-			elseif($bAdd && $arFilter['NAME'] && $arFilter['IBLOCK_ID'])
+			elseif($bAdd && ($arFilter['NAME'] || $arFilter['=NAME']) && ($arFilter['IBLOCK_ID'] || $arFilter['=IBLOCK_ID']))
 			{
-				$iblockFields = $this->GetIblockFields($arFilter['IBLOCK_ID']);
-				$this->GenerateElementCode($arFilter, $iblockFields);
+				$arFields = array();
+				foreach($arFilter as $k=>$v)
+				{
+					$arFields[str_replace('=', '', $k)] = $v;
+				}
+				$iblockFields = $this->GetIblockFields($arFields['IBLOCK_ID']);
+				$this->GenerateElementCode($arFields, $iblockFields);
 				$el = new \CIblockElement();
-				$val = $el->Add($arFilter, false, true, true);
-				$this->AddTagIblock($arFilter['IBLOCK_ID']);
+				$val = $el->Add(array_merge($arFields, $arElemFields), false, true, true);
+				$this->AddTagIblock($arFields['IBLOCK_ID']);
+			}
+			elseif($allowNF)
+			{
+				return false;
 			}
 		}
 
 		return $val;
 	}
 	
-	public function GetHighloadBlockValue($arProp, $val, $bAdd = false)
+	public function GetIblockElementValueEx($arProp, $val, $bAdd = false, $allowNF = false, $allowMultiple = false)
 	{
-		if($val && Loader::includeModule('highloadblock') && $arProp['USER_TYPE_SETTINGS']['TABLE_NAME'])
+		$IBLOCK_ID = (int)$arProp['LINK_IBLOCK_ID'];
+		$propsDef = ($IBLOCK_ID > 0 ? $this->GetIblockProperties($IBLOCK_ID) : array());
+		$defaultVal = current($val['PRIMARY']);
+		$arElemFields = $arPropFields = $arElemFields2 = $arPropFields2 = array();
+		if(isset($val['EXTRA']) && is_array($val['EXTRA']))
+		{
+			foreach($val['EXTRA'] as $fn=>$fv)
+			{
+				if(strpos($fn, 'IE_')===0)
+				{
+					$uid = substr($fn, 3);
+					if($uid!=='ID') $arElemFields[$uid] = $fv;
+				}
+				elseif(strpos($fn, 'IP_PROP')===0)
+				{
+					$uid = substr($fn, 7);
+					$arPropFields[$uid] = $fv;
+				}
+			}
+			$arElemFields2 = $arElemFields;
+			$arPropFields2 = $arPropFields;
+		}
+		$arFilter = array();
+		foreach($val['PRIMARY'] as $fn=>$fv)
+		{
+			if(!is_array($fv) && strlen($this->Trim($fv))!=strlen($fv)) $fv = array($fv, $this->Trim($fv));
+			elseif(!is_array($fv) && strlen($fv)==0) continue;
+			if(strpos($fn, 'IE_')===0)
+			{
+				$uid = substr($fn, 3);
+				//so slow 
+				/*if($uid=='ID') $arFilter[] = array('LOGIC'=>'OR', array('=ID' => $fv), array('=NAME' => $fv));
+				else
+				{*/
+					if($uid=='ID' && !is_numeric($fv) && (!is_array($fv) || !is_numeric(current($fv)))){$uid = 'NAME'; $bAdd = false;}
+					$arFilter['='.$uid] = $fv;
+					$arElemFields2[$uid] = $fv;
+				//}
+			}
+			elseif(strpos($fn, 'IP_PROP')===0)
+			{
+				$uid = substr($fn, 7);
+				if($propsDef[$uid]['PROPERTY_TYPE']=='L')
+				{
+					$arFilter['=PROPERTY_'.$uid.'_VALUE'] = $fv;
+				}
+				elseif($propsDef[$uid]['PROPERTY_TYPE']=='S' && $propsDef[$uid]['USER_TYPE']=='directory')
+				{
+					$arFilter['=PROPERTY_'.$uid] = $this->GetHighloadBlockValue($propsDef[$uid], $fv);
+				}
+				elseif($propsDef[$uid]['PROPERTY_TYPE']=='E')
+				{
+					$arFilter['=PROPERTY_'.$uid] = $this->GetIblockElementValue($propsDef[$uid], $fv, $this->fieldSettings[$fn]);
+				}
+				else $arFilter['=PROPERTY_'.$uid] = $fv;
+				$arPropFields2[$uid] = $fv;
+			}
+		}
+		if(count($arFilter) > 0 && $IBLOCK_ID > 0)
+		{
+			$arFilter['IBLOCK_ID'] = $arElemFields2['IBLOCK_ID'] = $IBLOCK_ID;
+			$arFilter['CHECK_PERMISSIONS'] = 'N';
+		}
+		else return $defaultVal;
+		
+		$fieldPrefix = 'IP_PROP'.$arProp['ID'].'|';
+		$this->logger->SetDisableLog();
+		$arKeys = array_merge(array('ID', 'NAME', 'IBLOCK_SECTION_ID', 'PREVIEW_PICTURE'), array_keys($arElemFields));
+		$dbRes = \Bitrix\KitImportxml\DataManager\IblockElementTable::GetListComp($arFilter, $arKeys, array('ID'=>'ASC'), ($allowMultiple ? false : 1));
+		if($arElem = $dbRes->Fetch())
+		{
+			$val = $arElem['ID'];
+			if($allowMultiple)
+			{
+				$arVals = array();
+				while($arElem = $dbRes->Fetch())
+				{
+					$arVals[] = $arElem['ID'];
+				}
+				if(count($arVals) > 0)
+				{
+					array_unshift($arVals, $val);
+					$val = array_values($arVals);
+				}
+			}
+			else
+			{
+				if(count($arElemFields) > 0)
+				{
+					$this->UpdateElement($arElem['ID'], $IBLOCK_ID, $arElemFields, $arElem, array(), $fieldPrefix);
+				}
+				if(count($arPropFields) > 0) $this->SaveProperties($arElem['ID'], $IBLOCK_ID, $arPropFields);
+			}				
+		}
+		elseif($bAdd && $arElemFields2['NAME'] && $IBLOCK_ID > 0)
+		{
+			$iblockFields = $this->GetIblockFields($IBLOCK_ID);
+			$this->GetDefaultElementFields($arElemFields2, $iblockFields);
+			if($val = $this->AddElement($arElemFields2, $fieldPrefix))
+			{
+				if(count($arPropFields2) > 0) $this->SaveProperties($val, $IBLOCK_ID, $arPropFields2);
+				$this->AddTagIblock($IBLOCK_ID);
+			}
+		}
+		elseif($allowNF) $val = false;
+		else $val = $defaultVal;
+		$this->logger->SetEnableLog();
+		return $val;
+	}
+	
+	public function GetIblockSectionValue($arProp, $val, $fsettings, $bAdd = false, $allowNF = false)
+	{
+		$relField = $fsettings['REL_SECTION_FIELD'];
+		if((!$relField || $relField=='ID') && !is_numeric($val))
+		{
+			$bAdd = false;
+			$relField = 'NAME';
+		}
+		if($relField && $relField!='ID' && $val && $arProp['LINK_IBLOCK_ID'])
+		{
+			$IBLOCK_ID = $arProp['LINK_IBLOCK_ID'];
+			$arFilter = array(
+				'IBLOCK_ID' => $IBLOCK_ID ,
+				$relField => $val,
+				'CHECK_PERMISSIONS' => 'N'
+			);
+			$dbRes = \CIblockSection::GetList(array('ID'=>'ASC'), $arFilter, false, array('ID'), array('nTopCount'=>1));
+			if($arElem = $dbRes->Fetch())
+			{
+				$val = $arElem['ID'];
+			}
+			elseif($bAdd && $relField=='NAME')
+			{
+				$arFields = array(
+					"IBLOCK_ID" => $IBLOCK_ID ,
+					"NAME" => $val
+				);
+				$iblockFields = $this->GetIblockFields($IBLOCK_ID );
+				if(($iblockFields['SECTION_CODE']['IS_REQUIRED']=='Y' || $iblockFields['SECTION_CODE']['DEFAULT_VALUE']['TRANSLITERATION']=='Y') && strlen($arFields['CODE'])==0)
+				{
+					$arFields['CODE'] = $this->Str2Url($arFields['NAME'], $iblockFields['SECTION_CODE']['DEFAULT_VALUE']);
+				}
+				$bs = new \CIBlockSection;
+				$sectId = $j = 0;
+				$code = $arFields['CODE'];
+				while($j<1000 && !($sectId = $bs->Add($arFields, true, true, true)) && ($arFields['CODE'] = $code.strval(++$j))){}
+				$val = $sectId;
+			}
+			else $val = '';
+		}
+		return $val;
+	}
+	
+	public function GetUserFieldEnum($val, $fieldParam)
+	{		
+		if(!isset($this->ufEnum)) $this->ufEnum = array();
+		if(!$this->ufEnum[$fieldParam['ID']])
+		{
+			$arEnumVals = array();
+			$fenum = new \CUserFieldEnum();
+			$dbRes = $fenum->GetList(array(), array('USER_FIELD_ID'=>$fieldParam['ID']));
+			while($arr = $dbRes->Fetch())
+			{
+				$arEnumVals[trim($arr['VALUE'])] = $arr['ID'];
+			}
+			$this->ufEnum[$fieldParam['ID']] = $arEnumVals;
+		}
+		
+		$val = trim($val);
+		$arEnumVals = $this->ufEnum[$fieldParam['ID']];
+		if(!isset($arEnumVals[$val]))
+		{
+			$fenum = new \CUserFieldEnum();
+			$arEnumValsOrig = array();
+			$dbRes = $fenum->GetList(array(), array('USER_FIELD_ID'=>$fieldParam['ID']));
+			while($arr = $dbRes->Fetch())
+			{
+				$arEnumValsOrig[$arr['ID']] = $arr;
+			}
+			$arEnumValsOrig['n0'] = array('VALUE'=>$val);
+			$fenum->SetEnumValues($fieldParam['ID'], $arEnumValsOrig);
+
+			$arEnumVals = array();
+			$dbRes = $fenum->GetList(array(), array('USER_FIELD_ID'=>$fieldParam['ID']));
+			while($arr = $dbRes->Fetch())
+			{
+				$arEnumVals[trim($arr['VALUE'])] = $arr['ID'];
+			}
+			$this->ufEnum[$fieldParam['ID']] = $arEnumVals;
+		}
+		return $arEnumVals[$val];
+	}
+	
+	public function GetUserFieldEnumDefaultVal($fieldParam)
+	{		
+		if(!isset($this->ufEnumDefault)) $this->ufEnumDefault = array();
+		if(!array_key_exists($fieldParam['ID'], $this->ufEnumDefault))
+		{
+			$val = ($fieldParam['MULTIPLE']=='Y' ? array() : '');
+			$fenum = new \CUserFieldEnum();
+			$dbRes = $fenum->GetList(array(), array('USER_FIELD_ID'=>$fieldParam['ID'], 'DEF'=>'Y'));
+			while($arr = $dbRes->Fetch())
+			{
+				if($fieldParam['MULTIPLE']=='Y') $val[] = $arr['VALUE'];
+				else $val = $arr['VALUE'];
+			}
+			$this->ufEnumDefault[$fieldParam['ID']] = $val;
+		}
+		return $this->ufEnumDefault[$fieldParam['ID']];
+	}
+	
+	public function GetYMCategoryValue($val)
+	{
+		if($val && Loader::includeModule('yandex.market') && is_callable('\Yandex\Market\Ui\UserField\ServiceCategory\Provider', 'GetList'))
+		{
+			if(!isset($this->ymCategories) || !is_array($this->ymCategories))
+			{
+				$arResult = \Yandex\Market\Ui\UserField\ServiceCategory\Provider::GetList();
+				$arCategories = array();
+				$currentTree = array();
+				$currentTreeDepth = 0;
+				foreach ($arResult as $sectionKey => $section)
+				{
+					if ($section['DEPTH_LEVEL'] < $currentTreeDepth)
+					{
+						array_splice($currentTree, $section['DEPTH_LEVEL']);
+					}
+					$currentTree[$section['DEPTH_LEVEL']] =  $section['NAME'];
+					$currentTreeDepth = $section['DEPTH_LEVEL'];
+					$arCategories[implode(' / ', $currentTree)] = $section['ID'];
+				}
+				$this->ymCategories = $arCategories;
+			}
+			return (isset($this->ymCategories[$val]) ? $this->ymCategories[$val] : $val);
+		}
+		return $val;
+	}
+	
+	public function GetHighloadBlockValue($arProp, $val, $bAdd = false, $bUpdate = false)
+	{
+		if($val && Loader::includeModule('highloadblock') && isset($arProp['USER_TYPE_SETTINGS']['TABLE_NAME']) && $arProp['USER_TYPE_SETTINGS']['TABLE_NAME'])
 		{
 			$arFields = $val;
 			if(!is_array($arFields))
@@ -6576,7 +7626,8 @@ class Importer {
 			foreach($arItems as $arFields)
 			{
 				if($arFields['UF_XML_ID']) $cacheKey = 'UF_XML_ID_'.$arFields['UF_XML_ID'];
-				else $cacheKey = 'UF_NAME_'.$arFields['UF_NAME'];
+				elseif($arFields['UF_NAME']) $cacheKey = 'UF_NAME_'.$arFields['UF_NAME'];
+				else $cacheKey = 'CUSTOM_'.md5(serialize($arFields));
 
 				if(!isset($this->propVals[$arProp['ID']][$cacheKey]))
 				{
@@ -6602,27 +7653,47 @@ class Importer {
 					}
 					$entityDataClass = $this->hlbl[$arProp['ID']];
 					$arHLFields = $this->hlblFields[$arProp['ID']];
+					foreach($arFields as $k=>$v)
+					{
+						if(!array_key_exists($k, $arHLFields)) unset($arFields[$k]);
+					}
+					if(empty($arFields)) continue;
+					if(count($arFields) > 1 && (!isset($arFields['UF_NAME']) || strlen(trim($arFields['UF_NAME']))==0) && (!isset($arFields['UF_XML_ID']) || strlen(trim($arFields['UF_XML_ID']))==0)) continue;
 					
-					if((!isset($arFields['UF_NAME']) || strlen(trim($arFields['UF_NAME']))==0) && (!isset($arFields['UF_XML_ID']) || strlen(trim($arFields['UF_XML_ID']))==0)) continue;
-					$this->PrepareHighLoadBlockFields($arFields, $arHLFields);
-					
-					if($arFields['UF_XML_ID']) $arFilter = array("UF_XML_ID"=>$arFields['UF_XML_ID']);
-					else $arFilter = array("UF_NAME"=>$arFields['UF_NAME']);
-					$dbRes2 = $entityDataClass::GetList(array('filter'=>$arFilter, 'select'=>array('ID', 'UF_XML_ID'), 'limit'=>1));
+					if(count($arFields)==1)
+					{
+						$this->PrepareHighLoadBlockFields($arFields, $arHLFields);
+						//$arFilter = $arFields;
+						foreach($arFields as $k=>$v) $arFilter['='.$k] = $v;
+					}
+					elseif(isset($arFields['UF_XML_ID']) && strlen($arFields['UF_XML_ID']) > 0) $arFilter = array("=UF_XML_ID"=>$arFields['UF_XML_ID']);
+					elseif(isset($arFields['UF_NAME']) && strlen($arFields['UF_NAME']) > 0) $arFilter = array("=UF_NAME"=>$arFields['UF_NAME']);
+					if(count($arFilter)==0) return false;
+					$dbRes2 = $entityDataClass::GetList(array('filter'=>$arFilter, 'select'=>array_merge(array('ID', 'UF_XML_ID'), array_keys($arFields)), 'limit'=>1));
 					if($arr2 = $dbRes2->Fetch())
 					{
-						if(count($arFields) > 1 && $bAdd)
+						if(count($arFields) > 1 && ($bAdd || $bUpdate))
 						{
+							$this->PrepareHighLoadBlockFields($arFields, $arHLFields, $arr2);
 							$entityDataClass::Update($arr2['ID'], $arFields);
 						}
 						$cacheVal = $this->propVals[$arProp['ID']][$cacheKey] = $arr2['UF_XML_ID'];
 					}
 					else
 					{
+						$this->PrepareHighLoadBlockFields($arFields, $arHLFields);
 						if(!isset($arFields['UF_NAME']) || strlen(trim($arFields['UF_NAME']))==0) continue;
 						if(!isset($arFields['UF_XML_ID']) || strlen(trim($arFields['UF_XML_ID']))==0) $arFields['UF_XML_ID'] = $this->Str2Url($arFields['UF_NAME']);
 						if($bAdd)
 						{
+							if(!array_key_exists('UF_XML_ID', $arFilter) && !array_key_exists('=UF_XML_ID', $arFilter))
+							{
+								$xmlId = $arFields['UF_XML_ID'];
+								while($entityDataClass::GetList(array('filter'=>array('=UF_XML_ID'=>$arFields['UF_XML_ID']), 'select'=>array('ID'), 'limit'=>1))->Fetch())
+								{
+									$arFields['UF_XML_ID'] = $xmlId.'-'.mt_rand();
+								}
+							}
 							if($entityDataClass::Add($arFields))
 								$cacheVal = $this->propVals[$arProp['ID']][$cacheKey] = $arFields['UF_XML_ID'];
 							else $cacheVal = $this->propVals[$arProp['ID']][$cacheKey] = false;
@@ -6644,45 +7715,75 @@ class Importer {
 		return $val;
 	}
 	
-	public function PrepareHighLoadBlockFields(&$arFields, $arHLFields)
+	public function PrepareHighLoadBlockFields(&$arFields, $arHLFields, $arOldVals=array())
 	{
 		foreach($arFields as $k=>$v)
 		{
 			if(!isset($arHLFields[$k]))
 			{
 				unset($arFields[$k]);
+				continue;
 			}
 			$type = $arHLFields[$k]['USER_TYPE_ID'];
-			if($type=='file')
+			$settings = $arHLFields[$k]['SETTINGS'];
+			if($arHLFields[$k]['MULTIPLE']=='Y')
 			{
-				$arFields[$k] = $this->GetFileArray($v);
-				if(empty($arFields[$k])) unset($arFields[$k]);
+				$v = array_map('trim', explode($this->params['ELEMENT_MULTIPLE_SEPARATOR'], $v));
+				$arFields[$k] = array();
+				foreach($v as $k2=>$v2)
+				{
+					$arFields[$k][$k2] = $this->GetHighLoadBlockFieldVal($v2, $type, $settings, $arOldVals[$k]);
+				}
+				if($type=='file' && count(array_diff($arFields[$k], array('')))==0) unset($arFields[$k]);
 			}
-			elseif($type=='integer' || $type=='double')
+			else
 			{
-				$arFields[$k] = $this->GetFloatVal($v);
+				$arFields[$k] = $this->GetHighLoadBlockFieldVal($v, $type, $settings, $arOldVals[$k]);
+				if($type=='file' && !is_array($arFields[$k])) unset($arFields[$k]);
 			}
-			elseif($type=='datetime')
+		}
+	}
+	
+	public function GetHighLoadBlockFieldVal($v, $type, $settings, $oldVal='')
+	{
+		if($type=='file')
+		{
+			$arFile = $this->GetFileArray($v, array(), array(), $oldVal);
+			if(empty($arFile) || array_key_exists('old_id', $arFile))
 			{
-				$arFields[$k] = $this->GetDateVal($v);
+				$arFile = '';
 			}
-			elseif($type=='date')
+			elseif($oldVal)
 			{
-				$arFields[$k] = $this->GetDateVal($v, 'PART');
+				$arFile['del'] = 'Y';
+				$arFile['old_id'] = $oldVal;
 			}
-			elseif($type=='boolean')
-			{
-				$arFields[$k] = $this->GetHLBoolValue($v);
-			}
-			elseif($type=='hlblock')
-			{
-				$arFields[$k] = $this->GetHLHLValue($v, $arHLFields[$k]['SETTINGS']);
-			}
-			if($arHLFields[$k]['MULTIPLE']=='Y' && !is_array($arFields[$k]))
-			{
-				$arFields[$k] = array($arFields[$k]);
-			}
-		}		
+			return $arFile;
+		}
+		elseif($type=='integer' || $type=='double')
+		{
+			return $this->GetFloatVal($v);
+		}
+		elseif($type=='datetime')
+		{
+			return $this->GetDateVal($v);
+		}
+		elseif($type=='date')
+		{
+			return $this->GetDateVal($v, 'PART');
+		}
+		elseif($type=='boolean')
+		{
+			return $this->GetHLBoolValue($v);
+		}
+		elseif($type=='hlblock')
+		{
+			return $this->GetHLHLValue($v, $settings);
+		}
+		else
+		{
+			return $v;
+		}
 	}
 	
 	public function GetHLHLValue($val, $arSettings)
@@ -6740,49 +7841,6 @@ class Importer {
 		return $val;
 	}
 	
-	public function PictureProcessing($arFile, $arDef)
-	{
-		if($arDef["SCALE"] === "Y")
-		{
-			$arNewPicture = \CIBlock::ResizePicture($arFile, $arDef);
-			if(is_array($arNewPicture))
-			{
-				$arFile = $arNewPicture;
-			}
-			/*elseif($arDef["IGNORE_ERRORS"] !== "Y")
-			{
-				unset($arFile);
-				$strWarning .= Loc::getMessage("IBLOCK_FIELD_PREVIEW_PICTURE").": ".$arNewPicture."<br>";
-			}*/
-		}
-
-		if($arDef["USE_WATERMARK_FILE"] === "Y")
-		{
-			\CIBLock::FilterPicture($arFile["tmp_name"], array(
-				"name" => "watermark",
-				"position" => $arDef["WATERMARK_FILE_POSITION"],
-				"type" => "file",
-				"size" => "real",
-				"alpha_level" => 100 - min(max($arDef["WATERMARK_FILE_ALPHA"], 0), 100),
-				"file" => $_SERVER["DOCUMENT_ROOT"].Rel2Abs("/", $arDef["WATERMARK_FILE"]),
-			));
-		}
-
-		if($arDef["USE_WATERMARK_TEXT"] === "Y")
-		{
-			\CIBLock::FilterPicture($arFile["tmp_name"], array(
-				"name" => "watermark",
-				"position" => $arDef["WATERMARK_TEXT_POSITION"],
-				"type" => "text",
-				"coefficient" => $arDef["WATERMARK_TEXT_SIZE"],
-				"text" => $arDef["WATERMARK_TEXT"],
-				"font" => $_SERVER["DOCUMENT_ROOT"].Rel2Abs("/", $arDef["WATERMARK_TEXT_FONT"]),
-				"color" => $arDef["WATERMARK_TEXT_COLOR"],
-			));
-		}
-		return $arFile;
-	}
-	
 	public function PrepareProductAdd(&$arFieldsProduct, $ID, $IBLOCK_ID)
 	{
 		if(!empty($arFieldsProduct)) return;
@@ -6801,9 +7859,66 @@ class Importer {
 		if($this->catalogIblocks[$IBLOCK_ID]) $arFieldsProduct['ID'] = $ID;
 	}
 	
-	public function SaveProduct($ID, $IBLOCK_ID, $arProduct, $arPrices, $arStores, $parentID=false)
+	public function AfterSaveProduct(&$arFieldsElement, $ID, $IBLOCK_ID, $isUpdate=false, $isOffer=false)
 	{
-		$this->productor->SaveProduct($ID, $IBLOCK_ID, $arProduct, $arPrices, $arStores, $parentID);
+		$this->SetProductQuantity($ID, $IBLOCK_ID);
+		
+		if(($this->params['ELEMENT_NO_QUANTITY_DEACTIVATE']=='Y' && floatval($this->productor->GetProductQuantity($ID, $IBLOCK_ID))<=0)
+			|| ($this->params['ELEMENT_NO_PRICE_DEACTIVATE']=='Y' && floatval($this->productor->GetProductPrice($ID, $IBLOCK_ID))<=0))
+		{
+			if($isUpdate) $arFieldsElement['ACTIVE'] = 'N';
+			elseif(!isset($arFieldsElement['ACTIVE']) || $arFieldsElement['ACTIVE']!='N')
+			{
+				$el = new \CIblockElement();
+				$el->Update($ID, array('ACTIVE'=>'N'), false, true, true);
+				$this->AddTagIblock($IBLOCK_ID);
+			}
+			
+			if($isOffer && ($arOfferIblock = \Bitrix\KitImportxml\Utils::GetOfferIblockByOfferIblock($IBLOCK_ID)))
+			{
+				$propId = $arOfferIblock['OFFERS_PROPERTY_ID'];
+				$arOffer = \CIblockElement::GetList(array(), array('ID'=>$ID), false, false, array('PROPERTY_'.$propId, 'PROPERTY_'.$propId.'.ACTIVE'))->Fetch();
+				if($arOffer['PROPERTY_'.$propId.'_VALUE'] > 0)
+				{
+					$arElem = array('ACTIVE'=>$arOffer['PROPERTY_'.$propId.'ACTIVE']);
+					$this->AfterSaveProduct($arElem, $arOffer['PROPERTY_'.$propId.'_VALUE'], $arOfferIblock['IBLOCK_ID']);
+				}
+			}
+		}
+	}
+	
+	public function UpdateSectionPropertyLinks($IBLOCK_ID, $propId)
+	{
+		$arSectionIds = array();
+		$dbRes = \CIblockElement::GetList(array(), array('IBLOCK_ID'=>$IBLOCK_ID, '!PROPERTY_'.$propId=>false, '!IBLOCK_SECTION_ID'=>false), array('IBLOCK_SECTION_ID'), false, array('IBLOCK_SECTION_ID'));
+		while($arr = $dbRes->Fetch())
+		{
+			$arSectionIds[] = $arr['IBLOCK_SECTION_ID'];
+		}
+		if(1 || !empty($arSectionIds))
+		{
+			$dbRes = \Bitrix\Iblock\SectionPropertyTable::getList(array("select" => array("SECTION_ID"), "filter" => array("=IBLOCK_ID" => $IBLOCK_ID, "=PROPERTY_ID"=>$propId)));
+			while($arr = $dbRes->Fetch())
+			{
+				if(!in_array($arr['SECTION_ID'], $arSectionIds))
+				{
+					\Bitrix\Iblock\SectionPropertyTable::delete(array("IBLOCK_ID" => $IBLOCK_ID, "PROPERTY_ID"=>$propId, "SECTION_ID"=>$arr['SECTION_ID']));
+				}
+				else
+				{
+					$arSectionIds = array_diff($arSectionIds, array($arr['SECTION_ID']));
+				}
+			}
+			foreach($arSectionIds as $sectionId)
+			{
+				\Bitrix\Iblock\SectionPropertyTable::add(array("IBLOCK_ID" => $IBLOCK_ID, "PROPERTY_ID"=>$propId, "SECTION_ID"=>$sectionId));
+			}
+		}
+	}
+	
+	public function SaveProduct($ID, $IBLOCK_ID, $arProduct, $arPrices, $arStores, $parentID=false, $arOldData=array())
+	{
+		$this->productor->SaveProduct($ID, $IBLOCK_ID, $arProduct, $arPrices, $arStores, $parentID, $arOldData);
 	}
 	
 	public function SetProductQuantity($ID, $IBLOCK_ID=0)
@@ -6811,7 +7926,7 @@ class Importer {
 		$this->productor->SetProductQuantity($ID, $IBLOCK_ID);
 	}
 	
-	public function SaveDiscount($ID, $IBLOCK_ID, $arFieldsProductDiscount, $name, $isOffer = false)
+	public function SaveDiscount($ID, $IBLOCK_ID, $arFieldsProductDiscount, $name='', $isOffer = false)
 	{
 		if(!isset($this->discountManager))
 			$this->discountManager = new \Bitrix\KitImportxml\DataManager\Discount($this);
@@ -6820,6 +7935,7 @@ class Importer {
 	
 	public function GetMeasureByStr($val)
 	{
+		if(is_array($val)) return $this->GetMeasureByStr(current($val));
 		if(!$val) return $val;
 		if(!isset($this->measureList) || !is_array($this->measureList))
 		{
@@ -6833,381 +7949,13 @@ class Importer {
 		$valCmp = trim(ToLower($val));
 		foreach($this->measureList as $k=>$v)
 		{
-			if(in_array($valCmp, array($v['MEASURE_TITLE'], $v['SYMBOL_RUS'], $v['SYMBOL_INTL'], $v['SYMBOL_LETTER_INTL'])))
+			if(in_array($valCmp, array($v['CODE'], $v['MEASURE_TITLE'], $v['SYMBOL_RUS'], $v['SYMBOL_INTL'], $v['SYMBOL_LETTER_INTL'])))
 			{
 				return $k;
 			}
 		}
-	}
-	
-	public function GetCurrencyRates()
-	{
-		if(!isset($this->currencyRates))
-		{
-			$arRates = array();
-			$currFile = $this->tmpdir.'/currencies.txt';
-			if(file_exists($currFile))
-			{
-				$arRates = unserialize(file_get_contents($currFile));
-			}
-			else
-			{
-				$client = new \Bitrix\Main\Web\HttpClient(array('socketTimeout'=>20, 'disableSslVerification'=>true));
-				$res = $client->get('http://www.cbr.ru/scripts/XML_daily.asp');
-				if($res)
-				{
-					$xml = simplexml_load_string($res);
-					if($xml->Valute)
-					{
-						foreach($xml->Valute as $val)
-						{
-							$arRates[(string)$val->CharCode] = $this->GetFloatVal((string)$val->Value);
-						}
-					}
-				}
-				file_put_contents($currFile, serialize($arRates));
-			}
-			$this->currencyRates = $arRates;
-		}
-		return $this->currencyRates;
-	}
-	
-	public function ConversionReplaceValues($m)
-	{
-		if(preg_match('/^\{(([^\s\}]*[\'"][^\'"\}]*[\'"])*[^\s\}]*)\}$/', $m[0], $m2))
-		{
-			return $this->GetValueByXpath($m2[1]);
-		}
-		elseif(preg_match('/^\$\{[\'"](([^\s\}]*[\'"][^\'"\}]*[\'"])*[^\s\}]*)[\'"]\}$/', $m[0], $m2))
-		{
-			if(!isset($this->convParams)) $this->convParams = array();
-			$this->convParams[$m2[1]] = $this->GetValueByXpath($m2[1]);
-			$quot = substr(ltrim($m2[0], '${ '), 0, 1);
-			return '$this->convParams['.$quot.$m2[1].$quot.']';
-		}
-		elseif($m[0]=='#HASH#')
-		{
-			$hash = md5(serialize($this->currentItemValues).serialize($this->params['FIELDS']).serialize($this->fparams));
-			return $hash;
-		}
-		elseif(in_array($m[0], $this->rcurrencies))
-		{
-			$arRates = $this->GetCurrencyRates();
-			$k = trim($m[0], '#');
-			return (isset($arRates[$k]) ? floatval($arRates[$k]) : 1);
-		}
-	}
-	
-	public function GetValueByXpath($xpath, $simpleXmlObj=null, $singleVal=false)
-	{
-		if(preg_match('/^\d+$/', $xpath) && isset($this->currentItemValues[$xpath]))
-		{
-			$val = $this->currentItemValues[$xpath];
-			if(is_array($val))
-			{
-				if($singleVal) $val = current($val);
-				elseif(count(preg_grep('/\D/', array_keys($val)))==0) $val = implode($this->params['ELEMENT_MULTIPLE_SEPARATOR'], $val);
-			}
-			return $val;
-		}
-		if(preg_match('/^[\d,]*$/', $xpath))
-		{
-			return '{'.$xpath.'}';
-		}
-		
-		$val = '';
-		
-		/*if(strlen($xpath) > 0) $arPath = explode('/', $xpath);
-		else $arPath = array();
-		$attr = $this->GetPathAttr($arPath);*/
-		$arXPath = $this->GetXPathParts($xpath);
-		$curXpath2 = $arXPath['xpath'];
-		$subXpath = $arXPath['subpath'];
-		$attr = $arXPath['attr'];
-		$currentXmlObj = $this->currentXmlObj;
-		if(isset($simpleXmlObj)) $currentXmlObj = $simpleXmlObj;
-		
-		if(strlen($curXpath2) > 0)
-		{
-			//$curXpath = '/'.ltrim($curXpath2, '/');
-			$curXpath = ltrim($curXpath2, '/');
-			if(strpos($curXpath, '.')!==0) $curXpath = '/'.$curXpath;
-			if(substr($curXpath2, 0, 2)=='//') $curXpath = $curXpath2;
-			if(isset($this->parentXpath) && strlen($this->parentXpath) > 0 && strpos($curXpath, $this->parentXpath)===0)
-			{
-				$tmpXpath = substr($curXpath, strlen($this->parentXpath) + 1);
-				//$tmpXmlObj = $currentXmlObj->xpath($tmpXpath);
-				$tmpXmlObj = $this->Xpath($currentXmlObj, $tmpXpath);
-				if(!empty($tmpXmlObj))
-				{
-					$currentXmlObj = $tmpXmlObj;
-					$curXpath = '';
-				}
-			}
-			if(strlen($curXpath) > 0)
-			{
-				if(strpos($curXpath, $this->xpath)===0)
-				{
-					//$curXpath = $this->ReplaceXpath($curXpath);
-					$curXpath = substr($curXpath, strlen($this->xpath) + 1);
-				}
-				elseif(isset($this->xmlPartObjects[$curXpath2]))
-				{
-					//$currentXmlObj = $this->xmlPartObjects[$curXpath2]->xpath($subXpath);
-					$currentXmlObj = $this->Xpath($this->xmlPartObjects[$curXpath2], $subXpath);
-					$curXpath = '';
-				}
-				elseif(substr($curXpath, 0, 2)=='//')
-				{
-					if(!isset($this->xmlSingleElems[$curXpath]))
-					{
-						$this->xmlSingleElems[$curXpath] = $this->GetPartXmlObject($curXpath, false);
-					}
-					$currentXmlObj = $this->xmlSingleElems[$curXpath];
-					$curXpath = '';
-				}
-				elseif(substr($curXpath, 0, 1)=='.')
-				{
-					$node = $this->GetCurrentFieldNode();
-					if($node!==false && ($tmpXmlObj = $this->Xpath($node, $curXpath)))
-					{
-						$currentXmlObj = $tmpXmlObj;
-						$curXpath = '';
-					}
-				}
-			}
-
-			//if(strlen($curXpath) > 0) $simpleXmlObj2 = $currentXmlObj->xpath($curXpath);
-			if(strlen($curXpath) > 0) $simpleXmlObj2 = $this->Xpath($currentXmlObj, ltrim($curXpath, '/'));
-			else $simpleXmlObj2 = $currentXmlObj;
-			if(count($simpleXmlObj2)==1) $simpleXmlObj2 = current($simpleXmlObj2);
-		}
-		else $simpleXmlObj2 = $currentXmlObj;
-		//if(is_array($simpleXmlObj2)) $simpleXmlObj2 = current($simpleXmlObj2);
-		
-		if(is_array($simpleXmlObj2))
-		{
-			$arVals = array();
-			foreach($simpleXmlObj2 as $sxml)
-			{
-				if($attr!==false)
-				{
-					if(is_callable(array($sxml, 'attributes')))
-					{
-						$arVals[] = (string)$sxml->attributes()->{$attr};
-					}
-				}
-				else
-				{
-					$arVals[] = (string)$sxml;					
-				}
-			}
-			if($singleVal) $val = current($arVals);
-			else $val = implode($this->params['ELEMENT_MULTIPLE_SEPARATOR'], $arVals);
-		}
-		else
-		{
-			if($attr!==false)
-			{
-				if(is_callable(array($simpleXmlObj2, 'attributes')))
-				{
-					$val = (string)$simpleXmlObj2->attributes()->{$attr};
-				}
-			}
-			else
-			{
-				$val = (string)$simpleXmlObj2;					
-			}
-		}
-		
-		$val = $this->GetRealXmlValue($val);		
-		return $val;
-	}
-	
-	public function GetCurrentFieldNode()
-	{
-		$key = $this->currentFieldKey;
-		$arFields = $this->params['FIELDS'];
-		if(!array_key_exists($key, $arFields)) return false;
-		$field = $arFields[$key];
-		list($xpath, $fieldName) = explode(';', $field, 2);
-		$simpleXmlObj = $this->currentXmlObj;
-		
-		$conditionIndex = trim($this->fparams[$key]['INDEX_LOAD_VALUE']);
-		$conditions = $this->fparams[$key]['CONDITIONS'];
-		if(!is_array($conditions)) $conditions = array();
-		foreach($conditions as $k2=>$v2)
-		{
-			if(preg_match('/^\{(\S*)\}$/', $v2['CELL'], $m))
-			{
-				$conditions[$k2]['XPATH'] = substr($m[1], strlen(trim($this->xpath, '/')) + 1);
-			}
-		}
-		
-		$xpath = substr($xpath, strlen(trim($this->xpath, '/')) + 1);
-		$arPath = array_diff(explode('/', $xpath), array(''));
-		$attr = $this->GetPathAttr($arPath);
-		if(count($arPath) > 0)
-		{
-			$simpleXmlObj2 = $this->Xpath($simpleXmlObj, implode('/', $arPath));
-			if(count($simpleXmlObj2)==1) $simpleXmlObj2 = current($simpleXmlObj2);
-		}
-		else $simpleXmlObj2 = $simpleXmlObj;
-		
-		$val = false;
-		if(is_array($simpleXmlObj2))
-		{
-			$val = array();
-			foreach($simpleXmlObj2 as $k=>$v)
-			{
-				if($this->CheckConditions($conditions, $xpath, $simpleXmlObj, $v, $k))
-				{
-					$val[] = $v;
-				}
-			}
-			if(is_numeric($conditionIndex)) $val = $val[$conditionIndex - 1];
-			elseif(count($val)==1) $val = current($val);
-		}
-		else
-		{
-			if($this->CheckConditions($conditions, $xpath, $simpleXmlObj, $simpleXmlObj2))
-			{
-				$val = $simpleXmlObj2;
-			}
-		}
-	
-		if(is_array($val))
-		{
-			if(array_key_exists($this->currentFieldIndex, $val)) $val = $val[$this->currentFieldIndex];
-			else $val = current($val);
-		}
-		if(!($val instanceof \SimpleXMLElement)) $val = false;
-		return $val;
-	}
-	
-	public function Xpath($simpleXmlObj, $xpath)
-	{
-		$xpath = \Bitrix\KitImportxml\Utils::ConvertDataEncoding($xpath, $this->siteEncoding, $this->fileEncoding);
-		if(preg_match('/((^|\/)[^\/]+):/', $xpath, $m))
-		{
-			if(strpos($m[1], '/')===0) $xpath = '/'.substr($xpath, strlen($m[1]) + 1);
-			$nss = $simpleXmlObj->getNamespaces(true);
-			$nsKey = trim($m[1], '/');
-			if(isset($nss[$nsKey]))
-			{
-				$simpleXmlObj->registerXPathNamespace($nsKey, $nss[$nsKey]);
-			}
-		}
-		$xpath = trim($xpath);
-		if(strlen($xpath) > 0 && $xpath!='.') return $simpleXmlObj->xpath($xpath);
-		else return $simpleXmlObj;
-	}
-	
-	public function ApplyConversions($val, $arConv, $arItem, $field=false, $iblockFields=array())
-	{
-		$fieldName = $fieldKey = $fieldIndex = false;
-		if(!is_array($field))
-		{
-			$fieldName = $field;
-		}
-		else
-		{
-			if($field['NAME']) $fieldName = $field['NAME'];
-			if(strlen($field['KEY']) > 0) $fieldKey = $field['KEY'];
-			if(strlen($field['INDEX']) > 0) $fieldIndex = $field['INDEX'];
-		}
-		$this->currentFieldKey = $fieldKey;
-		$this->currentFieldIndex = $fieldIndex;
-		
-		if(is_array($arConv))
-		{
-			$execConv = false;
-			$this->currentItemValues = $arItem;
-			$prefixPattern = '/(\{([^\s\}]*[\'"][^\'"\}]*[\'"])*[^\s\}]*\}|'.'\$\{[\'"]([^\s\}]*[\'"][^\'"\}]*[\'"])*[^\s\}]*[\'"]\}|#HASH#|'.implode('|', $this->rcurrencies).')/';
-			foreach($arConv as $k=>$v)
-			{
-				$condVal = $val;
-
-				if(preg_match('/^\{(\S*)\}$/', $v['CELL'], $m))
-				{
-					$condVal = $this->GetValueByXpath($m[1]);
-				}
-
-				if(strlen($v['FROM']) > 0) $v['FROM'] = preg_replace_callback($prefixPattern, array($this, 'ConversionReplaceValues'), $v['FROM']);
-				if($v['CELL']=='ELSE') $v['WHEN'] = '';
-				$condValNum = $this->GetFloatVal($condVal);
-				$fromNum = $this->GetFloatVal($v['FROM']);
-				if(($v['CELL']=='ELSE' && !$execConv)
-					|| ($v['WHEN']=='EQ' && $condVal==$v['FROM'])
-					|| ($v['WHEN']=='NEQ' && $condVal!=$v['FROM'])
-					|| ($v['WHEN']=='GT' && $condValNum > $fromNum)
-					|| ($v['WHEN']=='LT' && $condValNum < $fromNum)
-					|| ($v['WHEN']=='GEQ' && $condValNum >= $fromNum)
-					|| ($v['WHEN']=='LEQ' && $condValNum <= $fromNum)
-					|| ($v['WHEN']=='CONTAIN' && strpos($condVal, $v['FROM'])!==false)
-					|| ($v['WHEN']=='NOT_CONTAIN' && strpos($condVal, $v['FROM'])===false)
-					|| ($v['WHEN']=='REGEXP' && preg_match('/'.ToLower($v['FROM']).'/i', ToLower($condVal)))
-					|| ($v['WHEN']=='NOT_REGEXP' && !preg_match('/'.ToLower($v['FROM']).'/i', ToLower($condVal)))
-					|| ($v['WHEN']=='EMPTY' && strlen($condVal)==0)
-					|| ($v['WHEN']=='NOT_EMPTY' && strlen($condVal) > 0)
-					|| ($v['WHEN']=='ANY'))
-				{
-					if(strlen($v['TO']) > 0) $v['TO'] = preg_replace_callback($prefixPattern, array($this, 'ConversionReplaceValues'), $v['TO']);
-					if($v['THEN']=='REPLACE_TO') $val = $v['TO'];
-					elseif($v['THEN']=='REMOVE_SUBSTRING' && strlen($v['TO']) > 0) $val = str_replace($v['TO'], '', $val);
-					elseif($v['THEN']=='REPLACE_SUBSTRING_TO' && strlen($v['FROM']) > 0) $val = str_replace($v['FROM'], $v['TO'], $val);
-					elseif($v['THEN']=='ADD_TO_BEGIN') $val = $v['TO'].$val;
-					elseif($v['THEN']=='ADD_TO_END') $val = $val.$v['TO'];
-					elseif($v['THEN']=='LCASE') $val = ToLower($val);
-					elseif($v['THEN']=='UCASE') $val = ToUpper($val);
-					elseif($v['THEN']=='UFIRST') $val = preg_replace_callback('/^(\s*)(.*)$/', create_function('$m', 'return $m[1].ToUpper(substr($m[2], 0, 1)).ToLower(substr($m[2], 1));'), $val);
-					elseif($v['THEN']=='UWORD') $val = implode(' ', array_map(create_function('$m', 'return ToUpper(substr($m, 0, 1)).ToLower(substr($m, 1));'), explode(' ', $val)));
-					elseif($v['THEN']=='MATH_ROUND') $val = round($this->GetFloatVal($val));
-					elseif($v['THEN']=='MATH_MULTIPLY') $val = $this->GetFloatVal($val) * $this->GetFloatVal($v['TO']);
-					elseif($v['THEN']=='MATH_DIVIDE') $val = $this->GetFloatVal($val) / $this->GetFloatVal($v['TO']);
-					elseif($v['THEN']=='MATH_ADD') $val = $this->GetFloatVal($val) + $this->GetFloatVal($v['TO']);
-					elseif($v['THEN']=='MATH_SUBTRACT') $val = $this->GetFloatVal($val) - $this->GetFloatVal($v['TO']);
-					elseif($v['THEN']=='NOT_LOAD') $val = false;
-					elseif($v['THEN']=='EXPRESSION') $val = $this->ExecuteFilterExpression($val, $v['TO'], '');
-					elseif($v['THEN']=='STRIP_TAGS') $val = strip_tags($val);
-					elseif($v['THEN']=='CLEAR_TAGS') $val = preg_replace('/<([a-z][a-z0-9:]*)[^>]*(\/?)>/i','<$1$2>', $val);
-					elseif($v['THEN']=='TRANSLIT')
-					{
-						$arParams = array();
-						if($fieldName && !empty($iblockFields))
-						{
-							$paramName = '';
-							if($fieldName=='IE_CODE') $paramName = 'CODE';
-							if(preg_match('/^ISECT\d+_CODE$/', $fieldName)) $paramName = 'SECTION_CODE';
-							if($paramName && $iblockFields[$paramName]['DEFAULT_VALUE']['TRANSLITERATION']=='Y')
-							{
-								$arParams = $iblockFields[$paramName]['DEFAULT_VALUE'];
-							}
-						}
-						$val = $this->Str2Url($val, $arParams);
-					}
-					$execConv = true;
-				}
-			}
-		}
-		return $val;
-	}
-	
-	public function GetOfferParentId()
-	{
-		return (isset($this->offerParentId) ? $this->offerParentId : false);
-	}
-	
-	public function GetFieldSettings($key)
-	{
-		$fieldSettings = $this->fieldSettings[$key];
-		if(!is_array($fieldSettings)) $fieldSettings = array();
-		return $fieldSettings;
-	}
-	
-	public function GetCurrentIblock()
-	{
-		return $this->params['IBLOCK_ID'];
+		if(array_key_exists($val, $this->measureList)) return $val;
+		else return '';
 	}
 	
 	public function GetCachedOfferIblock($IBLOCK_ID)
@@ -7217,66 +7965,6 @@ class Importer {
 			$this->iblockoffers[$IBLOCK_ID] = \Bitrix\KitImportxml\Utils::GetOfferIblock($IBLOCK_ID, true);
 		}
 		return $this->iblockoffers[$IBLOCK_ID];
-	}
-	
-	public function IsChangedImage($fileId, $arNewFile)
-	{
-		$fileId = (int)$fileId;
-		if($this->params['ELEMENT_IMAGES_FORCE_UPDATE']=='Y' || !$fileId) return true;
-		$arFile = \Bitrix\KitImportxml\Utils::GetFileArray($fileId);
-		$arNewFileVal = $arNewFile;
-		if(isset($arNewFileVal['VALUE'])) $arNewFileVal = $arNewFileVal['VALUE'];
-		if(isset($arNewFileVal['DESCRIPTION'])) $arNewFile['description'] = $arNewFile['DESCRIPTION'];
-		list($width, $height, $type, $attr) = getimagesize($arNewFileVal['tmp_name']);
-		if(($arFile['EXTERNAL_ID']==$arNewFileVal['external_id']
-			|| ($arFile['FILE_SIZE']==$arNewFileVal['size'] 
-				&& $arFile['ORIGINAL_NAME']==$arNewFileVal['name'] 
-				&& (!$arFile['WIDTH'] || !$arFile['WIDTH'] || ($arFile['WIDTH']==$width && $arFile['HEIGHT']==$height))))
-			&& file_exists($_SERVER['DOCUMENT_ROOT'].\Bitrix\Main\IO\Path::convertLogicalToPhysical($arFile['SRC']))
-			&& (!isset($arNewFile['description']) || $arNewFile['description']==$arFile['DESCRIPTION']))
-		{
-			return false;
-		}
-		return true;
-	}
-	
-	public function GetFloatVal($val, $precision=0)
-	{
-		if(is_array($val)) $val = current($val);
-		$val = floatval(preg_replace('/[^\d\.\-]+/', '', str_replace(',', '.', $val)));
-		if($precision > 0) $val = round($val, $precision);
-		return $val;
-	}
-	
-	public function GetDateVal($val, $format = 'FULL')
-	{
-		$time = strtotime($val);
-		if($time > 0)
-		{
-			return ConvertTimeStamp($time, $format);
-		}
-		return false;
-	}
-	
-	public function Trim($str)
-	{
-		$str = trim($str);
-		$str = preg_replace('/(^(\xC2\xA0|\s)+|(\xC2\xA0|\s)+$)/s', '', $str);
-		return $str;
-	}
-	
-	public function Str2Url($string, $arParams=array())
-	{
-		if(!is_array($arParams)) $arParams = array();
-		if($arParams['TRANSLITERATION']=='Y')
-		{
-			if(isset($arParams['TRANS_LEN'])) $arParams['max_len'] = $arParams['TRANS_LEN'];
-			if(isset($arParams['TRANS_CASE'])) $arParams['change_case'] = $arParams['TRANS_CASE'];
-			if(isset($arParams['TRANS_SPACE'])) $arParams['replace_space'] = $arParams['TRANS_SPACE'];
-			if(isset($arParams['TRANS_OTHER'])) $arParams['replace_other'] = $arParams['TRANS_OTHER'];
-			if(isset($arParams['TRANS_EAT']) && $arParams['TRANS_EAT']=='N') $arParams['delete_repeat_replace'] = false;
-		}
-		return \CUtil::translit($string, LANGUAGE_ID, $arParams);
 	}
 	
 	public function ClearCompositeCache($link='')
@@ -7302,48 +7990,22 @@ class Importer {
 		}
 	}
 	
-	public function AddTagIblock($IBLOCK_ID)
+	public function GetIblockPropEnum($arFilter)
 	{
-		$IBLOCK_ID = (int)$IBLOCK_ID;
-		if($IBLOCK_ID <= 0) return;
-		$this->tagIblocks[$IBLOCK_ID] = $IBLOCK_ID;
-	}
-	
-	public function ClearIblocksTagCache($checkTime = false)
-	{
-		if($this->params['REMOVE_CACHE_AFTER_IMPORT']=='Y') return;
-		if($checkTime && (time() - $this->timeBeginTagCache < 60)) return;
-		if(is_callable(array('\CIBlock', 'clearIblockTagCache')))
+		if(class_exists('\Bitrix\Iblock\PropertyEnumerationTable')) $dbRes = \Bitrix\Iblock\PropertyEnumerationTable::getList(array('filter'=>$arFilter));
+		else 
 		{
-			if(is_callable(array('\CIBlock', 'enableClearTagCache'))) \CIBlock::enableClearTagCache();
-			foreach($this->tagIblocks as $IBLOCK_ID)
+			foreach(array('XML_ID', 'TMP_ID', 'VALUE') as $key)
 			{
-				\CIBlock::clearIblockTagCache($IBLOCK_ID);
-			}
-			if(is_callable(array('\CIBlock', 'disableClearTagCache'))) \CIBlock::disableClearTagCache();
-		}
-		$this->tagIblocks = array();
-		$this->timeBeginTagCache = time();
-	}
-	
-	public function GetRealXmlValue($val)
-	{
-		$val = \Bitrix\KitImportxml\Utils::ConvertDataEncoding($val, $this->fileEncoding, $this->siteEncoding);
-		if($this->params['HTML_ENTITY_DECODE']=='Y')
-		{
-			if(is_array($val))
-			{
-				foreach($val as $k=>$v)
+				if(isset($arFilter['='.$key]) && !isset($arFilter[$key]))
 				{
-					$val[$k] = html_entity_decode($v, ENT_QUOTES | ENT_HTML5, $this->siteEncoding);
+					$arFilter[$key] = $arFilter['='.$key];
+					unset($arFilter['='.$key]);
 				}
 			}
-			else
-			{
-				$val = html_entity_decode($val, ENT_QUOTES | ENT_HTML5, $this->siteEncoding);
-			}
+			$dbRes = \CIBlockPropertyEnum::GetList(array(), $arFilter);
 		}
-		return $val;
+		return $dbRes;
 	}
 	
 	public function GetSectionPathByLink($tmpId, $sep)
@@ -7395,38 +8057,5 @@ class Importer {
 		}
 
 		return (bool)in_array($sectionId, $this->sectIdtoSectIds[$sid]);
-	}
-	
-	public function OnShutdown()
-	{
-		$arError = error_get_last();
-		if(!is_array($arError) || !isset($arError['type']) || !in_array($arError['type'], array(E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR, E_RECOVERABLE_ERROR))) return;
-		
-		$this->EndWithError(sprintf(Loc::getMessage("KIT_IX_FATAL_ERROR"), $arError['type'], $arError['message'], $arError['file'], $arError['line']));
-	}
-	
-	public function HandleError($code, $message, $file, $line)
-	{
-		return true;
-	}
-	
-	public function HandleException($exception)
-	{
-		if(is_callable(array('\Bitrix\Main\Diag\ExceptionHandlerFormatter', 'format')))
-		{
-			$this->EndWithError(\Bitrix\Main\Diag\ExceptionHandlerFormatter::format($exception));
-		}
-		$this->EndWithError(sprintf(Loc::getMessage("KIT_IX_FATAL_ERROR"), '', $exception->getMessage(), $exception->getFile(), $exception->getLine()));
-	}
-	
-	public function EndWithError($error)
-	{
-		global $APPLICATION;
-		$APPLICATION->RestartBuffer();
-		ob_end_clean();
-		$this->errors[] = $error;
-		$this->SaveStatusImport();
-		echo '<!--module_return_data-->'.(\CUtil::PhpToJSObject($this->GetBreakParams()));
-		die();
 	}
 }

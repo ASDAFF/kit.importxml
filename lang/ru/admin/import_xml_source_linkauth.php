@@ -1,8 +1,4 @@
 <?
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 $MESS["KIT_IX_LAUTH_SETTINGS"] = "Настройки авторизации";
 $MESS["KIT_IX_LAUTH_FILELINK"] = "Ссылка на файл";
 $MESS["KIT_IX_LAUTH_PAGEAUTH"] = "Ссылка на страницу авторизации";
@@ -17,4 +13,5 @@ $MESS["KIT_IX_LAUTH_POSTPAGEAUTH"] = "Адрес для отправки пар�
 $MESS["KIT_IX_LAUTH_HEADERS"] = "Дополнительные http-заголовки";
 $MESS["KIT_IX_LAUTH_HEADER"] = "Заголовок";
 $MESS["KIT_IX_LAUTH_ADD_HEADER"] = "Добавить заголовок";
+$MESS["KIT_IX_AUTH_LINK_VIDEO"] = "Видео-инструкция по настройке параметров авторизации:";
 ?>

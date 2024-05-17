@@ -1,8 +1,4 @@
 <?
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 $MESS['KIT_IX_LIST_QUANTITY_STORE'] = "Количество на складе";
 $MESS['KIT_IX_LIST_PRICE'] = "Цена";
 $MESS['KIT_IX_LIST_SETTING_PROPERTIES_DEFAULT'] = "Значения полей и свойств элементов, отсутствующих в файле";

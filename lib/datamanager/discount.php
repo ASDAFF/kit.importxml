@@ -1,8 +1,4 @@
 <?php
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 namespace Bitrix\KitImportxml\DataManager;
 
 use Bitrix\Main\Loader;
@@ -19,11 +15,19 @@ class Discount
 		$this->discountModule = (Loader::includeModule('sale') && (string)\Bitrix\Main\Config\Option::get('sale', 'use_sale_discount_only') == 'Y' ? 'sale' : 'catalog');
 	}
 	
-	public function SaveDiscount($ID, $IBLOCK_ID, $arFieldsProductDiscount, $name, $isOffer = false)
+	public function SaveDiscount($ID, $IBLOCK_ID, $arFieldsProductDiscount, $name='', $isOffer = false)
 	{
 		if(!isset($arFieldsProductDiscount['VALUE'])
 			&& !isset($arFieldsProductDiscount['XML_ID'])
 			&& !isset($arFieldsProductDiscount['BRGIFT'])) return;
+		if(strlen($name)==0)
+		{
+			if($arElem = \Bitrix\Iblock\ElementTable::getList(array('filter'=>array('ID'=>$ID), 'select'=>array('NAME')))->Fetch())
+			{
+				$name = $arElem['NAME'];
+			}
+			else return;
+		}
 		
 		if($this->discountModule=='sale')
 		{
@@ -38,7 +42,7 @@ class Discount
 			unset($arFieldsProductDiscount['BRGIFT']);
 		}
 		
-		$onlyVal = (bool)(count(array_diff(array_keys($arFieldsProductDiscount), array('VALUE', 'VALUE_TYPE', 'CATALOG_GROUP_IDS')))==0);
+		$onlyVal = (bool)(count(array_diff(array_keys($arFieldsProductDiscount), array('VALUE', 'VALUE_TYPE', 'CATALOG_GROUP_IDS', 'LID_VALUES')))==0);
 		$arSites = $this->GetIblockSite($IBLOCK_ID);
 		$lidValues = array();
 		if(isset($arFieldsProductDiscount['LID_VALUES']))
@@ -64,11 +68,16 @@ class Discount
 				$arFieldsProductDiscount['XML_ID'] = 'IMPORT_'.$arFieldsProductDiscount['VALUE_TYPE'].'_'.$arFieldsProductDiscount['VALUE'].'_'.$arFieldsProductDiscount['SITE_ID'].(is_array($arFieldsProductDiscount['CATALOG_GROUP_IDS']) ? '_'.implode('|', $arFieldsProductDiscount['CATALOG_GROUP_IDS']) : '');
 				
 				$findProduct = false;
-				$dbRes = \CCatalogDiscount::GetList(array(), array('PRODUCT_ID'=>$ID, '%XML_ID'=>$arFieldsProductDiscount['XML_ID']), false, false, array('ID', 'XML_ID'));
+				$discountXmlId = '';
+				$dbRes = \CCatalogDiscount::GetList(array(), array('PRODUCT_ID'=>$ID, '%XML_ID'=>addcslashes($arFieldsProductDiscount['XML_ID'], '|')), false, false, array('ID', 'XML_ID'));
 				while($arDiscount = $dbRes->Fetch())
 				{
 					$suffix = trim(substr($arDiscount['XML_ID'], strlen($arFieldsProductDiscount['XML_ID'])));
-					if(strlen($suffix)==0 || preg_match('/^_\d+$/', $suffix)) $findProduct = true;
+					if(strlen($suffix)==0 || preg_match('/^_\d+$/', $suffix))
+					{
+						$findProduct = true;
+						$discountXmlId = $arDiscount['XML_ID'];
+					}
 				}
 				
 				if(!$findProduct)
@@ -76,7 +85,7 @@ class Discount
 					$lastError = '';
 					$isUpdate = false;
 					$suffix = '';
-					$dbRes = \CCatalogDiscount::GetList(array('XML_ID'=>'ASC'), array('%XML_ID'=>$arFieldsProductDiscount['XML_ID']), false, false, array('ID', 'XML_ID', 'CONDITIONS'));
+					$dbRes = \CCatalogDiscount::GetList(array('XML_ID'=>'ASC'), array('%XML_ID'=>addcslashes($arFieldsProductDiscount['XML_ID'], '|')), false, false, array('ID', 'XML_ID', 'CONDITIONS'));
 					while(!$isUpdate && ($arDiscount = $dbRes->Fetch()))
 					{
 						$suffix = trim(substr($arDiscount['XML_ID'], strlen($arFieldsProductDiscount['XML_ID'])));
@@ -114,6 +123,7 @@ class Discount
 						if(\CCatalogDiscount::Update($arDiscount['ID'], $arFieldsProductDiscount2))
 						{
 							$isUpdate = true;
+							$discountXmlId = $arDiscount['XML_ID'];
 						}
 						elseif($ex = $GLOBALS['APPLICATION']->GetException())
 						{
@@ -138,6 +148,7 @@ class Discount
 							else $arFieldsProductDiscount['NAME'] = Loc::getMessage("KIT_IX_DISCOUNT_NAME_TYPE_P").' '. $arFieldsProductDiscount['VALUE'].'%';
 						}
 						\CCatalogDiscount::Add($arFieldsProductDiscount);
+						$discountXmlId = $arFieldsProductDiscount2['XML_ID'];
 					}
 				}
 				
@@ -147,7 +158,7 @@ class Discount
 				{
 					\CCatalogDiscount::Delete($arDiscount['ID']);
 				}
-				$this->DeleteProductDiscount($ID, $arFieldsProductDiscount);
+				$this->DeleteProductDiscount($ID, array_merge($arFieldsProductDiscount, array('XML_ID'=>$discountXmlId)));
 			}
 			else
 			{
@@ -183,7 +194,11 @@ class Discount
 	
 	public function DeleteProductDiscount($ID, $arFieldsProductDiscount, $all=false)
 	{
-		$dbRes = \CCatalogDiscount::GetList(array(), array('PRODUCT_ID'=>$ID, '%XML_ID'=>'IMPORT_'), false, false, array('ID', 'VALUE', 'VALUE_TYPE', 'CONDITIONS', 'CATALOG_GROUP_ID'));
+		$arFilter = array('PRODUCT_ID'=>$ID, '%XML_ID'=>'IMPORT_');
+		if($arFieldsProductDiscount['SITE_ID']) $arFilter['SITE_ID'] = $arFieldsProductDiscount['SITE_ID'];
+		if($arFieldsProductDiscount['CATALOG_GROUP_IDS']) $arFilter['CATALOG_GROUP_ID'] = $arFieldsProductDiscount['CATALOG_GROUP_IDS'];
+		if($arFieldsProductDiscount['XML_ID']) $arFilter['!XML_ID'] = $arFieldsProductDiscount['XML_ID'];
+		$dbRes = \CCatalogDiscount::GetList(array(), $arFilter, false, false, array('ID', 'VALUE', 'VALUE_TYPE', 'CONDITIONS', 'CATALOG_GROUP_ID'));
 		$arDiscounts = array();
 		while($arDiscount = $dbRes->Fetch())
 		{
@@ -210,8 +225,7 @@ class Discount
 				{
 					if($v['CLASS_ID']=='CondIBElement' && ToLower($v['DATA']['logic'])=='equal')
 					{
-						$val = $arCond['CHILDREN'][$k]['DATA']['value'];
-						if(!is_array($val)) $val = array($val);
+						$val = $this->GetExistsProductIds($arCond['CHILDREN'][$k]['DATA']['value']);
 						$val = array_diff($val, array($ID));
 						if(!empty($val)) $arCond['CHILDREN'][$k]['DATA']['value'] = $val;
 						else unset($arCond['CHILDREN'][$k]);
@@ -225,7 +239,8 @@ class Discount
 	
 	public function GetDiscountProductCond($ID)
 	{
-		$arCond = \CCatalogCondTree::GetDefaultConditions();
+		$tree = new \CCatalogCondTree;
+		$arCond = $tree->GetDefaultConditions();
 		$arCond['CHILDREN'][] = array(
 			'CLASS_ID' => 'CondIBElement',
 			'DATA' => array(
@@ -414,13 +429,16 @@ class Discount
 			$arFieldsProductDiscount['ACTIVE_TO'] = ($arFieldsProductDiscount['ACTIVE_TO'] ? $this->ie->GetDateVal($arFieldsProductDiscount['ACTIVE_TO']) : '');
 			$arFieldsProductDiscount['PRIORITY'] = (isset($arFieldsProductDiscount['PRIORITY']) ? $this->ie->GetFloatVal($arFieldsProductDiscount['PRIORITY']) : 1);
 			$arFieldsProductDiscount['LAST_DISCOUNT'] = (isset($arFieldsProductDiscount['LAST_DISCOUNT']) ? $this->ie->GetBoolValue($arFieldsProductDiscount['LAST_DISCOUNT']) :"N");
-			$arFieldsProductDiscount['SORT'] = 100;
+			$arFieldsProductDiscount['LAST_LEVEL_DISCOUNT'] = (isset($arFieldsProductDiscount['LAST_LEVEL_DISCOUNT']) ? $this->ie->GetBoolValue($arFieldsProductDiscount['LAST_LEVEL_DISCOUNT']) :"N");
+			if(isset($arFieldsProductDiscount['SORT'])) $arFieldsProductDiscount['SORT'] = (int)$arFieldsProductDiscount['SORT'];
+			else $arFieldsProductDiscount['SORT'] = 100;
+			
 			ksort($arFieldsProductDiscount);
 			$md5Params = md5(serialize($arFieldsProductDiscount));
 			
 			if(!$customXmlId)
 			{
-				$arFieldsProductDiscount['XML_ID'] = 'IMPORT_'.$arFieldsProductDiscount['VALUE_TYPE'].'_'.$arFieldsProductDiscount['VALUE'].'_'.$arFieldsProductDiscount['LID'];
+				$arFieldsProductDiscount['XML_ID'] = 'IMPORT_'.$arFieldsProductDiscount['VALUE_TYPE'].'_'.$arFieldsProductDiscount['VALUE'].'_'.$arFieldsProductDiscount['LID'].(is_array($arFieldsProductDiscount['CATALOG_GROUP_IDS']) && count($arFieldsProductDiscount['CATALOG_GROUP_IDS']) > 0 ? '_'.implode('|', $arFieldsProductDiscount['CATALOG_GROUP_IDS']) : '');
 				if(!$onlyVal)
 				{
 					$arFieldsProductDiscount['XML_ID'] .= '_'.$md5Params;
@@ -431,7 +449,7 @@ class Discount
 			while($arDiscount = $dbRes->Fetch())
 			{
 				$arCond = unserialize($arDiscount['ACTIONS']);
-				$childrenKey1 = $childrenKey2 = -1;
+				$childrenKey1 = $childrenKey2 = $childrenKey3 = -1;
 				if(is_array($arCond['CHILDREN']))
 				{
 					foreach($arCond['CHILDREN'] as $k=>$v)
@@ -446,6 +464,10 @@ class Discount
 									if($v2['CLASS_ID']=='CondIBElement' && ToLower($v2['DATA']['logic'])=='equal')
 									{
 										$childrenKey2 = $k2;
+									}
+									elseif($v2['CLASS_ID']=='CondCatalogPriceType' && ToLower($v2['DATA']['logic'])=='equal')
+									{
+										$childrenKey3 = $k2;
 									}
 								}
 							}
@@ -465,6 +487,10 @@ class Discount
 					else
 					{
 						$arCond['CHILDREN'][$childrenKey1]['CHILDREN'][$childrenKey2]['DATA']['value'] = $val;
+						if($childrenKey3 >= 0 && is_array($arFieldsProductDiscount['CATALOG_GROUP_IDS']) && count($arFieldsProductDiscount['CATALOG_GROUP_IDS']) > 0)
+						{
+							$arCond['CHILDREN'][$childrenKey1]['CHILDREN'][$childrenKey3]['DATA']['value'] = $arFieldsProductDiscount['CATALOG_GROUP_IDS'];
+						}
 					}
 				}
 				else
@@ -477,7 +503,10 @@ class Discount
 					$arFieldsProductDiscount2 = array_merge($this->PrepareSaleDiscountFields($arFieldsProductDiscount), $arFieldsProductDiscount2);
 				}
 				
-				\CSaleDiscount::Update($arDiscount['ID'], $arFieldsProductDiscount2);
+				if(!\CSaleDiscount::Update($arDiscount['ID'], $arFieldsProductDiscount2))
+				{
+					\CSaleDiscount::Update($arDiscount['ID'], array_merge($arFieldsProductDiscount2, array('PREDICTIONS'=>array('CLASS_ID' => 'CondGroup'))));
+				}
 				$discountId = $arDiscount['ID'];
 			}
 			
@@ -555,7 +584,10 @@ class Discount
 			$arFieldsProductDiscount['ACTIVE_TO'] = ($arFieldsProductDiscount['ACTIVE_TO'] ? $this->ie->GetDateVal($arFieldsProductDiscount['ACTIVE_TO']) : '');
 			$arFieldsProductDiscount['PRIORITY'] = (isset($arFieldsProductDiscount['PRIORITY']) ? $this->ie->GetFloatVal($arFieldsProductDiscount['PRIORITY']) : 1);
 			$arFieldsProductDiscount['LAST_DISCOUNT'] = (isset($arFieldsProductDiscount['LAST_DISCOUNT']) ? $this->ie->GetBoolValue($arFieldsProductDiscount['LAST_DISCOUNT']) :"N");
-			$arFieldsProductDiscount['SORT'] = 100;
+			$arFieldsProductDiscount['LAST_LEVEL_DISCOUNT'] = (isset($arFieldsProductDiscount['LAST_LEVEL_DISCOUNT']) ? $this->ie->GetBoolValue($arFieldsProductDiscount['LAST_LEVEL_DISCOUNT']) :"N");
+			if(isset($arFieldsProductDiscount['SORT'])) $arFieldsProductDiscount['SORT'] = (int)$arFieldsProductDiscount['SORT'];
+			else $arFieldsProductDiscount['SORT'] = 100;
+			
 			ksort($arFieldsProductDiscount);
 			$arTmp = $arFieldsProductDiscount;
 			unset($arTmp['VALUE_TYPE'], $arTmp['VALUE']);
@@ -563,7 +595,7 @@ class Discount
 			
 			if(!$customXmlId)
 			{
-				$arFieldsProductDiscount['XML_ID'] = 'IMPORT_'.$arFieldsProductDiscount['LID'];
+				$arFieldsProductDiscount['XML_ID'] = 'IMPORT_'.$arFieldsProductDiscount['LID'].(is_array($arFieldsProductDiscount['CATALOG_GROUP_IDS']) && count($arFieldsProductDiscount['CATALOG_GROUP_IDS']) > 0 ? '_'.implode('|', $arFieldsProductDiscount['CATALOG_GROUP_IDS']) : '');
 				if(!$onlyVal)
 				{
 					$arFieldsProductDiscount['XML_ID'] .= '_'.$md5Params;
@@ -658,9 +690,9 @@ class Discount
 				Array(
 					'CLASS_ID' => 'ActSaleBsktGrp',
 					'DATA' => Array(
-						'Type' => 'Discount',
+						'Type' => ($arFieldsProductDiscount['VALUE_TYPE']=='S' ? 'Closeout' : 'Discount'),
 						'Value' => $arFieldsProductDiscount['VALUE'],
-						'Unit' => ($arFieldsProductDiscount['VALUE_TYPE']=='F' ? 'CurEach' : 'Perc'),
+						'Unit' => (in_array($arFieldsProductDiscount['VALUE_TYPE'], array('F', 'S')) ? 'CurEach' : 'Perc'),
 						'All' => 'AND',
 						'Max' => (isset($arFieldsProductDiscount['MAX_DISCOUNT']) && (float)$arFieldsProductDiscount['MAX_DISCOUNT'] > 0 ? $arFieldsProductDiscount['MAX_DISCOUNT'] : 0),
 						'True' => 'True'
@@ -677,6 +709,16 @@ class Discount
 				)
 			)
 		);
+		if(is_array($arFieldsProductDiscount['CATALOG_GROUP_IDS']) && count($arFieldsProductDiscount['CATALOG_GROUP_IDS']) > 0)
+		{
+			$arCond['CHILDREN'][0]['CHILDREN'][] = Array(
+				'CLASS_ID' => 'CondCatalogPriceType',
+				'DATA' => Array(
+					'logic' => 'Equal',
+					'value' => $arFieldsProductDiscount['CATALOG_GROUP_IDS']
+				)
+			);
+		}
 		return $arCond;
 	}
 	
@@ -746,12 +788,12 @@ class Discount
 						$val = $this->GetExistsProductIds($arCond['CHILDREN'][$childrenKey1]['CHILDREN'][$childrenKey2]['DATA']['value']);
 						if(!is_array($val) && $val==$productId)
 						{
-							\CSaleDiscount::Delete($arDiscount['ID']);
+							$this->DeleteSaleDiscount($arDiscount['ID']);
 						}
 						if(is_array($val) && in_array($productId, $val))
 						{
 							$val = array_diff($val, array($productId));
-							if(empty($val)) \CSaleDiscount::Delete($arDiscount['ID']);
+							if(empty($val)) $this->DeleteSaleDiscount($arDiscount['ID']);
 							else
 							{
 								$arCond['CHILDREN'][$childrenKey1]['CHILDREN'][$childrenKey2]['DATA']['value'] = $val;
@@ -833,7 +875,7 @@ class Discount
 				
 				if(empty($arCond['CHILDREN']))
 				{
-					\CSaleDiscount::Delete($arDiscount['ID']);
+					$this->DeleteSaleDiscount($arDiscount['ID']);
 				}
 				else
 				{
@@ -933,7 +975,7 @@ class Discount
 			$dbRes = \CSaleDiscount::GetList(array(), array('!ACTIVE_TO'=>false, '<ACTIVE_TO'=>ConvertTimeStamp(false, 'FULL')), false, false, array('ID'));
 			while($arDiscount = $dbRes->Fetch())
 			{
-				\CSaleDiscount::Delete($arDiscount['ID']);
+				$this->DeleteSaleDiscount($arDiscount['ID']);
 			}
 		}
 		else
@@ -944,5 +986,11 @@ class Discount
 				\CCatalogDiscount::Delete($arDiscount['ID']);
 			}
 		}
+	}
+	
+	public function DeleteSaleDiscount($ID)
+	{
+		$disc = new \CSaleDiscount();
+		$disc->Delete($ID);
 	}
 }

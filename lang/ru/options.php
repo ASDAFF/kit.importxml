@@ -1,8 +1,4 @@
 <?
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 $MESS["KIT_IX_SETTINGS"] = "Настройки";
 $MESS["KIT_IX_SETTINGS_TITLE"] = "Настройки";
 $MESS["KIT_IX_SET_MAX_EXECUTION_TIME"] = "Установить максимальное время выполнения скрипта импорта?";
@@ -15,28 +11,54 @@ $MESS["KIT_IX_OPTIONS_BTN_HINT_RESTORE_DEFAULT_WARNING"] = "Внимание! В
 $MESS["KIT_IX_OPTIONS_CRON_SETTINGS"] = "Настройки для импорта через cron";
 $MESS["KIT_IX_OPTIONS_CRON_CONTINUE_LOADING"] = "Продолжать прерванный импорт?";
 $MESS["KIT_IX_OPTIONS_CRON_REMOVE_LOADED_FILE"] = "Удалять загруженный файл?";
+$MESS["KIT_IX_OPTIONS_CRON_USER"] = "Пользователь для импорта в кроне";
+$MESS["KIT_IX_OPTIONS_CRON_USER_HINT"] = "Данный пользователь будет записан в полях &laquo;Кем создан&raquo; и &laquo;Кем изменен&raquo; при импорте элементов и разделов инфоблока в кроне";
 $MESS["KIT_IX_EXECUTION_DELAY"] = "Задержка между шагами импорта, сек.";
 $MESS["KIT_IX_OPTIONS_CRON_NEED_CHECKSIZE"] = "Не загружать повторно один и тот же файл?";
 $MESS["KIT_IX_OPTIONS_CRON_NEED_CHECKSIZE_HINT"] = "Осуществляется проверка md5-хеша от файла. Т.е., модуль увидит изменения файла даже если размер файла не изменился.";
+$MESS["KIT_IX_OPTIONS_EXTERNAL_TRANSLATE"] = "Сервисы перевода";
+$MESS["KIT_IX_OPTIONS_TRANSLATE_YANDEX"] = "Ключ сервиса Яндекс Переводчик";
+$MESS["KIT_IX_OPTIONS_TRANSLATE_GOOGLE"] = "Ключ сервиса Google Переводчик";
 $MESS["KIT_IX_OPTIONS_EXTERNAL_SERVICES"] = "Настройки внешних сервисов";
 $MESS["KIT_IX_OPTIONS_YANDEX_DISC"] = "Яндекс.Диск";
 $MESS["KIT_IX_OPTIONS_YANDEX_DISC_APIKEY"] = "OAuth-токен для Яндекс.Диска";
 $MESS["KIT_IX_OPTIONS_YANDEX_DISC_APIKEY_GET"] = "Получить токен";
+$MESS["KIT_IX_OPTIONS_GOOGLE_DRIVE"] = "Google.Drive";
+$MESS["KIT_IX_OPTIONS_GOOGLE_DRIVE_APIKEY"] = "OAuth-токен для Google.Drive";
+$MESS["KIT_IX_OPTIONS_GOOGLE_DRIVE_APIKEY_GET"] = "Получить токен";
 $MESS["KIT_IX_OPTIONS_CLOUD_MAILRU"] = "Облако mail.ru";
 $MESS["KIT_IX_OPTIONS_CLOUD_MAILRU_LOGIN"] = "Логин mail.ru";
 $MESS["KIT_IX_OPTIONS_CLOUD_MAILRU_PASSWORD"] = "Пароль mail.ru";
+$MESS["KIT_IX_OPTIONS_PROXY"] = "Настройки прокси";
+$MESS["KIT_IX_OPTIONS_PROXY_HOST"] = "IP адрес";
+$MESS["KIT_IX_OPTIONS_PROXY_PORT"] = "Порт";
+$MESS["KIT_IX_OPTIONS_PROXY_USER"] = "Логин";
+$MESS["KIT_IX_OPTIONS_PROXY_PASSWORD"] = "Пароль";
 $MESS["KIT_IX_AUTO_CONTINUE_IMPORT"] = "Автоматически продолжать импорт при потере связи с сервером?";
 $MESS["KIT_IX_AUTO_CORRECT_ENCODING"] = "Автоматически исправлять неправильную кодировку файла";
 $MESS["KIT_IX_OPTIONS_NOTIFY"] = "Настройки Email-уведомлений";
 $MESS["KIT_IX_OPTIONS_NOTIFY_MODE"] = "Режим отправки уведомлений";
-$MESS["KIT_IX_OPTIONS_NOTIFY_MODE_NONE"] = "Не оправлять уведомления";
+$MESS["KIT_IX_OPTIONS_NOTIFY_MODE_NONE"] = "Не отправлять уведомления";
 $MESS["KIT_IX_OPTIONS_NOTIFY_MODE_CRON"] = "Оправлять уведомления только при запуске импорта по крону";
 $MESS["KIT_IX_OPTIONS_NOTIFY_MODE_ALL"] = "Оправлять уведомления при любом запуске импорта";
 $MESS["KIT_IX_OPTIONS_NOTIFY_EMAIL"] = "Email-адрес для отправки уведомлений";
 $MESS["KIT_IX_OPTIONS_NOTIFY_BEGIN_IMPORT"] = "Отправлять уведомление при начале импорта";
 $MESS["KIT_IX_OPTIONS_NOTIFY_END_IMPORT"] = "Отправлять уведомление после окончания импорта";
+$MESS["KIT_IX_OPTIONS_NOTIFY_BREAK_IMPORT"] = "Отправлять уведомления при прерывании импорта в кроне";
+$MESS["KIT_IX_OPTIONS_NOTIFY_BREAK_IMPORT_NC"] = "Отправлять уведомления, если файл импорта не изменен";
+$MESS["KIT_IX_OPTIONS_NOTIFY_BREAK_IMPORT_NC_OFF"] = "Не отправлять";
+$MESS["KIT_IX_OPTIONS_NOTIFY_BREAK_IMPORT_NC_ON"] = "При каждом запуске импорта";
+$MESS["KIT_IX_OPTIONS_NOTIFY_BREAK_IMPORT_NC_DAYS"] = "Через n дней с момента последнего запуска";
+$MESS["KIT_IX_OPTIONS_NOTIFY_BREAK_IMPORT_NC_HOURS"] = "Через n часов с момента последнего запуска";
 $MESS["KIT_IX_OPTIONS_DISCOUNT"] = "Настройки импорта скидок";
 $MESS["KIT_IX_OPTIONS_DISCOUNT_MODE"] = "Режим загрузки правил работы с корзиной";
 $MESS["KIT_IX_OPTIONS_DISCOUNT_MODE_SPLIT"] = "Создавать отдельные правила по размеру скидки";
 $MESS["KIT_IX_OPTIONS_DISCOUNT_MODE_JOIN"] = "Объединять все скидки в одно правило";
+$MESS["KIT_IX_OPTIONS_CATALOG_RELS"] = "Связка товаров с торговыи предложениями";
+$MESS["KIT_IX_OPTIONS_NO_CHOOSEN"] = "- не выбрано -";
+$MESS["KIT_IX_OPTIONS_IBLOCK_PRODUCTS"] = "Инфоблок товаров";
+$MESS["KIT_IX_OPTIONS_IBLOCK_OFFERS"] = "Инфоблок торговых предложений";
+$MESS["KIT_IX_OPTIONS_IBLOCK_OFFERS_PROP"] = "Свойство для связки товаров и предложений";
+$MESS["KIT_IX_OPTIONS_ADD_RELS"] = "Добавить связку";
+$MESS["KIT_IX_OPTIONS_REMOVE"] = "Удалить";
 ?>

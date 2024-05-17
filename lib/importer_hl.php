@@ -1,8 +1,4 @@
 <?php
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Loader;
@@ -13,12 +9,14 @@ class ImporterHl {
 	protected static $moduleId = 'kit.importxml';
 	var $xmlParts = array();
 	var $rcurrencies = array('#USD#', '#EUR#');
+	var $getGetPartXmlObjects = array();
 	
 	function __construct($filename, $params, $fparams, $stepparams, $pid = false)
 	{
 		$this->filename = $_SERVER['DOCUMENT_ROOT'].$filename;
 		$this->params = $params;
 		$this->fparams = $fparams;
+		$this->memoryLimit = max(128*1024*1024, (int)\Bitrix\KitImportxml\Utils::GetIniAbsVal('memory_limit'));
 		$this->sections = array();
 		$this->propVals = array();
 		$this->hlbl = array();
@@ -118,7 +116,7 @@ class ImporterHl {
 	
 	public function CheckTimeEnding($time)
 	{
-		return ($this->params['MAX_EXECUTION_TIME'] && (time()-$time >= $this->params['MAX_EXECUTION_TIME']));
+		return ($this->params['MAX_EXECUTION_TIME'] && (time()-$time >= $this->params['MAX_EXECUTION_TIME'] || $this->memoryLimit - memory_get_peak_usage() < 2097152));
 	}
 	
 	public function Import()
@@ -173,6 +171,8 @@ class ImporterHl {
 					continue;
 				}
 				$lastElement = end($arUpdatedIds);
+				$arFields = array();
+				\Bitrix\KitImportxml\Utils::AddFilterHighload($arFields, $this->params['ELEMENT_MISSING_FILTER'], $HIGHLOADBLOCK_ID);
 				$arFields['!ID'] = $arUpdatedIds;
 				if($this->stepparams['deactivate_element_first'] > 0) $arFields['>ID'] = $this->stepparams['deactivate_element_first'];
 				if($lastElement < $this->stepparams['deactivate_element_last']) $arFields['<=ID'] = $lastElement;
@@ -195,6 +195,21 @@ class ImporterHl {
 		
 		$oProfile = \Bitrix\KitImportxml\Profile::getInstance('highload');
 		$oProfile->UpdateFileHash($this->pid, $this->filename);
+		
+		foreach(GetModuleEvents(static::$moduleId, "OnEndImport", true) as $arEvent)
+		{
+			$arEventData = array('HIGHLOADBLOCK_ID' => $this->params['HIGHLOADBLOCK_ID']);
+			foreach($this->stepparams as $k=>$v)
+			{
+				if(!is_array($v) && strpos($k, '/')===false) $arEventData[ToUpper($k)] = $v;
+			}
+			$arProfile = $oProfile->GetFieldsByID($this->pid);
+			$arEventData['PROFILE_NAME'] = $arProfile['NAME'];
+			$arEventData['IMPORT_START_DATETIME'] = (is_callable(array($arProfile['DATE_START'], 'toString')) ? $arProfile['DATE_START']->toString() : '');
+			$arEventData['IMPORT_FINISH_DATETIME'] = ConvertTimeStamp(false, 'FULL');
+			
+			$bEventRes = ExecuteModuleEventEx($arEvent, array('H'.$this->pid, $arEventData));
+		}
 		
 		return $this->GetBreakParams('finish');
 	}
@@ -229,7 +244,7 @@ class ImporterHl {
 		foreach($this->params['FIELDS'] as $k=>$fieldFull)
 		{
 			list($xpath, $field) = explode(';', $fieldFull, 2);
-			//if(strpos($field, '|')!==false) $field = substr($field, 0, strpos($field, '|'));
+			//if(mb_strpos($field, '|')!==false) $field = mb_substr($field, 0, mb_strpos($field, '|'));
 			$field2 = '';
 			if(strpos($field, '|')!==false)
 			{
@@ -241,6 +256,7 @@ class ImporterHl {
 				$field2 = substr($fieldName, 0, strpos($fieldName, '_') + 1).$field2;
 			}
 			
+			if(!is_array($this->fparams[$k])) $this->fparams[$k] = array();
 			$this->fieldSettings[$field] = $this->fparams[$k];
 			
 			if($this->fparams[$k]['SET_NEW_ONLY']=='Y')
@@ -329,8 +345,7 @@ class ImporterHl {
 			$cachedCountRows = (int)$this->stepparams[$cachedCountRowsKey];
 		}
 		
-		$xml = new \XMLReader();
-		$res = $xml->open($this->filename);
+		$xml = Utils::GetXmlReaderObject($this->filename);
 		
 		$arObjects = array();
 		$arObjectNames = array();
@@ -470,8 +485,11 @@ class ImporterHl {
 		return false;
 	}
 	
-	public function GetPartXmlObject($xpath)
+	public function GetPartXmlObject($xpath, $wChild=true)
 	{
+		$xpath = trim(trim($xpath), '/');
+		if(strlen($xpath) == 0) return;
+		
 		if(!class_exists('\XMLReader'))
 		{
 			$xmlObject = simplexml_load_file($this->filename);
@@ -480,92 +498,123 @@ class ImporterHl {
 			return $rows;
 		}
 		
-		$xml = new \XMLReader();
-		$res = $xml->open($this->filename);
-		
-		$arObjects = array();
-		$arObjectNames = array();
-		$arXPaths = array();
-		$curDepth = 0;
-		$isRead = false;
-		$break = false;
-		while(($isRead || $xml->read()) && !$break) 
+		$xpath = preg_replace('/\[\d+\]/', '', $xpath);
+		$xpathOrig = $xpath;
+		if(($pos = mb_strpos($xpath, '['))!==false)
 		{
+			$xpath = mb_substr($xpath, 0, $pos);
+			$wChild = true;
+		}
+		
+		$xpartKey = $xpath.'|'.($wChild ? 1 : 0);
+		if(!isset($this->getGetPartXmlObjects[$xpartKey]))
+		{			
+			$arXpath = $arXpathOrig = explode('/', trim($xpath, '/'));
+			$xml = Utils::GetXmlReaderObject($this->filename);
+			
+			$arObjects = array();
+			$arObjectNames = array();
+			$arXPaths = array();
+			$curDepth = 0;
 			$isRead = false;
-			if($xml->nodeType == \XMLReader::ELEMENT) 
+			$break = false;
+			while(($isRead || $xml->read()) && !$break) 
 			{
-				$curDepth = $xml->depth;
-				$arObjectNames[$curDepth] = $xml->name;
-				$extraDepth = $curDepth + 1;
-				while(isset($arObjectNames[$extraDepth]))
+				$isRead = false;
+				if($xml->nodeType == \XMLReader::ELEMENT) 
 				{
-					unset($arObjectNames[$extraDepth]);
-					$extraDepth++;
-				}
-				
-				$curXPath = implode('/', $arObjectNames);
-				if($this->siteEncoding!=$this->fileEncoding)
-				{
-					$curXPath = \Bitrix\Main\Text\Encoding::convertEncoding($curXPath, $this->fileEncoding, $this->siteEncoding);
-				}
-				if(strpos($xpath, $curXPath)!==0 && strpos($curXPath, $xpath)!==0) continue;
-				
-				$arAttributes = array();
-				if($xml->moveToFirstAttribute())
-				{
-					$arAttributes[] = array('name'=>$xml->name, 'value'=>$xml->value, 'namespaceURI'=>$xml->namespaceURI);
-					while($xml->moveToNextAttribute ())
+					$curDepth = $xml->depth;
+					$arObjectNames[$curDepth] = $xml->name;
+					$extraDepth = $curDepth + 1;
+					while(isset($arObjectNames[$extraDepth]))
+					{
+						unset($arObjectNames[$extraDepth]);
+						$extraDepth++;
+					}
+					
+					$curXPath = implode('/', $arObjectNames);
+					$curXPath = \Bitrix\KitImportxml\Utils::ConvertDataEncoding($curXPath, $this->fileEncoding, $this->siteEncoding);
+					if(strpos($xpath.'/', $curXPath.'/')!==0 && strpos($curXPath.'/', $xpath.'/')!==0)
+					{
+						if(isset($arObjects[$curDepth]) && !in_array(implode('/', array_slice($arXpathOrig, 0, $curDepth+1)), $this->xpathMulti))
+						{
+							$break = true;
+						}
+						continue;
+					}
+					if(strlen($curXPath)>strlen($xpath) && !$wChild) continue;
+					
+					$arAttributes = array();
+					if($xml->moveToFirstAttribute())
 					{
 						$arAttributes[] = array('name'=>$xml->name, 'value'=>$xml->value, 'namespaceURI'=>$xml->namespaceURI);
+						while($xml->moveToNextAttribute ())
+						{
+							$arAttributes[] = array('name'=>$xml->name, 'value'=>$xml->value, 'namespaceURI'=>$xml->namespaceURI);
+						}
 					}
-				}
-				$xml->moveToElement();
-				
+					$xml->moveToElement();
+					
 
-				$curName = $xml->name;
-				$curValue = null;
-				//$curNamespace = ($xml->namespaceURI ? $xml->namespaceURI : null);
-				$curNamespace = null;
-				if($xml->namespaceURI && strpos($curName, ':')!==false)
-				{
-					$curNamespace = $xml->namespaceURI;
-				}
+					$curName = $xml->name;
+					$curValue = null;
+					//$curNamespace = ($xml->namespaceURI ? $xml->namespaceURI : null);
+					$curNamespace = null;
+					if($xml->namespaceURI && strpos($curName, ':')!==false)
+					{
+						$curNamespace = $xml->namespaceURI;
+					}
 
-				$isSubRead = false;
-				while(($xml->read() && ($isSubRead = true)) && ($xml->nodeType == \XMLReader::SIGNIFICANT_WHITESPACE)){}
-				if($xml->nodeType == \XMLReader::TEXT || $xml->nodeType == \XMLReader::CDATA)
-				{
-					$curValue = $xml->value;
-				}
-				else
-				{
-					$isRead = $isSubRead;
-				}
+					$isSubRead = false;
+					while(($xml->read() && ($isSubRead = true)) && ($xml->nodeType == \XMLReader::SIGNIFICANT_WHITESPACE)){}
+					if($xml->nodeType == \XMLReader::TEXT || $xml->nodeType == \XMLReader::CDATA)
+					{
+						$curValue = $xml->value;
+					}
+					else
+					{
+						$isRead = $isSubRead;
+					}
 
-				if($curDepth == 0)
-				{
-					$xmlObj = new \SimpleXMLElement('<'.$curName.'></'.$curName.'>');
-					$arObjects[$curDepth] = &$xmlObj;
-				}
-				else
-				{
-					$curValue = str_replace('&', '&amp;', $curValue);
-					$arObjects[$curDepth] = $arObjects[$curDepth - 1]->addChild($curName, $curValue, $curNamespace);
-				}			
+					if($curDepth == 0)
+					{
+						//$xmlObj = new \SimpleXMLElement('<'.$curName.'></'.$curName.'>');
+						if(($pos = mb_strpos($curName, ':'))!==false)
+						{
+							$rootNS = mb_substr($curName, 0, $pos);
+							$curName = mb_substr($curName, mb_strlen($rootNS) + 1);
+						}
+						$xmlObj = new \SimpleXMLElement('<'.$curName.'></'.$curName.'>', 0, false, $rootNS, true);
+						$arObjects[$curDepth] = &$xmlObj;
+					}
+					else
+					{
+						$curValue = str_replace('&', '&amp;', $curValue);
+						$arObjects[$curDepth] = $arObjects[$curDepth - 1]->addChild($curName, $curValue, $curNamespace);
+					}			
 
-				foreach($arAttributes as $arAttr)
-				{
-					if(strpos($arAttr['name'], ':')!==false && $arAttr['namespaceURI']) $arObjects[$curDepth]->addAttribute($arAttr['name'], $arAttr['value'], $arAttr['namespaceURI']);
-					else $arObjects[$curDepth]->addAttribute($arAttr['name'], $arAttr['value']);
+					foreach($arAttributes as $arAttr)
+					{
+						if(strpos($arAttr['name'], ':')!==false && $arAttr['namespaceURI']) $arObjects[$curDepth]->addAttribute($arAttr['name'], $arAttr['value'], $arAttr['namespaceURI']);
+						else $arObjects[$curDepth]->addAttribute($arAttr['name'], $arAttr['value']);
+					}
+					
+					//if(strlen($xpath)==strlen($curXPath) && !$wChild) $break = true;
 				}
 			}
+			$xml->close();
+			$this->getGetPartXmlObjects[$xpartKey] = $xmlObj;
 		}
-		$xml->close();
+		$xmlObj = $this->getGetPartXmlObjects[$xpartKey];
 
 		if(is_object($xmlObj))
 		{
-			//return $xmlObj->xpath('/'.$xpath);
-			return $this->Xpath($xmlObj, '/'.$xpath);
+			$res = $this->Xpath($xmlObj, '/'.$xpathOrig);
+			if($res===false && preg_match('/^[^\/]+\/(.+\[.*)$/', $xpathOrig, $m))
+			{
+				$res = $this->Xpath($xmlObj, $m[1]);
+			}
+			return $res;
 		}
 		return false;
 	}
@@ -615,7 +664,11 @@ class ImporterHl {
 					$val = $arItem[$k];
 					$valOrig = $arItem['~'.$k];
 					$val = $this->ApplyConversions($valOrig, $v['CONVERSION'], array());
-					$val = ToLower(trim($val));
+					if(is_array($val))
+					{
+						$val = implode($this->params['ELEMENT_MULTIPLE_SEPARATOR'], array_diff($val, array('')));
+					}
+					else $val = ToLower(trim($val));
 				}
 				else
 				{
@@ -668,29 +721,33 @@ class ImporterHl {
 	{
 		$expression = trim($expression);
 		try{				
-			if(stripos($expression, 'return')===0)
+			if(preg_match('/(^|\n)[\r\t\s]*return/is', $expression))
 			{
-				return eval($expression.';');
+				$command = $expression.';';
+				return eval($command);
 			}
-			elseif(preg_match('/\$val\s*=/', $expression))
+			elseif(preg_match('/\$val\s*=[^=]/', $expression))
 			{
-				eval($expression.';');
+				$command = $expression.';';
+				eval($command);
 				return $val;
 			}
 			else
 			{
-				return eval('return '.$expression.';');
+				$command = 'return '.$expression.';';
+				return eval($command);
 			}
-		}catch(Exception $ex){
+		}catch(\Exception $ex){
 			return $altReturn;
 		}
 	}
 	
 	public function ExecuteOnAfterSaveHandler($handler, $ID)
 	{
-		try{				
-			eval($handler.';');
-		}catch(Exception $ex){}
+		try{
+			$command = $handler.';';
+			eval($command);
+		}catch(\Exception $ex){}
 	}
 	
 	public function GetNextRecord($time)
@@ -716,16 +773,16 @@ class ImporterHl {
 				{
 					if(preg_match('/^\{(\S*)\}$/', $v2['CELL'], $m))
 					{
-						$conditions[$k2]['XPATH'] = substr($m[1], strlen($this->params['GROUPS']['ELEMENT']) + 1);
+						$conditions[$k2]['XPATH'] = mb_substr($m[1], mb_strlen($this->params['GROUPS']['ELEMENT']) + 1);
 					}
 				}
 				
-				$xpath = substr($xpath, strlen($this->params['GROUPS']['ELEMENT']) + 1);
+				$xpath = mb_substr($xpath, mb_strlen($this->params['GROUPS']['ELEMENT']) + 1);
 				$arPath = array_diff(explode('/', $xpath), array(''));
 				$attr = false;
-				if(strpos($arPath[count($arPath)-1], '@')===0)
+				if(mb_strpos($arPath[count($arPath)-1], '@')===0)
 				{
-					$attr = substr(array_pop($arPath), 1);
+					$attr = mb_substr(array_pop($arPath), 1);
 				}
 				if(count($arPath) > 0)
 				{
@@ -813,10 +870,10 @@ class ImporterHl {
 	
 	public function ReplaceConditionXpath($m)
 	{
-		$offerXpath = substr($this->xpath, 1);
-		if(strpos($m[1], $offerXpath)===0)
+		$offerXpath = mb_substr($this->xpath, 1);
+		if(mb_strpos($m[1], $offerXpath)===0)
 		{
-			return '{'.substr($this->ReplaceXpath($m[1]), strlen($offerXpath) + 1).'}';
+			return '{'.mb_substr($this->ReplaceXpath($m[1]), mb_strlen($offerXpath) + 1).'}';
 		}
 		else
 		{
@@ -832,7 +889,7 @@ class ImporterHl {
 		$xpath2 = $m[1];
 		if(strpos($xpath2, $xpath)===0)
 		{
-			$xpath2 = substr($xpath2, strlen($xpath) + 1);
+			$xpath2 = mb_substr($xpath2, mb_strlen($xpath) + 1);
 			$simpleXmlObj = $simpleXmlObj2;
 		}
 		else
@@ -876,9 +933,9 @@ class ImporterHl {
 		}
 		$arPath = explode('/', $xpath2);
 		$attr = false;
-		if(strpos($arPath[count($arPath)-1], '@')===0)
+		if(mb_strpos($arPath[count($arPath)-1], '@')===0)
 		{
-			$attr = substr(array_pop($arPath), 1);
+			$attr = mb_substr(array_pop($arPath), 1);
 		}
 		if(count($arPath) > 0)
 		{
@@ -897,13 +954,13 @@ class ImporterHl {
 	{
 		$arPath = explode('/', $xpath);
 		$attr = false;
-		if(strpos($arPath[count($arPath)-1], '@')===0)
+		if(mb_strpos($arPath[count($arPath)-1], '@')===0)
 		{
-			$attr = substr(array_pop($arPath), 1);
+			$attr = mb_substr(array_pop($arPath), 1);
 		}
 		$xpath2 = implode('/', $arPath);
 		$xpath3 = '';
-		if(strpos($xpath2, '//')!==false)
+		if(mb_strpos($xpath2, '//')!==false && strpos($xpath2, '//') > 0)
 		{
 			list($xpath2, $xpath3) = explode('//', $xpath2, 2);
 		}
@@ -917,9 +974,9 @@ class ImporterHl {
 		{
 			$arPath = explode('/', $xpath);
 			$attr = false;
-			if(strpos($arPath[count($arPath)-1], '@')===0)
+			if(mb_strpos($arPath[count($arPath)-1], '@')===0)
 			{
-				$attr = substr(array_pop($arPath), 1);
+				$attr = mb_substr(array_pop($arPath), 1);
 			}
 			//if(count($arPath) > 1 && ($cnt = count($simpleXmlObj->xpath(implode('/', $arPath)))) && $cnt > 1)
 			if(count($arPath) > 1 && ($cnt = count($this->Xpath($simpleXmlObj, implode('/', $arPath)))) && $cnt > 1)
@@ -932,7 +989,7 @@ class ImporterHl {
 					$subpath = implode('/', $arPath).'/'.$lastElem;
 					for($i=0; $i<min($key2+1, $cnt3); $i++)
 					{
-						$xpath2 = $subpath.'['.($i+1).']/'.substr($xpath, strlen($subpath) + 1);
+						$xpath2 = $subpath.'['.($i+1).']/'.mb_substr($xpath, mb_strlen($subpath) + 1);
 						//if(count($simpleXmlObj->xpath($xpath2))==0) $key2++;
 						if(count($this->Xpath($simpleXmlObj, $xpath2))==0) $key2++;
 					}
@@ -969,19 +1026,19 @@ class ImporterHl {
 			$xpath2 = $v['XPATH'];
 
 			$generalXpath = $xpath;
-			if(strpos($xpath, '@')!==false) $generalXpath = rtrim(substr($xpath, 0, strpos($xpath, '@')), '/');
-			if(strpos($xpath2, $generalXpath)===0)
+			if(mb_strpos($xpath, '@')!==false) $generalXpath = rtrim(mb_substr($xpath, 0, mb_strpos($xpath, '@')), '/');
+			if(mb_strpos($xpath2, $generalXpath)===0)
 			{
-				//$xpath2 = substr($xpath2, strlen($xpath) + 1);
-				$xpath2 = substr($xpath2, strlen($generalXpath));
+				//$xpath2 = mb_substr($xpath2, mb_strlen($xpath) + 1);
+				$xpath2 = mb_substr($xpath2, mb_strlen($generalXpath));
 				$xpath2 = ltrim(preg_replace('/^\[\d*\]/', '', $xpath2), '/');
 				$simpleXmlObj = $simpleXmlObj2;
 			}
 			$arPath = explode('/', $xpath2);
 			$attr = false;
-			if(strpos($arPath[count($arPath)-1], '@')===0)
+			if(mb_strpos($arPath[count($arPath)-1], '@')===0)
 			{
-				$attr = substr(array_pop($arPath), 1);
+				$attr = mb_substr(array_pop($arPath), 1);
 			}
 			if(count($arPath) > 0)
 			{
@@ -1063,10 +1120,7 @@ class ImporterHl {
 	public function SaveRecord($arItem)
 	{
 		$this->stepparams['total_read_line']++;
-		if(count(array_diff(array_map('trim', $arItem), array('')))==0)
-		{
-			return false;
-		}
+		/*if(count(array_diff(array_map('trim', $arItem), array('')))==0) return false;*/ //maybe array in items
 		$this->stepparams['total_line']++;
 		
 		$filedList = preg_grep('/^[^~]/', array_keys($arItem));
@@ -1148,12 +1202,16 @@ class ImporterHl {
 		$emptyFields = array();
 		foreach($arUid as $k=>$v)
 		{
-			if(!trim($v['valUid'])) $emptyFields[] = $v['nameUid'];
+			if(!is_array($v['valUid']))
+			{
+				if(strlen(trim($v['valUid']))==0) $emptyFields[] = $v['nameUid'];
+			}
+			elseif(count(array_diff(array_map('trim', $v['valUid']), array('')))==0) $emptyFields[] = $v['nameUid'];
 		}
 		
 		if(!empty($emptyFields) || empty($arUid))
 		{
-			$this->errors[] = sprintf(GetMessage("KDA_IE_NOT_SET_FIELD"), implode(', ', $emptyFields), $this->worksheetNumForSave+1, $this->worksheetCurrentRow);
+			$this->errors[] = sprintf(GetMessage("KIT_IX_NOT_SET_FIELD"), implode(', ', $emptyFields), $this->worksheetNumForSave+1, $this->worksheetCurrentRow);
 			$this->stepparams['error_line']++;
 			return false;
 		}
@@ -1190,18 +1248,29 @@ class ImporterHl {
 		{
 			if(!$v['substring'])
 			{
-				if(strlen($v['valUid']) != strlen(trim($v['valUid'])))
+				if(is_array($v['valUid']))
 				{
-					$arFilter[] = array('LOGIC'=>'OR', array($v['uid']=>trim($v['valUid'])), array($v['uid']=>$v['valUid']));
+					$arFilter['='.$v['uid']] = array_map('trim', $v['valUid']);
+				}
+				elseif(strlen($v['valUid']) != strlen(trim($v['valUid'])))
+				{
+					$arFilter[] = array('LOGIC'=>'OR', array('='.$v['uid']=>trim($v['valUid'])), array('='.$v['uid']=>$v['valUid']));
 				}
 				else
 				{
-					$arFilter[$v['uid']] = trim($v['valUid']);
+					$arFilter['='.$v['uid']] = trim($v['valUid']);
 				}
 			}
 			else
 			{
-				$arFilter['%'.$v['uid']] = trim($v['valUid']);
+				if(is_array($v['valUid']))
+				{
+					$arFilter['%'.$v['uid']] = array_map('trim', $v['valUid']);
+				}
+				else
+				{
+					$arFilter['%'.$v['uid']] = trim($v['valUid']);
+				}
 			}
 		}
 		
@@ -1211,24 +1280,25 @@ class ImporterHl {
 			$ID = $arElement['ID'];
 			if($this->params['ONLY_CREATE_MODE']!='Y')
 			{
+				$arFieldsElement2 = $arFieldsElement;
 				foreach($arElement as $k=>$v)
 				{
 					$action = $this->fieldSettings['IE_'.$k]['LOADING_MODE'];
 					if($action)
 					{
-						if($action=='ADD_BEFORE') $arFieldsElement[$k] = $arFieldsElement[$k].$v;
-						elseif($action=='ADD_AFTER') $arFieldsElement[$k] = $v.$arFieldsElement[$k];
+						if($action=='ADD_BEFORE') $arFieldsElement2[$k] = $arFieldsElement2[$k].$v;
+						elseif($action=='ADD_AFTER') $arFieldsElement2[$k] = $v.$arFieldsElement2[$k];
 					}
 				}
 				
 				if($this->params['ELEMENT_NOT_UPDATE_WO_CHANGES']=='Y')
 				{
 					/*Delete unchanged data*/
-					foreach($arFieldsElement as $k=>$v)
+					foreach($arFieldsElement2 as $k=>$v)
 					{
 						if($v==$arElement[$k])
 						{
-							unset($arFieldsElement[$k]);
+							unset($arFieldsElement2[$k]);
 						}
 					}
 					/*/Delete unchanged data*/
@@ -1236,19 +1306,22 @@ class ImporterHl {
 				
 				if(!empty($this->fieldOnlyNew))
 				{
-					$this->UnsetExcessFields($this->fieldOnlyNew, $arFieldsElement);
+					$this->UnsetExcessFields($this->fieldOnlyNew, $arFieldsElement2);
 				}
 				
-				if(!empty($arFieldsElement))
+				$this->UnsetUidFields($arFieldsElement2, $this->params['ELEMENT_UID']);
+				
+				if(!empty($arFieldsElement2))
 				{
-					if($entityDataClass::Update($ID, $arFieldsElement))
+					$dbRes2 = $entityDataClass::Update($ID, $arFieldsElement2);
+					if($dbRes2->isSuccess())
 					{
 						//$this->SetTimeBegin($ID);
 					}
 					else
 					{
 						$this->stepparams['error_line']++;
-						$this->errors[] = sprintf(GetMessage("KDA_IE_UPDATE_ELEMENT_ERROR"), $el->LAST_ERROR, $this->worksheetNumForSave+1, $this->worksheetCurrentRow);
+						$this->errors[] = sprintf(GetMessage("KIT_IX_UPDATE_ELEMENT_ERROR"), implode(', ',$dbRes2->GetErrorMessages()), $ID);
 					}
 				}
 				
@@ -1271,7 +1344,7 @@ class ImporterHl {
 			else
 			{
 				$this->stepparams['error_line']++;
-				$this->errors[] = sprintf(GetMessage("KDA_IE_ADD_ELEMENT_ERROR"), $el->LAST_ERROR, $this->worksheetNumForSave+1, $this->worksheetCurrentRow);
+				$this->errors[] = sprintf(GetMessage("KIT_IX_ADD_ELEMENT_ERROR"), implode(', ',$dbRes2->GetErrorMessages()), '');
 				return false;
 			}
 		}
@@ -1371,6 +1444,7 @@ class ImporterHl {
 				$picSettings = $this->fieldSettings[$key]['PICTURE_PROCESSING'];
 			}
 			$val = $this->GetFileArray($val, $picSettings);
+			if(is_array($val) && empty($val)) $val = '';
 		}
 		elseif($ftype=='enumeration')
 		{
@@ -1403,6 +1477,7 @@ class ImporterHl {
 				else $val = '';
 			}
 		}
+		if(!is_array($val)) $val = (string)$val;
 		return $val;
 	}
 	
@@ -1456,46 +1531,23 @@ class ImporterHl {
 		return $arEnumVals[$val];
 	}
 	
-	public function UnsetUidFields(&$arFieldsElement, &$arFieldsProps, $arUids, $saveVal=false)
-	{
-		foreach($arUids as $field)
-		{
-			if(strpos($field, 'IE_')===0)
-			{
-				$fieldKey = substr($field, 3);
-				if(isset($arFieldsElement[$fieldKey]) && is_array($arFieldsElement[$fieldKey]))
-				{
-					if($saveVal)
-					{
-						$arFieldsElement[$fieldKey] = array_diff($arFieldsElement[$fieldKey], array(''));
-						if(count($arFieldsElement[$fieldKey]) > 0) $arFieldsElement[$fieldKey] = end($arFieldsElement[$fieldKey]);
-						else $arFieldsElement[$fieldKey] = '';
-					}
-					else unset($arFieldsElement[$fieldKey]);
-				}
-			}
-			elseif(strpos($field, 'IP_PROP')===0)
-			{
-				$fieldKey = substr($field, 7);
-				if(isset($arFieldsProps[$fieldKey]) && is_array($arFieldsProps[$fieldKey]))
-				{
-					if($saveVal)
-					{
-						$arFieldsProps[$fieldKey] = array_diff($arFieldsProps[$fieldKey], array(''));
-						if(count($arFieldsProps[$fieldKey]) > 0) $arFieldsProps[$fieldKey] = end($arFieldsProps[$fieldKey]);
-						else $arFieldsProps[$fieldKey] = '';
-					}
-					else unset($arFieldsProps[$fieldKey]);
-				}
-			}
-		}
-	}
-	
 	public function UnsetExcessFields($fieldsList, &$arFieldsElement)
 	{
 		foreach($fieldsList as $field)
 		{
 			unset($arFieldsElement[$field]);
+		}
+	}
+	
+	public function UnsetUidFields(&$arFieldsElement, $arUids)
+	{
+		if(!is_array($arUids)) $arUids = array($arUids);
+		foreach($arUids as $field)
+		{
+			if(isset($arFieldsElement[$field]))
+			{
+				unset($arFieldsElement[$field]);
+			}
 		}
 	}
 	
@@ -1597,7 +1649,7 @@ class ImporterHl {
 		elseif(preg_match('/http(s)?:\/\//', $file))
 		{
 			//$file = urldecode($file);
-			$file = preg_replace_callback('/[^:\/?=&#@]+/', create_function('$m', 'return urldecode($m[0]);'), $file);
+			$file = preg_replace_callback('/[^:\/?=&#@]+/', array(__CLASS__, 'GetUrldecodePath'), $file);
 			$arUrl = parse_url($file);
 			//Cyrillic domain
 			if(preg_match('/[^A-Za-z0-9\-\.]/', $arUrl['host']))
@@ -1626,10 +1678,10 @@ class ImporterHl {
 				$ob->setHeader('User-Agent', 'BitrixSM HttpClient class');
 				try{
 					if(!\CUtil::DetectUTF8($file)) $file = \Bitrix\KitImportxml\Utils::Win1251Utf8($file);
-					$file = preg_replace_callback('/[^:\/?=&#@]+/', create_function('$m', 'return rawurlencode($m[0]);'), $file);
+					$file = preg_replace_callback('/[^:\/?=&#@]+/', array(__CLASS__, 'GetUrlencodePath'), $file);
 					if($ob->download($file, $tempPath) && $ob->getStatus()!=404) $file = $tempPath2;
 					else return array();
-				}catch(Exception $ex){}
+				}catch(\Exception $ex){}
 			}
 		}
 		$arFile = \CFile::MakeFileArray($file);
@@ -1683,9 +1735,9 @@ class ImporterHl {
 		if(strpos($arFile['type'], 'image/')===0)
 		{
 			$ext = ToLower(str_replace('image/', '', $arFile['type']));
-			if(substr($arFile['name'], -(strlen($ext) + 1))!='.'.$ext)
+			if(mb_substr($arFile['name'], -(mb_strlen($ext) + 1))!='.'.$ext)
 			{
-				if($ext!='jpeg' || (($ext='jpg') && substr($arFile['name'], -(strlen($ext) + 1))!='.'.$ext))
+				if($ext!='jpeg' || (($ext='jpg') && mb_substr($arFile['name'], -(mb_strlen($ext) + 1))!='.'.$ext))
 				{
 					$arFile['name'] = $arFile['name'].'.'.$ext;
 				}
@@ -1720,13 +1772,23 @@ class ImporterHl {
 		}
 		
 		return $arFile;
-	}	
+	}
+	
+	public static function GetUrldecodePath($m)
+	{
+		return urldecode($m[0]);
+	}
+	
+	public static function GetUrlencodePath($m)
+	{
+		return rawurlencode($m[0]);
+	}
 	
 	public function GetArchiveParams($file)
 	{
 		$arUrl = parse_url($file);
 		$fragment = (isset($arUrl['fragment']) ? $arUrl['fragment'] : '');
-		if(strlen($fragment) > 0) $file = substr($file, 0, -strlen($fragment) - 1);
+		if(strlen($fragment) > 0) $file = mb_substr($file, 0, -mb_strlen($fragment) - 1);
 		$archivePath = $this->archivedir.md5($file).'/';
 		return array(
 			'path' => $archivePath, 
@@ -2133,12 +2195,20 @@ class ImporterHl {
 		{
 			return $this->GetValueByXpath($m2[1]);
 		}
+		elseif(preg_match('/^\$\{[\'"](([^\s\}]*[\'"][^\'"\}]*[\'"])*[^\s\}]*)[\'"]\}$/', $m[0], $m2))
+		{
+			if(!isset($this->convParams)) $this->convParams = array();
+			$this->convParams[$m2[1]] = $this->GetValueByXpath($m2[1]);
+			$quot = mb_substr(ltrim($m2[0], '${ '), 0, 1);
+			return '$this->convParams['.$quot.$m2[1].$quot.']';
+		}
 		elseif(in_array($m[0], $this->rcurrencies))
 		{
 			$arRates = $this->GetCurrencyRates();
 			$k = trim($m[0], '#');
 			return (isset($arRates[$k]) ? floatval($arRates[$k]) : 1);
 		}
+		else return "";
 	}
 	
 	public function GetValueByXpath($xpath, $simpleXmlObj=null)
@@ -2157,9 +2227,9 @@ class ImporterHl {
 		/*if(strlen($xpath) > 0) $arPath = explode('/', $xpath);
 		else $arPath = array();
 		$attr = false;
-		if(strpos($arPath[count($arPath)-1], '@')===0)
+		if(mb_strpos($arPath[count($arPath)-1], '@')===0)
 		{
-			$attr = substr(array_pop($arPath), 1);
+			$attr = mb_substr(array_pop($arPath), 1);
 		}*/
 		$arXPath = $this->GetXPathParts($xpath);
 		$curXpath2 = $arXPath['xpath'];
@@ -2167,13 +2237,16 @@ class ImporterHl {
 		$attr = $arXPath['attr'];
 		$currentXmlObj = $this->currentXmlObj;
 		if(isset($simpleXmlObj)) $currentXmlObj = $simpleXmlObj;
-		
+
 		if(strlen($curXpath2) > 0)
 		{
-			$curXpath = '/'.ltrim($curXpath2, '/');
-			if(isset($this->parentXpath) && strlen($this->parentXpath) > 0 && strpos($curXpath, $this->parentXpath)===0)
+			//$curXpath = '/'.ltrim($curXpath2, '/');
+			$curXpath = ltrim($curXpath2, '/');
+			if(mb_strpos($curXpath, '.')!==0) $curXpath = '/'.$curXpath;
+			if(mb_substr($curXpath2, 0, 2)=='//') $curXpath = $curXpath2;
+			if(isset($this->parentXpath) && mb_strlen($this->parentXpath) > 0 && mb_strpos($curXpath, $this->parentXpath)===0)
 			{
-				$tmpXpath = substr($curXpath, strlen($this->parentXpath) + 1);
+				$tmpXpath = mb_substr($curXpath, mb_strlen($this->parentXpath) + 1);
 				//$tmpXmlObj = $currentXmlObj->xpath($tmpXpath);
 				$tmpXmlObj = $this->Xpath($currentXmlObj, $tmpXpath);
 				if(!empty($tmpXmlObj))
@@ -2182,13 +2255,23 @@ class ImporterHl {
 					$curXpath = '';
 				}
 			}
-			if(strlen($curXpath) > 0)
+
+			if(mb_strlen($curXpath) > 0)
 			{
-				if(strpos($curXpath, $this->xpath)===0) $curXpath = substr($curXpath, strlen($this->xpath) + 1);
+				if(mb_strpos($curXpath, $this->xpath)===0) $curXpath = mb_substr($curXpath, mb_strlen($this->xpath) + 1);
 				elseif(isset($this->xmlPartObjects[$curXpath2]))
 				{
 					//$currentXmlObj = $this->xmlPartObjects[$curXpath2]->xpath($subXpath);
 					$currentXmlObj = $this->Xpath($this->xmlPartObjects[$curXpath2], $subXpath);
+					$curXpath = '';
+				}
+				elseif(mb_substr($curXpath, 0, 2)=='//')
+				{
+					if(!isset($this->xmlSingleElems[$curXpath]))
+					{
+						$this->xmlSingleElems[$curXpath] = $this->GetPartXmlObject($curXpath, false);
+					}
+					$currentXmlObj = $this->xmlSingleElems[$curXpath];
 					$curXpath = '';
 				}
 			}
@@ -2198,18 +2281,41 @@ class ImporterHl {
 			if(count($simpleXmlObj2)==1) $simpleXmlObj2 = current($simpleXmlObj2);
 		}
 		else $simpleXmlObj2 = $currentXmlObj;
-		if(is_array($simpleXmlObj2)) $simpleXmlObj2 = current($simpleXmlObj2);
+		//if(is_array($simpleXmlObj2)) $simpleXmlObj2 = current($simpleXmlObj2);
 		
-		if($attr!==false)
+		if(is_array($simpleXmlObj2))
 		{
-			if(is_callable(array($simpleXmlObj2, 'attributes')))
+			$arVals = array();
+			foreach($simpleXmlObj2 as $sxml)
 			{
-				$val = (string)$simpleXmlObj2->attributes()->{$attr};
+				if($attr!==false)
+				{
+					if(is_callable(array($sxml, 'attributes')))
+					{
+						$arVals[] = (string)$sxml->attributes()->{$attr};
+					}
+				}
+				else
+				{
+					$arVals[] = (string)$sxml;					
+				}
 			}
+			if($singleVal) $val = current($arVals);
+			else $val = implode($this->params['ELEMENT_MULTIPLE_SEPARATOR'], $arVals);
 		}
 		else
 		{
-			$val = (string)$simpleXmlObj2;					
+			if($attr!==false)
+			{
+				if(is_callable(array($simpleXmlObj2, 'attributes')))
+				{
+					$val = (string)$simpleXmlObj2->attributes()->{$attr};
+				}
+			}
+			else
+			{
+				$val = (string)$simpleXmlObj2;					
+			}
 		}
 		
 		$val = $this->GetRealXmlValue($val);
@@ -2253,7 +2359,7 @@ class ImporterHl {
 		{
 			$execConv = false;
 			$this->currentItemValues = $arItem;
-			$prefixPattern = '/(\{([^\s\}]*[\'"][^\'"\}]*[\'"])*[^\s\}]*\}|'.implode('|', $this->rcurrencies).')/';
+			$prefixPattern = '/(\{([^\s\'"\}]+[\'"][^\'"\}]*[\'"])*[^\s\'"\}]+\}|'.'\$\{[\'"]([^\s\}]*[\'"][^\'"\}]*[\'"])*[^\s\'"\}]*[\'"]\}|'.implode('|', $this->rcurrencies).')/';
 			foreach($arConv as $k=>$v)
 			{
 				$condVal = $val;
@@ -2290,11 +2396,11 @@ class ImporterHl {
 					elseif($v['THEN']=='ADD_TO_END') $val = $val.$v['TO'];
 					elseif($v['THEN']=='LCASE') $val = ToLower($val);
 					elseif($v['THEN']=='UCASE') $val = ToUpper($val);
-					elseif($v['THEN']=='UFIRST') $val = preg_replace_callback('/^(\s*)(.*)$/', create_function('$m', 'return $m[1].ToUpper(substr($m[2], 0, 1)).ToLower(substr($m[2], 1));'), $val);
-					elseif($v['THEN']=='UWORD') $val = implode(' ', array_map(create_function('$m', 'return ToUpper(substr($m, 0, 1)).ToLower(substr($m, 1));'), explode(' ', $val)));
+					elseif($v['THEN']=='UFIRST') $val = preg_replace_callback('/^(\s*)(.*)$/', array('\Bitrix\KitImportxml\Conversion', 'UFirstCallback'), $val);
+					elseif($v['THEN']=='UWORD') $val = implode(' ', array_map(array('\Bitrix\KitImportxml\Conversion', 'UWordCallback'), explode(' ', $val)));
 					elseif($v['THEN']=='MATH_ROUND') $val = round($this->GetFloatVal($val));
 					elseif($v['THEN']=='MATH_MULTIPLY') $val = $this->GetFloatVal($val) * $this->GetFloatVal($v['TO']);
-					elseif($v['THEN']=='MATH_DIVIDE') $val = $this->GetFloatVal($val) / $this->GetFloatVal($v['TO']);
+					elseif($v['THEN']=='MATH_DIVIDE') $val = ($this->GetFloatVal($v['TO'])==0 ? 0 :$this->GetFloatVal($val) / $this->GetFloatVal($v['TO']));
 					elseif($v['THEN']=='MATH_ADD') $val = $this->GetFloatVal($val) + $this->GetFloatVal($v['TO']);
 					elseif($v['THEN']=='MATH_SUBTRACT') $val = $this->GetFloatVal($val) - $this->GetFloatVal($v['TO']);
 					elseif($v['THEN']=='NOT_LOAD') $val = false;

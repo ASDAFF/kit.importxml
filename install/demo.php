@@ -1,8 +1,4 @@
 <?
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 IncludeModuleLangFile(__FILE__);
 
 function kit_importxml_demo_expired() {
@@ -24,6 +20,21 @@ function kit_importxml_demo_expired() {
 
 function kit_importxml_show_demo($bAjax = false) {
 	$moduleId = 'kit.importxml';
+	$pathJS = '/bitrix/js/'.$moduleId;
+	$pathCSS = '/bitrix/panel/'.$moduleId;
+	$pathLang = BX_ROOT.'/modules/'.$moduleId.'/lang/'.LANGUAGE_ID;
+	$arJSKitDemoConfig = array(
+		'kit_importxml_demo' => array(
+			'js' => array($pathJS.'/chosen/chosen.jquery.min.js', $pathJS.'/script.js'),
+			'css' => array($pathJS.'/chosen/chosen.min.css', $pathCSS.'/styles.css'),
+			'rel' => array('jquery'),
+			'lang' => $pathLang.'/js_admin.php',
+		),
+	);
+	foreach ($arJSKitDemoConfig as $ext => $arExt) {
+		\CJSCore::RegisterExt($ext, $arExt);
+	}
+	
 	$DemoMode = CModule::IncludeModuleEx($moduleId);
 	$activateText = GetMessage("KIT_IMPORTXML_DEMO_MESSAGE_ACTIVATE_MODULE",array("#LANG#"=>LANGUAGE_ID));
 	if ($DemoMode==MODULE_DEMO) {
@@ -39,16 +50,19 @@ function kit_importxml_show_demo($bAjax = false) {
 				print GetMessage("KIT_IMPORTXML_DEMO_MESSAGE_DAYS_REMAIN",array("#DAYS#"=>$days, "#ACTIVATE#"=>$activateText));
 				print EndNote();
 			} else {
+				\CJSCore::Init(array('kit_importxml_demo'));
 				print BeginNote();
 				print GetMessage("KIT_IMPORTXML_DEMO_MESSAGE_EXPIRED", array("#ACTIVATE#"=>$activateText));
 				print EndNote();
 			}
-		} else{ 
+		} else{
+			\CJSCore::Init(array('kit_importxml_demo'));
 			print BeginNote();
 			print GetMessage("KIT_IMPORTXML_DEMO_MESSAGE_EXPIRED", array("#ACTIVATE#"=>$activateText));
 			print EndNote();
 		}
 	} elseif ($DemoMode==MODULE_DEMO_EXPIRED) {
+		\CJSCore::Init(array('kit_importxml_demo'));
 		print BeginNote();
 		print GetMessage("KIT_IMPORTXML_DEMO_MESSAGE_EXPIRED", array("#ACTIVATE#"=>$activateText));
 		print EndNote();
@@ -77,7 +91,7 @@ function kit_importxml_show_demo($bAjax = false) {
 			{
 				if(is_callable(array('CUpdateClientPartner', 'GetUpdatesList')))
 				{
-					$arUpdateList = CUpdateClientPartner::GetUpdatesList($errorMessage, LANG, 'Y', $moduleId, Array("fullmoduleinfo" => "Y"));
+					$arUpdateList = CUpdateClientPartner::GetUpdatesList($errorMessage, LANG, 'Y', array($moduleId), Array("fullmoduleinfo" => "Y"));
 					
 					if(is_array($arUpdateList['MODULE']))
 					{

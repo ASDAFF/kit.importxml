@@ -1,8 +1,4 @@
 <?php
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 namespace Bitrix\KitImportxml;
 
 use Bitrix\Main\Localization\Loc;
@@ -98,8 +94,8 @@ class MailUtil
 	function ByteXOR($a,$b,$l)
 	{
 		$c="";
-		for($i=0; $i<$l; $i++)
-			$c .= $a{$i}^$b{$i};
+		for($i=0;$i<$l;$i++)
+			$c .= $a[$i]^$b[$i];
 		return($c);
 	}
 

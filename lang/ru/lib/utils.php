@@ -1,8 +1,4 @@
 <?
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 $MESS['KIT_IX_FILE_SOURCE_EMAIL'] = "Загрузить файл с Email-адреса";
 $MESS['KIT_IX_FILE_SOURCE_LINKAUTH'] = "Загрузить файл по ссылке с авторизацией";
 $MESS['KIT_IX_FILTER_FROMTO_ID'] = "ID (начальный и конечный)";
@@ -61,4 +57,8 @@ $MESS['KIT_IX_EL_A_SALE_ORDER'] = "Номер заказа";
 $MESS['KIT_IX_IS_NOT_EMPTY'] = "не пустое";
 $MESS['KIT_IX_IS_EMPTY'] = "пустое";
 $MESS['KIT_IX_IS_VALUE'] = "значение";
+$MESS['KIT_IX_VTYPE_CONTAIN'] = "содержит";
+$MESS['KIT_IX_VTYPE_NOT_CONTAIN'] = "не содержит";
+$MESS['KIT_IX_VTYPE_BEGIN_WITH'] = "начинается с";
+$MESS['KIT_IX_VTYPE_END_ON'] = "заканчивается на";
 ?>

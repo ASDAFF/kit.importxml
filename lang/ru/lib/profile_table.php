@@ -1,8 +1,4 @@
 <?
-/**
- * Copyright (c) 4/8/2019 Created By/Edited By ASDAFF asdaff.asad@yandex.ru
- */
-
 $MESS['KIT_IX_PROFILE_ENTITY_ID_FIELD'] = "ID профиля";
 $MESS['KIT_IX_PROFILE_ENTITY_ACTIVE_FIELD'] = "Активность";
 $MESS['KIT_IX_PROFILE_ENTITY_NAME_FIELD'] = "Название";
